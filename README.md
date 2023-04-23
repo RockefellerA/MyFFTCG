@@ -1,0 +1,2 @@
+# MyFFTCG
+Lightweight FFTCG client
