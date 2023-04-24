@@ -1,5 +1,5 @@
 package zone;
 
-public class BreakZone {
+public class BreakZone extends Zone{
 
 }

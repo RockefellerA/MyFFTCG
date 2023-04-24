@@ -10,7 +10,7 @@ public class Player {
 	
 	public Hand hand;
 	
-	public int crystalPoints; // think mana but it expires immediately after the cast
+	public int crystalPoints; // think mana but it expires immediately after the cast. Only allowed to waste 1CP on casts via discard.
 	
 	public Set<Elements> crystalPointElements; // for multi-element casts
 	

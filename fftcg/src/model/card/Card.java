@@ -26,6 +26,7 @@ public abstract class Card {
 	 * States of being
 	 */
 	public boolean isDull;
+	public boolean isFrozen;
 	public boolean isBroken;
 	public boolean isRemoved;
 	
