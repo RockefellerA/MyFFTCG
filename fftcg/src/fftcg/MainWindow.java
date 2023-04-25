@@ -1,11 +1,13 @@
 package fftcg;
 
+import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.EventQueue;
 
 import javax.swing.ImageIcon;
+import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
-import java.awt.BorderLayout;
 
 public class MainWindow {
 
@@ -39,15 +41,19 @@ public class MainWindow {
 	 */
 	private void initialize() {
 		frame = new JFrame("MyFFTCG");
-		frame.setBounds(100, 100, 450, 300);
+		frame.setBackground(new Color(255, 255, 255));
+		frame.getContentPane().setBackground(new Color(0, 0, 160));
+		frame.setBounds(800, 500, 800, 600);
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		ImageIcon icon = new ImageIcon(getClass().getResource("/resources/MyFF20.png"));
 		frame.setIconImage(icon.getImage());
 		
+		JLabel lblPlayerSide = new JLabel("Player 2 Side");
+		lblPlayerSide.setForeground(new Color(255, 255, 255));
+		frame.getContentPane().add(lblPlayerSide, BorderLayout.NORTH);
 		
-		
-		JLabel label = new JLabel("Test");
-		frame.getContentPane().add(label, BorderLayout.NORTH);
+		JButton btnNewButton = new JButton("Pass Turn");
+		frame.getContentPane().add(btnNewButton, BorderLayout.SOUTH);
 	}
 
 }

@@ -5,6 +5,7 @@ import java.util.Set;
 import model.Category;
 import model.Elements;
 import model.Keywords;
+import model.Rarity;
 
 public abstract class Card {
 	
@@ -13,9 +14,8 @@ public abstract class Card {
 	 */
 	public String name;
 	public int cost;
-	public Category category;
-	public String cardNumber;
-	public String rarity;
+	public String job;
+	public Set<Category> categories;
 	public boolean hasExBurst;
 	public Set<Elements> elements;
 	public Set<Keywords> keywords;
@@ -33,6 +33,12 @@ public abstract class Card {
 	/**
 	 * Misc data
 	 */
+	public String cardNumber;
+	public Rarity rarity;
 	public boolean isFoil;
 	public boolean isFullArt;
+	
+	
+	// Full Card Size: 429x600px from fftcg browser
+	
 }
