@@ -8,10 +8,14 @@ import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import java.awt.event.ActionListener;
+import java.awt.event.ActionEvent;
 
 public class MainWindow {
 
 	private JFrame frame;
+	
+	int i = 0;
 	
 	/**
 	 * Launch the application.
@@ -52,7 +56,31 @@ public class MainWindow {
 		lblPlayerSide.setForeground(new Color(255, 255, 255));
 		frame.getContentPane().add(lblPlayerSide, BorderLayout.NORTH);
 		
-		JButton btnNewButton = new JButton("Pass Turn");
+		JButton btnNewButton = new JButton("Active Phase");
+		btnNewButton.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				switch (i) {
+				case 0: btnNewButton.setText("Draw Phase");
+						i++;
+						break;
+				case 1: btnNewButton.setText("Main Phase 1");
+						i++;
+						break;
+				case 2: btnNewButton.setText("Attack Phase");
+						i++;
+						break;
+				case 3: btnNewButton.setText("Main Phase 2");
+						i++;
+						break;
+				case 4: btnNewButton.setText("End Phase");
+						i++;
+						break;
+				case 5: btnNewButton.setText("Active Phase");
+						i=0;
+						break;
+				}
+			}
+		});
 		frame.getContentPane().add(btnNewButton, BorderLayout.SOUTH);
 	}
 
