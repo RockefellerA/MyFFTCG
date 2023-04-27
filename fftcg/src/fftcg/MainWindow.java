@@ -43,7 +43,7 @@ public class MainWindow {
 		frame = new JFrame("MyFFTCG");
 		frame.setBackground(new Color(255, 255, 255));
 		frame.getContentPane().setBackground(new Color(0, 0, 160));
-		frame.setBounds(800, 500, 800, 600);
+		frame.setBounds(800, 500, 1280, 720);
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		ImageIcon icon = new ImageIcon(getClass().getResource("/resources/MyFF20.png"));
 		frame.setIconImage(icon.getImage());
