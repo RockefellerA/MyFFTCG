@@ -27,6 +27,8 @@ public class MainWindow {
 				try {
 					MainWindow window = new MainWindow();
 					window.frame.setVisible(true);
+					ImageIcon icon40 = new ImageIcon(getClass().getResource("/resources/MyFF40.png"));
+					window.frame.setIconImage(icon40.getImage());
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
@@ -50,8 +52,6 @@ public class MainWindow {
 		frame.getContentPane().setBackground(new Color(0, 0, 160));
 		frame.setBounds(800, 500, 1280, 720);
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		ImageIcon icon = new ImageIcon(getClass().getResource("/resources/MyFF20.png"));
-		frame.setIconImage(icon.getImage());
 		frame.getContentPane().setLayout(null);
 		
 		JLabel labelPlayerSide2 = new JLabel("Player 2 Side");
