@@ -1,15 +1,16 @@
 package fftcg;
 
-import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.EventQueue;
+import java.awt.Label;
+import java.awt.Panel;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
-import java.awt.event.ActionListener;
-import java.awt.event.ActionEvent;
 
 public class MainWindow {
 
@@ -51,12 +52,15 @@ public class MainWindow {
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		ImageIcon icon = new ImageIcon(getClass().getResource("/resources/MyFF20.png"));
 		frame.setIconImage(icon.getImage());
+		frame.getContentPane().setLayout(null);
 		
-		JLabel lblPlayerSide = new JLabel("Player 2 Side");
-		lblPlayerSide.setForeground(new Color(255, 255, 255));
-		frame.getContentPane().add(lblPlayerSide, BorderLayout.NORTH);
+		JLabel labelPlayerSide2 = new JLabel("Player 2 Side");
+		labelPlayerSide2.setBounds(0, 0, 1264, 14);
+		labelPlayerSide2.setForeground(new Color(255, 255, 255));
+		frame.getContentPane().add(labelPlayerSide2);
 		
 		JButton btnNewButton = new JButton("Active Phase");
+		btnNewButton.setBounds(0, 658, 1264, 23);
 		btnNewButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				switch (i) {
@@ -81,7 +85,41 @@ public class MainWindow {
 				}
 			}
 		});
-		frame.getContentPane().add(btnNewButton, BorderLayout.SOUTH);
+		frame.getContentPane().add(btnNewButton);
+		
+		Label labelPlayerSide1 = new Label("Player 1 Side");
+		labelPlayerSide1.setBounds(0, 630, 84, 22);
+		labelPlayerSide1.setForeground(new Color(255, 255, 255));
+		frame.getContentPane().add(labelPlayerSide1);
+		
+		Panel panel = new Panel();
+		panel.setBackground(new Color(255, 255, 255));
+		panel.setBounds(1135, 329, 119, 134);
+		frame.getContentPane().add(panel);
+		
+		Panel panel_1 = new Panel();
+		panel_1.setBackground(Color.WHITE);
+		panel_1.setBounds(1135, 487, 119, 134);
+		frame.getContentPane().add(panel_1);
+		
+		Panel panel_1_1 = new Panel();
+		panel_1_1.setBackground(Color.LIGHT_GRAY);
+		panel_1_1.setBounds(10, 329, 127, 295);
+		frame.getContentPane().add(panel_1_1);
+		
+		Panel panel_2 = new Panel();
+		panel_2.setBackground(Color.WHITE);
+		panel_2.setBounds(18, 165, 119, 134);
+		frame.getContentPane().add(panel_2);
+		
+		Panel panel_3 = new Panel();
+		panel_3.setBackground(Color.WHITE);
+		panel_3.setBounds(18, 20, 119, 134);
+		frame.getContentPane().add(panel_3);
+		
+		Panel panel_1_1_1 = new Panel();
+		panel_1_1_1.setBackground(Color.LIGHT_GRAY);
+		panel_1_1_1.setBounds(1127, 16, 127, 295);
+		frame.getContentPane().add(panel_1_1_1);
 	}
-
 }
