@@ -2,6 +2,7 @@ package model;
 
 import java.util.Set;
 
+import zone.Deck;
 import zone.Hand;
 
 public class Player {
