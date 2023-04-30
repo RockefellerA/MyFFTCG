@@ -2,6 +2,8 @@ package model;
 
 import java.util.Set;
 
+import zone.Hand;
+
 public class Player {
 
 	public int hp; // Standard HP is 7

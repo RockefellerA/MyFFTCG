@@ -2,6 +2,8 @@ package model.card;
 
 public class CardBackup extends Card{
 	
+	// Backups are played dull
+	
 	/**
 	 * Things only Backups have
 	 */

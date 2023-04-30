@@ -10,7 +10,9 @@ public class Deck {
 	// Each deck may have only 3 copies of each card.
 	// If a player takes damage while their deck has 0 cards left, they lose the game.
 	
-	public int MAXIMUM_DECK_SIZE = 50; // Each deck must consist of exactly 50 cards
+	public int MAXIMUM_DECK_SIZE = 50; // Each deck must start with exactly 50 cards
+	
+	public int currentDeckSize; // This needs to be tracked for win/lose conditions.
 	
 	public ArrayList<Card> cards;
 	

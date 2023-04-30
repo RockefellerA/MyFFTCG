@@ -11,6 +11,8 @@ import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JTextPane;
+import java.awt.Font;
 
 public class MainWindow {
 
@@ -54,72 +56,63 @@ public class MainWindow {
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		frame.getContentPane().setLayout(null);
 		
-		JLabel labelPlayerSide2 = new JLabel("Player 2 Side");
-		labelPlayerSide2.setBounds(0, 0, 1264, 14);
-		labelPlayerSide2.setForeground(new Color(255, 255, 255));
-		frame.getContentPane().add(labelPlayerSide2);
-		
-		JButton btnNewButton = new JButton("Active Phase");
-		btnNewButton.setBounds(0, 658, 1264, 23);
-		btnNewButton.addActionListener(new ActionListener() {
+		JButton phaseButton = new JButton("Active Phase");
+		phaseButton.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		phaseButton.setBounds(0, 658, 1264, 23);
+		phaseButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				switch (i) {
-				case 0: btnNewButton.setText("Draw Phase");
+				case 0: phaseButton.setText("Draw Phase");
 						i++;
 						break;
-				case 1: btnNewButton.setText("Main Phase 1");
+				case 1: phaseButton.setText("Main Phase 1");
 						i++;
 						break;
-				case 2: btnNewButton.setText("Attack Phase");
+				case 2: phaseButton.setText("Attack Phase");
 						i++;
 						break;
-				case 3: btnNewButton.setText("Main Phase 2");
+				case 3: phaseButton.setText("Main Phase 2");
 						i++;
 						break;
-				case 4: btnNewButton.setText("End Phase");
+				case 4: phaseButton.setText("End Phase");
 						i++;
 						break;
-				case 5: btnNewButton.setText("Active Phase");
+				case 5: phaseButton.setText("Active Phase");
 						i=0;
 						break;
 				}
 			}
 		});
-		frame.getContentPane().add(btnNewButton);
+		frame.getContentPane().add(phaseButton);
 		
-		Label labelPlayerSide1 = new Label("Player 1 Side");
-		labelPlayerSide1.setBounds(0, 630, 84, 22);
-		labelPlayerSide1.setForeground(new Color(255, 255, 255));
-		frame.getContentPane().add(labelPlayerSide1);
+		Panel Deck1 = new Panel();
+		Deck1.setBackground(new Color(255, 255, 255));
+		Deck1.setBounds(1135, 329, 119, 134);
+		frame.getContentPane().add(Deck1);
 		
-		Panel panel = new Panel();
-		panel.setBackground(new Color(255, 255, 255));
-		panel.setBounds(1135, 329, 119, 134);
-		frame.getContentPane().add(panel);
+		Panel Break1 = new Panel();
+		Break1.setBackground(Color.WHITE);
+		Break1.setBounds(1135, 487, 119, 134);
+		frame.getContentPane().add(Break1);
 		
-		Panel panel_1 = new Panel();
-		panel_1.setBackground(Color.WHITE);
-		panel_1.setBounds(1135, 487, 119, 134);
-		frame.getContentPane().add(panel_1);
+		Panel Damage1 = new Panel();
+		Damage1.setBackground(Color.LIGHT_GRAY);
+		Damage1.setBounds(10, 329, 127, 295);
+		frame.getContentPane().add(Damage1);
 		
-		Panel panel_1_1 = new Panel();
-		panel_1_1.setBackground(Color.LIGHT_GRAY);
-		panel_1_1.setBounds(10, 329, 127, 295);
-		frame.getContentPane().add(panel_1_1);
+		Panel Deck2 = new Panel();
+		Deck2.setBackground(Color.WHITE);
+		Deck2.setBounds(18, 165, 119, 134);
+		frame.getContentPane().add(Deck2);
 		
-		Panel panel_2 = new Panel();
-		panel_2.setBackground(Color.WHITE);
-		panel_2.setBounds(18, 165, 119, 134);
-		frame.getContentPane().add(panel_2);
+		Panel Break2 = new Panel();
+		Break2.setBackground(Color.WHITE);
+		Break2.setBounds(18, 20, 119, 134);
+		frame.getContentPane().add(Break2);
 		
-		Panel panel_3 = new Panel();
-		panel_3.setBackground(Color.WHITE);
-		panel_3.setBounds(18, 20, 119, 134);
-		frame.getContentPane().add(panel_3);
-		
-		Panel panel_1_1_1 = new Panel();
-		panel_1_1_1.setBackground(Color.LIGHT_GRAY);
-		panel_1_1_1.setBounds(1127, 16, 127, 295);
-		frame.getContentPane().add(panel_1_1_1);
+		Panel Damage2 = new Panel();
+		Damage2.setBackground(Color.LIGHT_GRAY);
+		Damage2.setBounds(1127, 16, 127, 295);
+		frame.getContentPane().add(Damage2);
 	}
 }
