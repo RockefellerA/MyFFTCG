@@ -16,7 +16,7 @@ public abstract class Card {
 	 * These are things all cards have.
 	 */
 	public String name;
-	public int cost;
+	public int cost;  // If cost=1, you still need one CP of each element. If cost=0, no CP is needed.
 	public String job;
 	public Set<Category> categories;
 	public boolean hasExBurst;

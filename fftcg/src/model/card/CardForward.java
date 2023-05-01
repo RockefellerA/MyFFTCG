@@ -13,5 +13,16 @@ public class CardForward extends Card{
 	public boolean isBlocking;
 	
 	public int damageTaken;
+	
+	public void takeDamage(int damage) {
+		power = power - damage;
+		if (power <= 0) {
+			breakForward();
+		}
+	}
+	
+	private void breakForward() {
+		// Move card to break zone.
+	}
 
 }
