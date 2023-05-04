@@ -1,30 +1,35 @@
 package fftcg;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Desktop;
 import java.awt.EventQueue;
 import java.awt.Font;
 import java.awt.Panel;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JInternalFrame;
+import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
 import javax.swing.KeyStroke;
-import javax.swing.JLabel;
-import java.awt.BorderLayout;
 import javax.swing.SwingConstants;
 
 public class MainWindow {
 
 	private JFrame frame;
 	
-	int i = 0;
+	int phase = 0;
 	
 	/**
 	 * Launch the application.
@@ -67,25 +72,25 @@ public class MainWindow {
 		phaseButton.setBounds(0, 636, 1264, 23);
 		phaseButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				switch (i) {
+				switch (phase) {
 				case 0: phaseButton.setText("Draw Phase");
-						i++;
-						break;
+					phase++;
+					break;
 				case 1: phaseButton.setText("Main Phase 1");
-						i++;
-						break;
+					phase++;
+					break;
 				case 2: phaseButton.setText("Attack Phase");
-						i++;
-						break;
+					phase++;
+					break;
 				case 3: phaseButton.setText("Main Phase 2");
-						i++;
-						break;
+					phase++;
+					break;
 				case 4: phaseButton.setText("End Phase");
-						i++;
-						break;
+					phase++;
+					break;
 				case 5: phaseButton.setText("Active Phase");
-						i=0;
-						break;
+					phase=0;
+					break;
 				}
 			}
 		});
@@ -171,8 +176,31 @@ public class MainWindow {
 		JMenu helpMenu = new JMenu("Help");
 		menuBar.add(helpMenu);
 		
-		JMenuItem howToPlayMenuItem = new JMenuItem("How to Play");
+		JMenuItem howToPlayMenuItem = new JMenuItem("How to Play (Basics)");
 		helpMenu.add(howToPlayMenuItem);
+		howToPlayMenuItem.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+	            int result = JOptionPane.showConfirmDialog(frame,"This will open the FFTCG Starter Guide in your browser. Continue?", howToPlayMenuItem.getText(),
+	                    JOptionPane.YES_NO_OPTION,
+	                    JOptionPane.QUESTION_MESSAGE);
+				if (result == JOptionPane.YES_OPTION) {
+					openStarterGuidePdf();
+				}
+			}
+		});
+		
+		JMenuItem howToPlay2MenuItem = new JMenuItem("How to Play (Advanced)");
+		helpMenu.add(howToPlay2MenuItem);
+		howToPlay2MenuItem.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+	            int result = JOptionPane.showConfirmDialog(frame,"This will open the FFTCG Comprehensive Rules in your browser. Continue?", howToPlay2MenuItem.getText(),
+	                    JOptionPane.YES_NO_OPTION,
+	                    JOptionPane.QUESTION_MESSAGE);
+				if (result == JOptionPane.YES_OPTION) {
+					openAdvancedGuidePdf();
+				}
+			}
+		});
 		
 		JMenuItem menuItemAbout = new JMenuItem("About MyFFTCG");
 		helpMenu.add(menuItemAbout);
@@ -181,5 +209,33 @@ public class MainWindow {
 				aboutFrame.setVisible(true);
 			}
 		});
+	}
+	
+	/**
+	 * Opens the Starter Guide in the browser.  This link could go dead.
+	 */
+	private void openStarterGuidePdf() {
+		if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+		    try {
+				Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2020-02/fftcgrulesheet-en.pdf"));
+			} catch (IOException | URISyntaxException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
+		}
+	}
+	
+	/**
+	 * Opens the Advanced Guide in the browser.  This link could go dead.
+	 */
+	private void openAdvancedGuidePdf() {
+		if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+		    try {
+				Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2022-11/fftcg-opus-cr-english-20220811.pdf"));
+			} catch (IOException | URISyntaxException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
+		}
 	}
 }
