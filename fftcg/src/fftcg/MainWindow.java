@@ -10,6 +10,13 @@ import java.awt.event.ActionListener;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFrame;
+import javax.swing.JToolBar;
+import javax.swing.JMenuBar;
+import javax.swing.JMenu;
+import javax.swing.JMenuItem;
+import javax.swing.JInternalFrame;
+import javax.swing.KeyStroke;
+import java.awt.event.KeyEvent;
 
 public class MainWindow {
 
@@ -55,7 +62,7 @@ public class MainWindow {
 		
 		JButton phaseButton = new JButton("Active Phase");
 		phaseButton.setFont(new Font("Pixel NES", Font.PLAIN, 11));
-		phaseButton.setBounds(0, 658, 1264, 23);
+		phaseButton.setBounds(0, 636, 1264, 23);
 		phaseButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				switch (i) {
@@ -111,5 +118,38 @@ public class MainWindow {
 		Damage2.setBackground(Color.LIGHT_GRAY);
 		Damage2.setBounds(1127, 16, 127, 295);
 		frame.getContentPane().add(Damage2);
+		
+		JInternalFrame internalFrame = new JInternalFrame("About MyFFTCG");
+		internalFrame.setClosable(true);
+		internalFrame.setBounds(460, 229, 272, 166);
+		frame.getContentPane().add(internalFrame);
+		
+		JMenuBar menuBar = new JMenuBar();
+		frame.setJMenuBar(menuBar);
+		
+		JMenu mnNewMenu = new JMenu("File");
+		menuBar.add(mnNewMenu);
+		
+		JMenuItem mntmNewMenuItem_3 = new JMenuItem("New Game");
+		mnNewMenu.add(mntmNewMenuItem_3);
+		
+		JMenuItem mntmNewMenuItem_1 = new JMenuItem("Deck Manager");
+		mnNewMenu.add(mntmNewMenuItem_1);
+		
+		JMenuItem mntmNewMenuItem_2 = new JMenuItem("Card Browser");
+		mnNewMenu.add(mntmNewMenuItem_2);
+		
+		JMenuItem mntmNewMenuItem = new JMenuItem("Exit MyFFTCG");
+		mntmNewMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0));
+		mnNewMenu.add(mntmNewMenuItem);
+		
+		JMenu mnNewMenu_1 = new JMenu("Help");
+		menuBar.add(mnNewMenu_1);
+		
+		JMenuItem mntmNewMenuItem_4 = new JMenuItem("How to Play");
+		mnNewMenu_1.add(mntmNewMenuItem_4);
+		
+		JMenuItem mntmNewMenuItem_5 = new JMenuItem("About MyFFTCG");
+		mnNewMenu_1.add(mntmNewMenuItem_5);
 	}
 }
