@@ -157,21 +157,31 @@ public class MainWindow {
 		JMenuBar menuBar = new JMenuBar();
 		frame.setJMenuBar(menuBar);
 		
-		JMenu mnNewMenu = new JMenu("File");
-		menuBar.add(mnNewMenu);
+		JMenu fileMenu = new JMenu("File");
+		menuBar.add(fileMenu);
 		
-		JMenuItem mntmNewMenuItem_3 = new JMenuItem("New Game");
-		mnNewMenu.add(mntmNewMenuItem_3);
+		JMenuItem newGameMenuItem = new JMenuItem("New Game");
+		fileMenu.add(newGameMenuItem);
 		
-		JMenuItem mntmNewMenuItem_1 = new JMenuItem("Deck Manager");
-		mnNewMenu.add(mntmNewMenuItem_1);
+		JMenuItem deckManagerMenuItem = new JMenuItem("Deck Manager");
+		fileMenu.add(deckManagerMenuItem);
 		
-		JMenuItem mntmNewMenuItem_2 = new JMenuItem("Card Browser");
-		mnNewMenu.add(mntmNewMenuItem_2);
+		JMenuItem cardBrowserMenuItem = new JMenuItem("Card Browser");
+		fileMenu.add(cardBrowserMenuItem);
 		
-		JMenuItem mntmNewMenuItem = new JMenuItem("Exit MyFFTCG");
-		mntmNewMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0));
-		mnNewMenu.add(mntmNewMenuItem);
+		JMenuItem exitMenuItem = new JMenuItem("Exit MyFFTCG");
+		exitMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0));
+		fileMenu.add(exitMenuItem);
+		exitMenuItem.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+	            int result = JOptionPane.showConfirmDialog(frame,"Are you sure you want to quit?", exitMenuItem.getText(),
+	                    JOptionPane.YES_NO_OPTION,
+	                    JOptionPane.WARNING_MESSAGE);
+				if (result == JOptionPane.YES_OPTION) {
+					System.exit(0);
+				}
+			}
+		});
 		
 		JMenu helpMenu = new JMenu("Help");
 		menuBar.add(helpMenu);
