@@ -144,16 +144,6 @@ public class MainWindow {
 		JLabel lblNewLabel_3 = new JLabel("P2 Damage Zone");
 		Damage2.add(lblNewLabel_3);
 		
-		JInternalFrame aboutFrame = new JInternalFrame("About MyFFTCG");
-		aboutFrame.setFrameIcon(new ImageIcon(MainWindow.class.getResource("/resources/MyFF20.png")));
-		aboutFrame.setClosable(true);
-		aboutFrame.setBounds(460, 229, 272, 166);
-		frame.getContentPane().add(aboutFrame);
-		
-		JLabel lblNewLabel = new JLabel("<html>Author: Andrew Rockefeller © 2023<br/>Pixel NES font by Neale Davidson</html>");
-		lblNewLabel.setHorizontalAlignment(SwingConstants.CENTER);
-		aboutFrame.getContentPane().add(lblNewLabel, BorderLayout.CENTER);
-		
 		JMenuBar menuBar = new JMenuBar();
 		frame.setJMenuBar(menuBar);
 		
@@ -216,7 +206,9 @@ public class MainWindow {
 		helpMenu.add(menuItemAbout);
 		menuItemAbout.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				aboutFrame.setVisible(true);
+				About dialog = new About();
+				dialog.setLocationRelativeTo(frame);
+				dialog.setVisible(true);
 			}
 		});
 	}
