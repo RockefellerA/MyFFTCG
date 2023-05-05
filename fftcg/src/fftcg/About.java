@@ -2,15 +2,15 @@ package fftcg;
 
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
+import java.awt.Toolkit;
 
-import javax.swing.JButton;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingConstants;
 import javax.swing.border.EmptyBorder;
-import java.awt.Toolkit;
 
+@SuppressWarnings("serial")
 public class About extends JDialog {
 
 	private final JPanel contentPanel = new JPanel();

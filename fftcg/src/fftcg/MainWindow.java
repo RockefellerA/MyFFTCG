@@ -1,6 +1,5 @@
 package fftcg;
 
-import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Desktop;
 import java.awt.EventQueue;
@@ -16,20 +15,18 @@ import java.net.URISyntaxException;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFrame;
-import javax.swing.JInternalFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.KeyStroke;
-import javax.swing.SwingConstants;
 
 public class MainWindow {
 
 	private JFrame frame;
 	
-	int phase = 0;
+	int phase = 0; // Track the game phases with this handy button!
 	
 	/**
 	 * Launch the application.
