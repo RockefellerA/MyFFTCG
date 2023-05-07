@@ -63,6 +63,7 @@ public class MainWindow {
 		frame.setBounds(800, 500, 1280, 720);
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		frame.getContentPane().setLayout(null);
+//		frame.getContentPane().setLayout(new CardLayout());
 		
 		JButton phaseButton = new JButton("Active Phase");
 		phaseButton.setFont(new Font("Pixel NES", Font.PLAIN, 11));
@@ -155,6 +156,11 @@ public class MainWindow {
 		
 		JMenuItem cardBrowserMenuItem = new JMenuItem("Card Browser");
 		fileMenu.add(cardBrowserMenuItem);
+		cardBrowserMenuItem.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				// Call a JPanel? Frame? How should I design this?
+			}
+		});
 		
 		JMenuItem exitMenuItem = new JMenuItem("Exit MyFFTCG");
 		exitMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0));
@@ -181,7 +187,7 @@ public class MainWindow {
 	                    JOptionPane.YES_NO_OPTION,
 	                    JOptionPane.QUESTION_MESSAGE);
 				if (result == JOptionPane.YES_OPTION) {
-					openStarterGuidePdf();
+					openGuidePdf(0);
 				}
 			}
 		});
@@ -194,7 +200,7 @@ public class MainWindow {
 	                    JOptionPane.YES_NO_OPTION,
 	                    JOptionPane.QUESTION_MESSAGE);
 				if (result == JOptionPane.YES_OPTION) {
-					openAdvancedGuidePdf();
+					openGuidePdf(1);
 				}
 			}
 		});
@@ -211,26 +217,19 @@ public class MainWindow {
 	}
 	
 	/**
-	 * Opens the Starter Guide in the browser.  This link could go dead.
+	 * Opens the Starter or Advanced Guide in the browser.  These links could go dead.
 	 */
-	private void openStarterGuidePdf() {
+	private void openGuidePdf(int guide) {
 		if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
 		    try {
-				Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2020-02/fftcgrulesheet-en.pdf"));
-			} catch (IOException | URISyntaxException e1) {
-				// TODO Auto-generated catch block
-				e1.printStackTrace();
-			}
-		}
-	}
-	
-	/**
-	 * Opens the Advanced Guide in the browser.  This link could go dead.
-	 */
-	private void openAdvancedGuidePdf() {
-		if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-		    try {
-				Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2022-11/fftcg-opus-cr-english-20220811.pdf"));
+		    	switch(guide) {
+		    		case 0:
+		    			Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2020-02/fftcgrulesheet-en.pdf"));
+		    			break;
+		    		case 1:
+						Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2022-11/fftcg-opus-cr-english-20220811.pdf"));
+		    			break;
+		    	}
 			} catch (IOException | URISyntaxException e1) {
 				// TODO Auto-generated catch block
 				e1.printStackTrace();
