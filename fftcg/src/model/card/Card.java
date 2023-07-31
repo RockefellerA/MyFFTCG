@@ -1,5 +1,6 @@
 package model.card;
 
+import java.awt.Image;
 import java.util.Set;
 
 import model.Category;
@@ -41,6 +42,9 @@ public abstract class Card {
 	public Rarity rarity;
 	public boolean isFoil;
 	public boolean isFullArt;
+	public Image cardBack;
+	public Image cardFront;
+	
 	public String getName() {
 		return name;
 	}
@@ -145,10 +149,20 @@ public abstract class Card {
 		this.isFullArt = isFullArt;
 	}
 	
-	
+	public Image getCardBack() {
+		return cardBack;
+	}
 
-	
-	
-	
+	public void setCardBack(Image cardBack) {
+		this.cardBack = cardBack;
+	}
+
+	public Image getCardFront() {
+		return cardFront;
+	}
+
+	public void setCardFront(Image cardFront) {
+		this.cardFront = cardFront;
+	}
 	
 }
