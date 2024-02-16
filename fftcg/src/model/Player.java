@@ -4,12 +4,15 @@ import java.util.Set;
 
 import zone.Deck;
 import zone.Hand;
+import zone.LimitBreakDeck;
 
 public class Player {
 
 	public int hp; // Standard HP is 7
 	
 	public Deck deck;
+	
+	public LimitBreakDeck limitBreakDeck; // Up to 8 optional, always-accessible "LB" cards.
 	
 	public Hand hand;
 	

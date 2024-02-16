@@ -1,10 +1,8 @@
 package fftcg;
 
-import java.awt.Color;
+import java.awt.BorderLayout;
 import java.awt.Desktop;
 import java.awt.EventQueue;
-import java.awt.Font;
-import java.awt.Panel;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
@@ -13,9 +11,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 
 import javax.swing.ImageIcon;
-import javax.swing.JButton;
 import javax.swing.JFrame;
-import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
@@ -27,6 +23,8 @@ public class MainWindow {
 	private JFrame frame;
 	
 	int phase = 0; // Track the game phases with this handy button!
+	
+	boolean gameInProgress = false; // placeholder to assume a game is in progress
 	
 	/**
 	 * Launch the application.
@@ -58,89 +56,85 @@ public class MainWindow {
 	 */
 	private void initialize() {
 		frame = new JFrame("MyFFTCG");
-		frame.setBackground(new Color(255, 255, 255));
-		frame.getContentPane().setBackground(new Color(0, 0, 160));
 		frame.setBounds(800, 500, 1280, 720);
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-		frame.getContentPane().setLayout(null);
-//		frame.getContentPane().setLayout(new CardLayout());
 		
-		JButton phaseButton = new JButton("Active Phase");
-		phaseButton.setFont(new Font("Pixel NES", Font.PLAIN, 11));
-		phaseButton.setBounds(0, 636, 1264, 23);
-		phaseButton.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				switch (phase) {
-				case 0: phaseButton.setText("Draw Phase");
-					phase++;
-					break;
-				case 1: phaseButton.setText("Main Phase 1");
-					phase++;
-					break;
-				case 2: phaseButton.setText("Attack Phase");
-					phase++;
-					break;
-				case 3: phaseButton.setText("Main Phase 2");
-					phase++;
-					break;
-				case 4: phaseButton.setText("End Phase");
-					phase++;
-					break;
-				case 5: phaseButton.setText("Active Phase");
-					phase=0;
-					break;
-				}
-			}
-		});
-		frame.getContentPane().add(phaseButton);
-		
-		Panel Deck1 = new Panel();
-		Deck1.setBackground(new Color(255, 255, 255));
-		Deck1.setBounds(1135, 329, 119, 134);
-		frame.getContentPane().add(Deck1);
-		
-		JLabel lblNewLabel_2_1 = new JLabel("P1 Deck");
-		Deck1.add(lblNewLabel_2_1);
-		
-		Panel Break1 = new Panel();
-		Break1.setBackground(Color.WHITE);
-		Break1.setBounds(1135, 487, 119, 134);
-		frame.getContentPane().add(Break1);
-		
-		JLabel lblNewLabel_1_1 = new JLabel("P1 Break Zone");
-		Break1.add(lblNewLabel_1_1);
-		
-		Panel Damage1 = new Panel();
-		Damage1.setBackground(Color.LIGHT_GRAY);
-		Damage1.setBounds(10, 329, 127, 295);
-		frame.getContentPane().add(Damage1);
-		
-		JLabel lblNewLabel_3_1 = new JLabel("P1 Damage Zone");
-		Damage1.add(lblNewLabel_3_1);
-		
-		Panel Deck2 = new Panel();
-		Deck2.setBackground(Color.WHITE);
-		Deck2.setBounds(18, 165, 119, 134);
-		frame.getContentPane().add(Deck2);
-		
-		JLabel lblNewLabel_2 = new JLabel("P2 Deck");
-		Deck2.add(lblNewLabel_2);
-		
-		Panel Break2 = new Panel();
-		Break2.setBackground(Color.WHITE);
-		Break2.setBounds(18, 20, 119, 134);
-		frame.getContentPane().add(Break2);
-		
-		JLabel lblNewLabel_1 = new JLabel("P2 Break Zone");
-		Break2.add(lblNewLabel_1);
-		
-		Panel Damage2 = new Panel();
-		Damage2.setBackground(Color.LIGHT_GRAY);
-		Damage2.setBounds(1127, 16, 127, 295);
-		frame.getContentPane().add(Damage2);
-		
-		JLabel lblNewLabel_3 = new JLabel("P2 Damage Zone");
-		Damage2.add(lblNewLabel_3);
+//		JButton phaseButton = new JButton("Active Phase");
+//		phaseButton.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+//		phaseButton.setBounds(0, 636, 1264, 23);
+//		phaseButton.addActionListener(new ActionListener() {
+//			public void actionPerformed(ActionEvent e) {
+//				switch (phase) {
+//				case 0: phaseButton.setText("Draw Phase");
+//					phase++;
+//					break;
+//				case 1: phaseButton.setText("Main Phase 1");
+//					phase++;
+//					break;
+//				case 2: phaseButton.setText("Attack Phase");
+//					phase++;
+//					break;
+//				case 3: phaseButton.setText("Main Phase 2");
+//					phase++;
+//					break;
+//				case 4: phaseButton.setText("End Phase");
+//					phase++;
+//					break;
+//				case 5: phaseButton.setText("Active Phase");
+//					phase=0;
+//					break;
+//				}
+//			}
+//		});
+//		frame.getContentPane().add(phaseButton);
+//		
+//		Panel Deck1 = new Panel();
+//		Deck1.setBackground(new Color(255, 255, 255));
+//		Deck1.setBounds(1135, 329, 119, 134);
+//		frame.getContentPane().add(Deck1);
+//		
+//		JLabel lblNewLabel_2_1 = new JLabel("P1 Deck");
+//		Deck1.add(lblNewLabel_2_1);
+//		
+//		Panel Break1 = new Panel();
+//		Break1.setBackground(Color.WHITE);
+//		Break1.setBounds(1135, 487, 119, 134);
+//		frame.getContentPane().add(Break1);
+//		
+//		JLabel lblNewLabel_1_1 = new JLabel("P1 Break Zone");
+//		Break1.add(lblNewLabel_1_1);
+//		
+//		Panel Damage1 = new Panel();
+//		Damage1.setBackground(Color.LIGHT_GRAY);
+//		Damage1.setBounds(10, 329, 127, 295);
+//		frame.getContentPane().add(Damage1);
+//		
+//		JLabel lblNewLabel_3_1 = new JLabel("P1 Damage Zone");
+//		Damage1.add(lblNewLabel_3_1);
+//		
+//		Panel Deck2 = new Panel();
+//		Deck2.setBackground(Color.WHITE);
+//		Deck2.setBounds(18, 165, 119, 134);
+//		frame.getContentPane().add(Deck2);
+//		
+//		JLabel lblNewLabel_2 = new JLabel("P2 Deck");
+//		Deck2.add(lblNewLabel_2);
+//		
+//		Panel Break2 = new Panel();
+//		Break2.setBackground(Color.WHITE);
+//		Break2.setBounds(18, 20, 119, 134);
+//		frame.getContentPane().add(Break2);
+//		
+//		JLabel lblNewLabel_1 = new JLabel("P2 Break Zone");
+//		Break2.add(lblNewLabel_1);
+//		
+//		Panel Damage2 = new Panel();
+//		Damage2.setBackground(Color.LIGHT_GRAY);
+//		Damage2.setBounds(1127, 16, 127, 295);
+//		frame.getContentPane().add(Damage2);
+//		
+//		JLabel lblNewLabel_3 = new JLabel("P2 Damage Zone");
+//		Damage2.add(lblNewLabel_3);
 		
 		JMenuBar menuBar = new JMenuBar();
 		frame.setJMenuBar(menuBar);
@@ -150,6 +144,15 @@ public class MainWindow {
 		
 		JMenuItem newGameMenuItem = new JMenuItem("New Game");
 		fileMenu.add(newGameMenuItem);
+		newGameMenuItem.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				frame.getContentPane().removeAll();
+				frame.getContentPane().invalidate();
+				frame.getContentPane().add(new GameWindow(frame));
+				frame.getContentPane().revalidate();
+//				frame.setLocationRelativeTo(null);
+			}
+		});
 		
 		JMenuItem deckManagerMenuItem = new JMenuItem("Deck Manager");
 		fileMenu.add(deckManagerMenuItem);
@@ -158,7 +161,17 @@ public class MainWindow {
 		fileMenu.add(cardBrowserMenuItem);
 		cardBrowserMenuItem.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				// Call a JPanel? Frame? How should I design this?
+				if (gameInProgress) {
+					int result = JOptionPane.showConfirmDialog(frame,"Game is in progress. Abandon to view card browser?", cardBrowserMenuItem.getText(),
+							JOptionPane.YES_NO_OPTION,
+							JOptionPane.WARNING_MESSAGE);
+					if (result == JOptionPane.YES_OPTION) {
+						frame.getContentPane().removeAll();
+						frame.getContentPane().invalidate();
+						frame.getContentPane().add(new CardBrowser());
+						frame.getContentPane().revalidate();
+					}
+				}
 			}
 		});
 		
@@ -207,6 +220,8 @@ public class MainWindow {
 		
 		JMenuItem menuItemAbout = new JMenuItem("About MyFFTCG");
 		helpMenu.add(menuItemAbout);
+		frame.getContentPane().setLayout(new BorderLayout(0, 0));
+		
 		menuItemAbout.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				About dialog = new About();
@@ -231,7 +246,6 @@ public class MainWindow {
 		    			break;
 		    	}
 			} catch (IOException | URISyntaxException e1) {
-				// TODO Auto-generated catch block
 				e1.printStackTrace();
 			}
 		}

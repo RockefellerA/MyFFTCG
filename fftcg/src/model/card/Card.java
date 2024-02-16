@@ -17,7 +17,8 @@ public abstract class Card {
 	 * These are things all cards have.
 	 */
 	public String name;
-	public int cost;  // If cost=1, you still need one CP of each element. If cost=0, no CP is needed.
+	public int cost;  // If cost=1, you still need one CP of each element. If cost=0, no CP is needed.\
+	public int lbCost = 0; // only applies to LB cards
 	public String job;
 	public Set<Category> categories;
 	public boolean hasExBurst;
@@ -25,6 +26,7 @@ public abstract class Card {
 	public Set<Keywords> keywords;
 	
 	public boolean isCharacter;
+	public boolean isLimitBreak; // LB cards can only be found in the LB deck.
 	
 	/**
 	 * States of being
@@ -93,6 +95,12 @@ public abstract class Card {
 	}
 	public void setCharacter(boolean isCharacter) {
 		this.isCharacter = isCharacter;
+	}
+	public boolean isLimitBreak() {
+		return isLimitBreak;
+	}
+	public void setLimitBreak(boolean isLimitBreak) {
+		this.isLimitBreak = isLimitBreak;
 	}
 	public Player getOwner() {
 		return owner;
