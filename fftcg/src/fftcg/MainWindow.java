@@ -242,7 +242,7 @@ public class MainWindow {
 		    			Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2020-02/fftcgrulesheet-en.pdf"));
 		    			break;
 		    		case 1:
-						Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2022-11/fftcg-opus-cr-english-20220811.pdf"));
+						Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/advanced-rules/fftcg-rules-2.1.10.pdf"));
 		    			break;
 		    	}
 			} catch (IOException | URISyntaxException e1) {
