@@ -1,8 +1,8 @@
 package fftcg;
 
-import java.awt.BorderLayout;
 import java.awt.Desktop;
 import java.awt.EventQueue;
+import java.awt.Image;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
@@ -12,11 +12,22 @@ import java.net.URISyntaxException;
 
 import javax.swing.ImageIcon;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
+import javax.swing.JPanel;
 import javax.swing.KeyStroke;
+import java.awt.Color;
+import java.awt.Font;
+import javax.swing.SwingConstants;
+import javax.swing.border.BevelBorder;
+import javax.swing.border.EtchedBorder;
+import javax.swing.border.SoftBevelBorder;
+import javax.swing.border.EmptyBorder;
+import javax.swing.border.CompoundBorder;
+import javax.swing.border.LineBorder;
 
 public class MainWindow {
 
@@ -56,6 +67,7 @@ public class MainWindow {
 	 */
 	private void initialize() {
 		frame = new JFrame("MyFFTCG");
+		frame.getContentPane().setBackground(Color.LIGHT_GRAY);
 		frame.setBounds(800, 500, 1280, 720);
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 		
@@ -135,6 +147,11 @@ public class MainWindow {
 //		
 //		JLabel lblNewLabel_3 = new JLabel("P2 Damage Zone");
 //		Damage2.add(lblNewLabel_3);
+		
+		//
+		// GAME WINDOW
+		// I'll move this to GameWindow when I figure out how to treat these as pages.
+		// 
 		
 		JMenuBar menuBar = new JMenuBar();
 		frame.setJMenuBar(menuBar);
@@ -220,7 +237,26 @@ public class MainWindow {
 		
 		JMenuItem menuItemAbout = new JMenuItem("About MyFFTCG");
 		helpMenu.add(menuItemAbout);
-		frame.getContentPane().setLayout(new BorderLayout(0, 0));
+		frame.getContentPane().setLayout(null);
+		
+		JLabel deck = new JLabel();
+		deck.setBorder(new BevelBorder(BevelBorder.RAISED, new Color(0, 0, 0), null, null, null));
+		deck.setToolTipText("Player 1 Deck");
+		deck.setBounds(1071, 267, 132, 185);
+		frame.getContentPane().add(deck);
+		
+		ImageIcon cardBack = new ImageIcon(getClass().getResource("/resources/cardback60p.jpg"));
+		deck.setIcon(cardBack);
+		
+		JLabel break1 = new JLabel();
+		break1.setHorizontalAlignment(SwingConstants.CENTER);
+		break1.setFont(new Font("Pixel NES", Font.PLAIN, 18));
+		break1.setText("B R E A K");
+		break1.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
+		break1.setBackground(Color.DARK_GRAY);
+		break1.setToolTipText("Player 1 Break Zone");
+		break1.setBounds(1071, 463, 132, 185);
+		frame.getContentPane().add(break1);
 		
 		menuItemAbout.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
