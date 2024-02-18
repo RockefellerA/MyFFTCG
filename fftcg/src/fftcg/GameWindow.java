@@ -56,6 +56,7 @@ public class GameWindow extends JPanel {
 				}
 			}
 		});
+		
 		GridBagConstraints gbc_phaseButton = new GridBagConstraints();
 		gbc_phaseButton.anchor = GridBagConstraints.SOUTH;
 		gbc_phaseButton.fill = GridBagConstraints.HORIZONTAL;
