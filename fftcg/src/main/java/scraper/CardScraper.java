@@ -217,13 +217,15 @@ public class CardScraper {
         c.typeEn    = j.optString("type_en",    "");
         c.rarity    = j.optString("rarity",     "");
         c.jobEn     = j.optString("job_en",     "");
-        c.category1 = j.optString("category_1", "");
+        String cat1 = j.optString("category_1", "");
+        int middot = cat1.indexOf("&middot;");
+        c.category1 = (middot >= 0 ? cat1.substring(0, middot) : cat1).trim();
         c.category2 = j.optString("category_2", "");
         c.textEn    = j.optString("text_en",    "");
         c.setNumber = setNumber;
 
         // element is an array, e.g. ["Fire"] or ["火", "水"] for dual-element cards.
-        // The API sometimes returns Japanese kanji — translate to English here.
+        // The API may return Japanese kanji — translate to English here.
         JSONArray elementArr = j.optJSONArray("element");
         if (elementArr != null) {
             StringBuilder sb = new StringBuilder();

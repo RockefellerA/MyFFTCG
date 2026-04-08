@@ -2,8 +2,8 @@ package fftcg;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.Image;
-import java.io.IOException;
 import java.net.URL;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -11,10 +11,13 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.regex.Pattern;
 
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -22,17 +25,26 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
+import javax.swing.RowFilter;
 import javax.swing.SwingConstants;
 import javax.swing.SwingWorker;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableRowSorter;
 
 public class CardBrowser extends JDialog {
 
     private static final String DB_URL = "jdbc:sqlite:fftcg_cards_test.db";
+    private static final String[] COLUMNS = {
+        "Serial", "Name", "Type", "Element", "Cost", "Power",
+        "Rarity", "Job", "Category 1", "Category 2", "Set"
+    };
 
     private final DefaultTableModel tableModel;
     private final JLabel cardImageLabel;
+    private final JLabel countLabel;
+    private TableRowSorter<DefaultTableModel> sorter;
 
     public CardBrowser(JFrame parent) {
         super(parent, "Card Browser", true);
@@ -41,8 +53,7 @@ public class CardBrowser extends JDialog {
         setLayout(new BorderLayout());
 
         // --- Card table ---
-        String[] columns = {"Serial", "Name", "Type", "Element", "Cost", "Power", "Rarity", "Job", "Category 1", "Category 2", "Set"};
-        tableModel = new DefaultTableModel(columns, 0) {
+        tableModel = new DefaultTableModel(COLUMNS, 0) {
             @Override
             public boolean isCellEditable(int row, int col) { return false; }
         };
@@ -51,7 +62,35 @@ public class CardBrowser extends JDialog {
         cardTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         cardTable.getTableHeader().setReorderingAllowed(false);
         cardTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
-        cardTable.setAutoCreateRowSorter(true);
+
+        sorter = new TableRowSorter<>(tableModel);
+        cardTable.setRowSorter(sorter);
+
+        // --- Search bar ---
+        String[] columnChoices = new String[COLUMNS.length + 1];
+        columnChoices[0] = "All Columns";
+        System.arraycopy(COLUMNS, 0, columnChoices, 1, COLUMNS.length);
+
+        JComboBox<String> columnDropdown = new JComboBox<>(columnChoices);
+        JTextField searchField = new JTextField(20);
+        JButton searchButton = new JButton("\uD83D\uDD0D"); // 🔍
+        JButton clearButton  = new JButton("✕");
+
+        searchButton.addActionListener(e -> applyFilter(searchField.getText(), columnDropdown.getSelectedIndex()));
+        clearButton.addActionListener(e -> {
+            searchField.setText("");
+            sorter.setRowFilter(null);
+            updateCount();
+        });
+        // Also trigger search on Enter in the text field
+        searchField.addActionListener(e -> applyFilter(searchField.getText(), columnDropdown.getSelectedIndex()));
+
+        JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
+        searchPanel.add(new JLabel("Search:"));
+        searchPanel.add(columnDropdown);
+        searchPanel.add(searchField);
+        searchPanel.add(searchButton);
+        searchPanel.add(clearButton);
 
         // --- Card image preview ---
         cardImageLabel = new JLabel("Select a card to preview", SwingConstants.CENTER);
@@ -68,26 +107,51 @@ public class CardBrowser extends JDialog {
                 int row = cardTable.getSelectedRow();
                 if (row >= 0) {
                     int modelRow = cardTable.convertRowIndexToModel(row);
-                    String serial = (String) tableModel.getValueAt(modelRow, 0);
-                    loadCardImageAsync(serial);
+                    loadCardImageAsync((String) tableModel.getValueAt(modelRow, 0));
                 }
             }
         });
 
-        JLabel countLabel = new JLabel("", SwingConstants.RIGHT);
+        // --- Status bar ---
+        countLabel = new JLabel("", SwingConstants.RIGHT);
         countLabel.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 8));
 
         JPanel southPanel = new JPanel(new BorderLayout());
         southPanel.add(countLabel, BorderLayout.EAST);
 
+        add(searchPanel, BorderLayout.NORTH);
         add(new JScrollPane(cardTable), BorderLayout.CENTER);
         add(imagePanel, BorderLayout.EAST);
         add(southPanel, BorderLayout.SOUTH);
 
-        loadCards(countLabel);
+        loadCards();
     }
 
-    private void loadCards(JLabel countLabel) {
+    private void applyFilter(String text, int columnDropdownIndex) {
+        if (text == null || text.isBlank()) {
+            sorter.setRowFilter(null);
+        } else {
+            String regex = "(?i)" + Pattern.quote(text.trim());
+            if (columnDropdownIndex == 0) {
+                // All columns
+                sorter.setRowFilter(RowFilter.regexFilter(regex));
+            } else {
+                // Specific column (dropdown index 1 = COLUMNS index 0)
+                sorter.setRowFilter(RowFilter.regexFilter(regex, columnDropdownIndex - 1));
+            }
+        }
+        updateCount();
+    }
+
+    private void updateCount() {
+        int visible = sorter.getViewRowCount();
+        int total   = tableModel.getRowCount();
+        countLabel.setText(visible == total
+                ? "Total Cards: " + total
+                : "Showing " + visible + " of " + total + " cards");
+    }
+
+    private void loadCards() {
         String sql = "SELECT serial, name_en, type_en, element, cost, power, rarity, job_en, "
                    + "category_1, category_2, set_number FROM cards ORDER BY serial";
         try (Connection conn = DriverManager.getConnection(DB_URL);
@@ -112,7 +176,7 @@ public class CardBrowser extends JDialog {
             JOptionPane.showMessageDialog(this, "Error loading cards:\n" + e.getMessage(),
                     "Database Error", JOptionPane.ERROR_MESSAGE);
         }
-        countLabel.setText("Total Cards: " + tableModel.getRowCount());
+        updateCount();
     }
 
     private void loadCardImageAsync(String serial) {

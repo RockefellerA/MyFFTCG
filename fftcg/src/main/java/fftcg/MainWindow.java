@@ -7,6 +7,7 @@ import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.Font;
+import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Image;
@@ -22,6 +23,7 @@ import java.net.URISyntaxException;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFrame;
+import javax.swing.JSeparator;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
@@ -253,6 +255,7 @@ public class MainWindow {
 
 		txtP2 = new JTextField("P2");
 		txtP2.setEditable(false);
+		txtP2.setFocusable(false);
 		txtP2.setBorder(null);
 		txtP2.setHorizontalAlignment(SwingConstants.CENTER);
 		txtP2.setFont(new Font("Pixel NES", Font.PLAIN, 18));
@@ -281,6 +284,7 @@ public class MainWindow {
 
 		txtP1 = new JTextField("P1");
 		txtP1.setEditable(false);
+		txtP1.setFocusable(false);
 		txtP1.setBorder(null);
 		txtP1.setHorizontalAlignment(SwingConstants.CENTER);
 		txtP1.setFont(new Font("Pixel NES", Font.PLAIN, 18));
@@ -348,8 +352,28 @@ public class MainWindow {
 		southPanel.add(phaseButton, BorderLayout.SOUTH);
 
 		// --- Game Board (center, takes all remaining space) ---
-		JPanel gameBoard = new JPanel();
+		// --- P2 board half ---
+		JPanel p2Board = new JPanel();
+		p2Board.setBackground(UIManager.getColor("Panel.background"));
+
+		// --- P1 board half ---
+		JPanel p1Board = new JPanel();
+		p1Board.setBackground(UIManager.getColor("Panel.background"));
+
+		JSeparator divider = new JSeparator(JSeparator.HORIZONTAL);
+		divider.setForeground(Color.LIGHT_GRAY);
+
+		JPanel gameBoard = new JPanel(new GridBagLayout());
 		gameBoard.setBackground(UIManager.getColor("Panel.background"));
+
+		GridBagConstraints gbc = new GridBagConstraints();
+		gbc.fill    = GridBagConstraints.BOTH;
+		gbc.weightx = 1.0;
+		gbc.gridx   = 0;
+
+		gbc.weighty = 1.0; gbc.gridy = 0; gameBoard.add(p2Board,  gbc);
+		gbc.weighty = 0.0; gbc.gridy = 1; gameBoard.add(divider,  gbc);
+		gbc.weighty = 1.0; gbc.gridy = 2; gameBoard.add(p1Board,  gbc);
 
 		// --- Card Preview Panel (right side, vertically centered) ---
 		JPanel previewPanel = new JPanel(new GridBagLayout());

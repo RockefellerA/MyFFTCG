@@ -65,8 +65,9 @@ public class CardDatabase implements AutoCloseable {
     // Write
     // -------------------------------------------------------------------------
 
-    /** Inserts or updates a single card (upsert on serial). */
+    /** Inserts or updates a single card (upsert on serial). Skips cards with no serial. */
     public void saveCard(ScrapedCard card) throws SQLException {
+        if (card.serial == null || card.serial.isBlank()) return;
         try (PreparedStatement ps = conn.prepareStatement("""
                 INSERT INTO cards (
                     serial, name_en, type_en, element, cost, power, rarity,
