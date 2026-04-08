@@ -1,12 +1,20 @@
 package fftcg;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Cursor;
 import java.awt.Desktop;
+import java.awt.Dimension;
 import java.awt.EventQueue;
+import java.awt.Font;
+import java.awt.GridBagLayout;
 import java.awt.GridLayout;
+import java.awt.Image;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -20,14 +28,12 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JTextField;
 import javax.swing.KeyStroke;
-import java.awt.Color;
-import java.awt.Font;
-import java.awt.Cursor;
 import javax.swing.SwingConstants;
+import javax.swing.UIManager;
 import javax.swing.border.BevelBorder;
 import javax.swing.border.SoftBevelBorder;
-import javax.swing.JTextField;
 
 public class MainWindow {
 
@@ -95,24 +101,12 @@ public class MainWindow {
 			}
 		});
 
-		JMenuItem deckManagerMenuItem = new JMenuItem("Deck Manager");
-		fileMenu.add(deckManagerMenuItem);
-
 		JMenuItem cardBrowserMenuItem = new JMenuItem("Card Browser");
 		fileMenu.add(cardBrowserMenuItem);
 		cardBrowserMenuItem.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				if (gameInProgress) {
-					int result = JOptionPane.showConfirmDialog(frame, "Game is in progress. Abandon to view card browser?", cardBrowserMenuItem.getText(),
-							JOptionPane.YES_NO_OPTION,
-							JOptionPane.WARNING_MESSAGE);
-					if (result == JOptionPane.YES_OPTION) {
-						frame.getContentPane().removeAll();
-						frame.getContentPane().invalidate();
-						frame.getContentPane().add(new CardBrowser());
-						frame.getContentPane().revalidate();
-					}
-				}
+				CardBrowser cb = new CardBrowser(frame);
+				cb.setVisible(true);
 			}
 		});
 
@@ -185,15 +179,31 @@ public class MainWindow {
 			}
 		});
 
+		// Card dimensions (cardback.jpg scaled to 110x155, sized to allow full 220x309 preview to fit)
+		Dimension cardSize = new Dimension(110, 155);
+
+		// --- Card Preview (shown on deck mouseover, right side of window) ---
+		JLabel cardPreview = new JLabel();
+		cardPreview.setIcon(new ImageIcon(getClass().getResource("/resources/cardback.jpg")));
+		cardPreview.setVisible(false);
+
+		MouseAdapter deckHover = new MouseAdapter() {
+			@Override public void mouseEntered(MouseEvent e) { cardPreview.setVisible(true); }
+			@Override public void mouseExited(MouseEvent e)  { cardPreview.setVisible(false); }
+		};
+
 		// --- P2 Zones (top of screen) ---
 		// Top-left corner: narrow column (Remove, Limit) beside wide column (Break, Deck)
-		JLabel lblRemove_1 = new JLabel("REMOVED FROM PLAY");
+		JLabel lblRemove_1 = new JLabel("<html><div style='text-align:center'>REMOVED<br>FROM<br>PLAY</div></html>");
 		lblRemove_1.setToolTipText("Player 2 Removed From Play");
 		lblRemove_1.setHorizontalAlignment(SwingConstants.CENTER);
 		lblRemove_1.setFont(new Font("Pixel NES", Font.PLAIN, 18));
 		lblRemove_1.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
 		lblRemove_1.setBackground(Color.DARK_GRAY);
+		lblRemove_1.setForeground(Color.WHITE);
 		lblRemove_1.setOpaque(true);
+		lblRemove_1.setPreferredSize(cardSize);
+		lblRemove_1.setMinimumSize(cardSize);
 
 		JLabel lblLimit_1 = new JLabel("LIMIT");
 		lblLimit_1.setToolTipText("Player 2 LB");
@@ -201,41 +211,44 @@ public class MainWindow {
 		lblLimit_1.setFont(new Font("Pixel NES", Font.PLAIN, 18));
 		lblLimit_1.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
 		lblLimit_1.setBackground(Color.DARK_GRAY);
+		lblLimit_1.setForeground(Color.WHITE);
 		lblLimit_1.setOpaque(true);
+		lblLimit_1.setPreferredSize(cardSize);
+		lblLimit_1.setMinimumSize(cardSize);
 
-		JLabel break1_1 = new JLabel("B R E A K");
+		JLabel break1_1 = new JLabel("BREAK");
 		break1_1.setToolTipText("Player 2 Break Zone");
 		break1_1.setHorizontalAlignment(SwingConstants.CENTER);
 		break1_1.setFont(new Font("Pixel NES", Font.PLAIN, 18));
 		break1_1.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
 		break1_1.setBackground(Color.DARK_GRAY);
+		break1_1.setForeground(Color.WHITE);
 		break1_1.setOpaque(true);
+		break1_1.setPreferredSize(cardSize);
+		break1_1.setMinimumSize(cardSize);
 
 		JLabel deck_1 = new JLabel();
-		deck_1.setIcon(new ImageIcon(MainWindow.class.getResource("/resources/cardback60p.jpg")));
+		deck_1.setIcon(new ImageIcon(new ImageIcon(MainWindow.class.getResource("/resources/cardback.jpg")).getImage().getScaledInstance(cardSize.width, cardSize.height, Image.SCALE_SMOOTH)));
 		deck_1.setToolTipText("Player 2 Deck");
 		deck_1.setHorizontalAlignment(SwingConstants.CENTER);
 		deck_1.setBorder(new BevelBorder(BevelBorder.RAISED, new Color(0, 0, 0), null, null, null));
+		deck_1.addMouseListener(deckHover);
 
-		JPanel p2CornerNarrow = new JPanel(new GridLayout(2, 1));
-		p2CornerNarrow.add(lblRemove_1);
-		p2CornerNarrow.add(lblLimit_1);
-
-		JPanel p2CornerWide = new JPanel(new GridLayout(2, 1));
-		p2CornerWide.add(break1_1);
-		p2CornerWide.add(deck_1);
-
-		JPanel p2CornerPanel = new JPanel(new BorderLayout());
-		p2CornerPanel.add(p2CornerNarrow, BorderLayout.WEST);
-		p2CornerPanel.add(p2CornerWide, BorderLayout.CENTER);
+		JPanel p2CornerPanel = new JPanel(new GridLayout(2, 2));
+		p2CornerPanel.add(lblRemove_1);
+		p2CornerPanel.add(break1_1);
+		p2CornerPanel.add(lblLimit_1);
+		p2CornerPanel.add(deck_1);
 
 		// Top-right: damage zone with player label
-		JLabel lblDAM_1 = new JLabel("DAMAGE");
+		JLabel lblDAM_1 = new JLabel("<html><div style='text-align:center'>D<br>A<br>M<br>A<br>G<br>E</div></html>");
 		lblDAM_1.setToolTipText("Player 2 Damage Zone");
 		lblDAM_1.setHorizontalAlignment(SwingConstants.CENTER);
-		lblDAM_1.setFont(new Font("Pixel NES", Font.PLAIN, 18));
+		lblDAM_1.setVerticalAlignment(SwingConstants.CENTER);
+		lblDAM_1.setFont(new Font("Pixel NES", Font.PLAIN, 36));
 		lblDAM_1.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
 		lblDAM_1.setBackground(Color.DARK_GRAY);
+		lblDAM_1.setForeground(Color.WHITE);
 		lblDAM_1.setOpaque(true);
 
 		txtP2 = new JTextField("P2");
@@ -246,6 +259,7 @@ public class MainWindow {
 		txtP2.setBackground(Color.LIGHT_GRAY);
 
 		JPanel p2DamagePanel = new JPanel(new BorderLayout());
+		p2DamagePanel.setPreferredSize(new Dimension(cardSize.width, cardSize.height * 2));
 		p2DamagePanel.add(lblDAM_1, BorderLayout.CENTER);
 		p2DamagePanel.add(txtP2, BorderLayout.SOUTH);
 
@@ -255,12 +269,14 @@ public class MainWindow {
 
 		// --- P1 Zones (bottom of screen, above phase button) ---
 		// Bottom-left: damage zone with player label
-		JLabel lblDAM = new JLabel("DAMAGE");
+		JLabel lblDAM = new JLabel("<html><div style='text-align:center'>D<br>A<br>M<br>A<br>G<br>E</div></html>");
 		lblDAM.setToolTipText("Player 1 Damage Zone");
 		lblDAM.setHorizontalAlignment(SwingConstants.CENTER);
-		lblDAM.setFont(new Font("Pixel NES", Font.PLAIN, 18));
+		lblDAM.setVerticalAlignment(SwingConstants.CENTER);
+		lblDAM.setFont(new Font("Pixel NES", Font.PLAIN, 36));
 		lblDAM.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
 		lblDAM.setBackground(Color.DARK_GRAY);
+		lblDAM.setForeground(Color.WHITE);
 		lblDAM.setOpaque(true);
 
 		txtP1 = new JTextField("P1");
@@ -271,23 +287,28 @@ public class MainWindow {
 		txtP1.setBackground(Color.LIGHT_GRAY);
 
 		JPanel p1DamagePanel = new JPanel(new BorderLayout());
+		p1DamagePanel.setPreferredSize(new Dimension(cardSize.width, cardSize.height * 2));
 		p1DamagePanel.add(txtP1, BorderLayout.NORTH);
 		p1DamagePanel.add(lblDAM, BorderLayout.CENTER);
 
 		// Bottom-right corner: wide column (Deck, Break) beside narrow column (Limit, Remove)
 		JLabel deck = new JLabel();
-		deck.setIcon(new ImageIcon(getClass().getResource("/resources/cardback60p.jpg")));
+		deck.setIcon(new ImageIcon(new ImageIcon(getClass().getResource("/resources/cardback.jpg")).getImage().getScaledInstance(cardSize.width, cardSize.height, Image.SCALE_SMOOTH)));
 		deck.setToolTipText("Player 1 Deck");
 		deck.setHorizontalAlignment(SwingConstants.CENTER);
 		deck.setBorder(new BevelBorder(BevelBorder.RAISED, new Color(0, 0, 0), null, null, null));
+		deck.addMouseListener(deckHover);
 
-		JLabel break1 = new JLabel("B R E A K");
+		JLabel break1 = new JLabel("BREAK");
 		break1.setToolTipText("Player 1 Break Zone");
 		break1.setHorizontalAlignment(SwingConstants.CENTER);
 		break1.setFont(new Font("Pixel NES", Font.PLAIN, 18));
 		break1.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
 		break1.setBackground(Color.DARK_GRAY);
+		break1.setForeground(Color.WHITE);
 		break1.setOpaque(true);
+		break1.setPreferredSize(cardSize);
+		break1.setMinimumSize(cardSize);
 
 		JLabel lblLimit = new JLabel("LIMIT");
 		lblLimit.setToolTipText("Player 1 LB");
@@ -295,27 +316,27 @@ public class MainWindow {
 		lblLimit.setFont(new Font("Pixel NES", Font.PLAIN, 18));
 		lblLimit.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
 		lblLimit.setBackground(Color.DARK_GRAY);
+		lblLimit.setForeground(Color.WHITE);
 		lblLimit.setOpaque(true);
+		lblLimit.setPreferredSize(cardSize);
+		lblLimit.setMinimumSize(cardSize);
 
-		JLabel lblRemove = new JLabel("REMOVED FROM PLAY");
+		JLabel lblRemove = new JLabel("<html><div style='text-align:center'>REMOVED<br>FROM<br>PLAY</div></html>");
 		lblRemove.setToolTipText("Player 1 Removed From Play");
 		lblRemove.setHorizontalAlignment(SwingConstants.CENTER);
 		lblRemove.setFont(new Font("Pixel NES", Font.PLAIN, 18));
 		lblRemove.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
 		lblRemove.setBackground(Color.DARK_GRAY);
+		lblRemove.setForeground(Color.WHITE);
 		lblRemove.setOpaque(true);
+		lblRemove.setPreferredSize(cardSize);
+		lblRemove.setMinimumSize(cardSize);
 
-		JPanel p1CornerWide = new JPanel(new GridLayout(2, 1));
-		p1CornerWide.add(deck);
-		p1CornerWide.add(break1);
-
-		JPanel p1CornerNarrow = new JPanel(new GridLayout(2, 1));
-		p1CornerNarrow.add(lblLimit);
-		p1CornerNarrow.add(lblRemove);
-
-		JPanel p1CornerPanel = new JPanel(new BorderLayout());
-		p1CornerPanel.add(p1CornerWide, BorderLayout.CENTER);
-		p1CornerPanel.add(p1CornerNarrow, BorderLayout.EAST);
+		JPanel p1CornerPanel = new JPanel(new GridLayout(2, 2));
+		p1CornerPanel.add(deck);
+		p1CornerPanel.add(lblLimit);
+		p1CornerPanel.add(break1);
+		p1CornerPanel.add(lblRemove);
 
 		JPanel p1ZonesPanel = new JPanel(new BorderLayout());
 		p1ZonesPanel.add(p1DamagePanel, BorderLayout.WEST);
@@ -328,12 +349,19 @@ public class MainWindow {
 
 		// --- Game Board (center, takes all remaining space) ---
 		JPanel gameBoard = new JPanel();
-		gameBoard.setBackground(Color.LIGHT_GRAY);
+		gameBoard.setBackground(UIManager.getColor("Panel.background"));
+
+		// --- Card Preview Panel (right side, vertically centered) ---
+		JPanel previewPanel = new JPanel(new GridBagLayout());
+		previewPanel.setOpaque(true);
+		previewPanel.add(cardPreview);
+		previewPanel.setBackground(UIManager.getColor("Panel.background"));
 
 		// --- Assemble ---
 		frame.getContentPane().add(p2ZonesPanel, BorderLayout.NORTH);
 		frame.getContentPane().add(southPanel, BorderLayout.SOUTH);
 		frame.getContentPane().add(gameBoard, BorderLayout.CENTER);
+		frame.getContentPane().add(previewPanel, BorderLayout.EAST);
 		
 	}
 	

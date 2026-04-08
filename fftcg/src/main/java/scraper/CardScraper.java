@@ -8,6 +8,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -25,6 +26,17 @@ import org.json.JSONObject;
  * to confirm the exact field names used by the current API version.
  */
 public class CardScraper {
+
+    private static final Map<String, String> ELEMENT_TRANSLATIONS = Map.of(
+            "火", "Fire",
+            "氷", "Ice",
+            "風", "Wind",
+            "雷", "Lightning",
+            "土", "Earth",
+            "水", "Water",
+            "光", "Light",
+            "闇", "Dark"
+    );
 
     private static final String API_URL =
             "https://fftcg.square-enix-games.com/na/get-cards";
@@ -210,13 +222,14 @@ public class CardScraper {
         c.textEn    = j.optString("text_en",    "");
         c.setNumber = setNumber;
 
-        // element is an array, e.g. ["Fire"] or ["Fire", "Ice"] for dual-element cards
+        // element is an array, e.g. ["Fire"] or ["火", "水"] for dual-element cards.
+        // The API sometimes returns Japanese kanji — translate to English here.
         JSONArray elementArr = j.optJSONArray("element");
         if (elementArr != null) {
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < elementArr.length(); i++) {
                 if (i > 0) sb.append("/");
-                sb.append(elementArr.optString(i));
+                sb.append(ELEMENT_TRANSLATIONS.getOrDefault(elementArr.optString(i), elementArr.optString(i)));
             }
             c.element = sb.toString();
         }
