@@ -21,7 +21,9 @@ public class CardDatabase implements AutoCloseable {
 
     public CardDatabase(String dbPath) throws SQLException {
         conn = DriverManager.getConnection("jdbc:sqlite:" + dbPath);
-        conn.createStatement().execute("PRAGMA journal_mode=WAL");
+        try (Statement s = conn.createStatement()) {
+            s.execute("PRAGMA journal_mode=WAL");
+        }
         createSchema();
     }
 

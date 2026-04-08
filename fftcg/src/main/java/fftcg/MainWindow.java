@@ -334,6 +334,7 @@ public class MainWindow {
 		frame.getContentPane().add(p2ZonesPanel, BorderLayout.NORTH);
 		frame.getContentPane().add(southPanel, BorderLayout.SOUTH);
 		frame.getContentPane().add(gameBoard, BorderLayout.CENTER);
+		
 	}
 	
 	/**

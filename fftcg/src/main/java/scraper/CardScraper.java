@@ -27,7 +27,7 @@ import org.json.JSONObject;
 public class CardScraper {
 
     private static final String API_URL =
-            "https://fftcg.square-enix-games.com/na/card-browser/getCards";
+            "https://fftcg.square-enix-games.com/na/get-cards";
     private static final String IMAGE_BASE_URL =
             "https://fftcg.cdn.sewest.net/images/cards/full/";
 
@@ -48,6 +48,37 @@ public class CardScraper {
     // -------------------------------------------------------------------------
     // Public API
     // -------------------------------------------------------------------------
+
+    /**
+     * Fetches only the first page of a set — used for smoke-testing the pipeline
+     * without waiting for a full scrape.
+     */
+    public List<ScrapedCard> scrapeOnePage(String setNumber) throws IOException, InterruptedException {
+        String body = buildRequestBody(setNumber, 0, PAGE_SIZE);
+        JSONObject json = post(body);
+        JSONArray cards = json.optJSONArray("cards");
+        List<ScrapedCard> result = new ArrayList<>();
+        if (cards != null) {
+            for (int i = 0; i < cards.length(); i++) {
+                result.add(parseCard(cards.getJSONObject(i), setNumber));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Returns a pretty-printed JSON string of the first card from the API.
+     * Use this to inspect actual field names when the mapping looks wrong.
+     */
+    public String fetchRawFirstCard(String setNumber) throws IOException, InterruptedException {
+        String body = buildRequestBody(setNumber, 0, 1);
+        JSONObject json = post(body);
+        JSONArray cards = json.optJSONArray("cards");
+        if (cards != null && !cards.isEmpty()) {
+            return cards.getJSONObject(0).toString(2);
+        }
+        return "(no cards returned — check top-level response keys: " + json.keySet() + ")";
+    }
 
     /**
      * Scrapes all cards for a single set / Opus number.
@@ -150,6 +181,7 @@ public class CardScraper {
 
         return new JSONObject()
                 .put("language",     "en")
+                .put("text",         "")
                 .put("setNum",       setNumber)
                 .put("type",         new JSONArray())
                 .put("element",      new JSONArray())
@@ -168,39 +200,53 @@ public class CardScraper {
     private ScrapedCard parseCard(JSONObject j, String setNumber) {
         ScrapedCard c = new ScrapedCard();
 
-        c.serial    = j.optString("Serial",    "");
-        c.nameEn    = j.optString("Name_EN",   "");
-        c.typeEn    = j.optString("Type_EN",   "");
-        c.element   = j.optString("Element",   "");
-        c.rarity    = j.optString("Rarity",    "");
-        c.jobEn     = j.optString("Job_EN",    "");
-        c.category1 = j.optString("Category_1","");
-        c.category2 = j.optString("Category_2","");
-        c.exBurst   = j.optBoolean("Ex_Burst",  false);
-        c.multicard = j.optBoolean("Multicard", false);
-        c.textEn    = j.optString("Text_EN",   "");
-        c.thumbName = j.optString("ThumbName", "");
+        c.serial    = j.optString("code",       "");
+        c.nameEn    = j.optString("name_en",    "");
+        c.typeEn    = j.optString("type_en",    "");
+        c.rarity    = j.optString("rarity",     "");
+        c.jobEn     = j.optString("job_en",     "");
+        c.category1 = j.optString("category_1", "");
+        c.category2 = j.optString("category_2", "");
+        c.textEn    = j.optString("text_en",    "");
         c.setNumber = setNumber;
 
-        // Cost can arrive as int or string from the API
-        Object rawCost = j.opt("Cost");
-        if (rawCost instanceof Number n) {
-            c.cost = n.intValue();
-        } else if (rawCost instanceof String s && !s.isBlank()) {
-            try { c.cost = Integer.parseInt(s.trim()); } catch (NumberFormatException ignored) {}
+        // element is an array, e.g. ["Fire"] or ["Fire", "Ice"] for dual-element cards
+        JSONArray elementArr = j.optJSONArray("element");
+        if (elementArr != null) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < elementArr.length(); i++) {
+                if (i > 0) sb.append("/");
+                sb.append(elementArr.optString(i));
+            }
+            c.element = sb.toString();
         }
 
-        // Power is only present on Forwards and Monsters; may be "" or absent for others
-        Object rawPower = j.opt("Power");
-        if (rawPower instanceof Number n) {
-            c.power = n.intValue();
-        } else if (rawPower instanceof String s && !s.isBlank()) {
-            try { c.power = Integer.parseInt(s.replace(",", "").trim()); }
+        // ex_burst and multicard arrive as "0" / "1" strings
+        c.exBurst   = "1".equals(j.optString("ex_burst",  "0"));
+        c.multicard = "1".equals(j.optString("multicard", "0"));
+
+        // cost and power arrive as strings
+        try { c.cost = Integer.parseInt(j.optString("cost", "0").trim()); }
+        catch (NumberFormatException ignored) {}
+
+        String powerStr = j.optString("power", "");
+        if (!powerStr.isBlank()) {
+            try { c.power = Integer.parseInt(powerStr.trim()); }
             catch (NumberFormatException ignored) {}
         }
 
-        if (!c.thumbName.isEmpty()) {
-            c.imageUrl = IMAGE_BASE_URL + c.thumbName;
+        // image URLs come from images.full[0] and images.thumbs[0]
+        JSONObject images = j.optJSONObject("images");
+        if (images != null) {
+            JSONArray full = images.optJSONArray("full");
+            if (full != null && !full.isEmpty()) {
+                c.imageUrl = full.optString(0);
+            }
+            JSONArray thumbs = images.optJSONArray("thumbs");
+            if (thumbs != null && !thumbs.isEmpty()) {
+                String thumbUrl = thumbs.optString(0);
+                c.thumbName = thumbUrl.substring(thumbUrl.lastIndexOf('/') + 1);
+            }
         }
 
         return c;
