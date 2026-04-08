@@ -2,6 +2,7 @@ package fftcg;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Desktop;
 import java.awt.Dimension;
@@ -21,6 +22,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 
 import javax.swing.ImageIcon;
+import javax.swing.JComboBox;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JSeparator;
@@ -258,13 +260,19 @@ public class MainWindow {
 		txtP2.setFocusable(false);
 		txtP2.setBorder(null);
 		txtP2.setHorizontalAlignment(SwingConstants.CENTER);
-		txtP2.setFont(new Font("Pixel NES", Font.PLAIN, 18));
+		txtP2.setFont(new Font("Pixel NES", Font.PLAIN, 36));
 		txtP2.setBackground(Color.LIGHT_GRAY);
+
+		JComboBox<String> p2ColorBox = buildColorDropdown();
+
+		JPanel p2PlayerPanel = new JPanel(new BorderLayout());
+		p2PlayerPanel.add(txtP2, BorderLayout.CENTER);
+		p2PlayerPanel.add(p2ColorBox, BorderLayout.SOUTH);
 
 		JPanel p2DamagePanel = new JPanel(new BorderLayout());
 		p2DamagePanel.setPreferredSize(new Dimension(cardSize.width, cardSize.height * 2));
 		p2DamagePanel.add(lblDAM_1, BorderLayout.CENTER);
-		p2DamagePanel.add(txtP2, BorderLayout.SOUTH);
+		p2DamagePanel.add(p2PlayerPanel, BorderLayout.SOUTH);
 
 		JPanel p2ZonesPanel = new JPanel(new BorderLayout());
 		p2ZonesPanel.add(p2CornerPanel, BorderLayout.WEST);
@@ -287,12 +295,18 @@ public class MainWindow {
 		txtP1.setFocusable(false);
 		txtP1.setBorder(null);
 		txtP1.setHorizontalAlignment(SwingConstants.CENTER);
-		txtP1.setFont(new Font("Pixel NES", Font.PLAIN, 18));
+		txtP1.setFont(new Font("Pixel NES", Font.PLAIN, 36));
 		txtP1.setBackground(Color.LIGHT_GRAY);
+
+		JComboBox<String> p1ColorBox = buildColorDropdown();
+
+		JPanel p1PlayerPanel = new JPanel(new BorderLayout());
+		p1PlayerPanel.add(p1ColorBox, BorderLayout.NORTH);
+		p1PlayerPanel.add(txtP1, BorderLayout.CENTER);
 
 		JPanel p1DamagePanel = new JPanel(new BorderLayout());
 		p1DamagePanel.setPreferredSize(new Dimension(cardSize.width, cardSize.height * 2));
-		p1DamagePanel.add(txtP1, BorderLayout.NORTH);
+		p1DamagePanel.add(p1PlayerPanel, BorderLayout.NORTH);
 		p1DamagePanel.add(lblDAM, BorderLayout.CENTER);
 
 		// Bottom-right corner: wide column (Deck, Break) beside narrow column (Limit, Remove)
@@ -375,9 +389,11 @@ public class MainWindow {
 		gbc.weighty = 0.0; gbc.gridy = 1; gameBoard.add(divider,  gbc);
 		gbc.weighty = 1.0; gbc.gridy = 2; gameBoard.add(p1Board,  gbc);
 
+		p2ColorBox.addActionListener(e -> applyElementColor((String) p2ColorBox.getSelectedItem(), p2ZonesPanel, p2Board));
+		p1ColorBox.addActionListener(e -> applyElementColor((String) p1ColorBox.getSelectedItem(), p1ZonesPanel, p1Board));
+
 		// --- Card Preview Panel (right side, vertically centered) ---
 		JPanel previewPanel = new JPanel(new GridBagLayout());
-		previewPanel.setOpaque(true);
 		previewPanel.add(cardPreview);
 		previewPanel.setBackground(UIManager.getColor("Panel.background"));
 
@@ -392,6 +408,34 @@ public class MainWindow {
 	/**
 	 * Opens the Starter or Advanced Guide in the browser.  These links could go dead.
 	 */
+	private JComboBox<String> buildColorDropdown() {
+		String[] items = new String[ElementColor.values().length + 1];
+		items[0] = "Default";
+		for (int i = 0; i < ElementColor.values().length; i++)
+			items[i + 1] = ElementColor.values()[i].name().charAt(0)
+					+ ElementColor.values()[i].name().substring(1).toLowerCase();
+		return new JComboBox<>(items);
+	}
+
+	private void applyElementColor(String selection, JPanel... panels) {
+		Color bg = "Default".equals(selection)
+				? UIManager.getColor("Panel.background")
+				: ElementColor.fromName(selection).color;
+		for (JPanel panel : panels) {
+			setPanelBackground(panel, bg);
+			panel.repaint();
+		}
+	}
+
+	private void setPanelBackground(JPanel panel, Color color) {
+		panel.setBackground(color);
+		for (Component c : panel.getComponents()) {
+			if (c instanceof JPanel) {
+				setPanelBackground((JPanel) c, color);
+			}
+		}
+	}
+
 	private void openGuidePdf(int guide) {
 		if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
 		    try {
