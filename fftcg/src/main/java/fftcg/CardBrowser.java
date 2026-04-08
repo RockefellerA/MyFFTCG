@@ -1,6 +1,7 @@
 package fftcg;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Image;
@@ -16,6 +17,7 @@ import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JDialog;
@@ -38,7 +40,7 @@ public class CardBrowser extends JDialog {
     private static final String DB_URL = "jdbc:sqlite:fftcg_cards_test.db";
     private static final String[] COLUMNS = {
         "Serial", "Name", "Type", "Element", "Cost", "Power",
-        "Rarity", "Job", "Category 1", "Category 2", "Set"
+        "Rarity", "Job", "Category 1", "Category 2"
     };
 
     private final DefaultTableModel tableModel;
@@ -65,6 +67,38 @@ public class CardBrowser extends JDialog {
 
         sorter = new TableRowSorter<>(tableModel);
         cardTable.setRowSorter(sorter);
+
+        // Grey out empty cells in Job (7), Category 1 (8), Category 2 (9)
+        DefaultTableCellRenderer greyIfEmpty = new DefaultTableCellRenderer() {
+            @Override
+            public java.awt.Component getTableCellRendererComponent(
+                    JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                if (!isSelected && (value == null || value.toString().isBlank())) {
+                    setBackground(Color.LIGHT_GRAY);
+                } else {
+                    setBackground(table.getBackground());
+                }
+                return this;
+            }
+        };
+        for (int col : new int[]{7, 9}) {
+            cardTable.getColumnModel().getColumn(col).setCellRenderer(greyIfEmpty);
+        }
+
+        // Grey out Power (5) when value is 0 or null
+        cardTable.getColumnModel().getColumn(5).setCellRenderer(new DefaultTableCellRenderer() {
+            @Override
+            public java.awt.Component getTableCellRendererComponent(
+                    JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+                boolean empty = value == null || Integer.valueOf(0).equals(value);
+                super.getTableCellRendererComponent(table, empty ? null : value, isSelected, hasFocus, row, column);
+                if (!isSelected) {
+                    setBackground(empty ? Color.LIGHT_GRAY : table.getBackground());
+                }
+                return this;
+            }
+        });
 
         // --- Search bar ---
         String[] columnChoices = new String[COLUMNS.length + 1];
@@ -153,7 +187,7 @@ public class CardBrowser extends JDialog {
 
     private void loadCards() {
         String sql = "SELECT serial, name_en, type_en, element, cost, power, rarity, job_en, "
-                   + "category_1, category_2, set_number FROM cards ORDER BY serial";
+                   + "category_1, category_2 FROM cards ORDER BY serial";
         try (Connection conn = DriverManager.getConnection(DB_URL);
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
@@ -168,8 +202,7 @@ public class CardBrowser extends JDialog {
                     rs.getString("rarity"),
                     rs.getString("job_en"),
                     rs.getString("category_1"),
-                    rs.getString("category_2"),
-                    rs.getString("set_number")
+                    rs.getString("category_2")
                 });
             }
         } catch (SQLException e) {
