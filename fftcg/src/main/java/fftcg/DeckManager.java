@@ -3,7 +3,12 @@ package fftcg;
 import scraper.DeckDatabase;
 import scraper.DeckDatabase.DeckEntry;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.awt.*;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.*;
 import java.net.URL;
 import java.sql.DriverManager;
@@ -122,12 +127,25 @@ public class DeckManager extends JDialog {
         copyBtn.addActionListener(e   -> onCopyDeck());
         deleteBtn.addActionListener(e -> onDeleteDeck());
 
-        JPanel btnPanel = new JPanel(new GridLayout(2, 2, 4, 4));
-        btnPanel.add(newBtn);
-        btnPanel.add(renameBtn);
-        btnPanel.add(copyBtn);
-        btnPanel.add(deleteBtn);
-        btnPanel.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+        JButton importBtn = new JButton("Import");
+        JButton exportBtn = new JButton("Export");
+        importBtn.addActionListener(e -> onImportDeck());
+        exportBtn.addActionListener(e -> onExportDeck());
+
+        JPanel mgmtPanel = new JPanel(new GridLayout(2, 2, 4, 4));
+        mgmtPanel.add(newBtn);
+        mgmtPanel.add(renameBtn);
+        mgmtPanel.add(copyBtn);
+        mgmtPanel.add(deleteBtn);
+
+        JPanel ioPanel = new JPanel(new GridLayout(1, 2, 4, 4));
+        ioPanel.add(importBtn);
+        ioPanel.add(exportBtn);
+
+        JPanel southPanel = new JPanel(new BorderLayout(0, 4));
+        southPanel.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+        southPanel.add(mgmtPanel, BorderLayout.NORTH);
+        southPanel.add(ioPanel,   BorderLayout.SOUTH);
 
         JLabel title = new JLabel("My Decks", SwingConstants.CENTER);
         title.setFont(title.getFont().deriveFont(Font.BOLD, 13f));
@@ -138,7 +156,7 @@ public class DeckManager extends JDialog {
         panel.setBorder(BorderFactory.createEtchedBorder());
         panel.add(title,                        BorderLayout.NORTH);
         panel.add(new JScrollPane(deckList),    BorderLayout.CENTER);
-        panel.add(btnPanel,                     BorderLayout.SOUTH);
+        panel.add(southPanel,                   BorderLayout.SOUTH);
         return panel;
     }
 
@@ -517,6 +535,76 @@ public class DeckManager extends JDialog {
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(this, "Error removing card:\n" + e.getMessage(),
                     "Database Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Import / Export
+    // -------------------------------------------------------------------------
+
+    private void onExportDeck() {
+        DeckEntry entry = deckList.getSelectedValue();
+        if (entry == null) { JOptionPane.showMessageDialog(this, "Select a deck to export."); return; }
+
+        try {
+            JSONArray cards = new JSONArray();
+            for (Object[] row : db.getDeckCards(entry.id())) {
+                cards.put(new JSONObject()
+                        .put("serial", row[0])
+                        .put("qty",    row[7]));
+            }
+            String json = new JSONObject()
+                    .put("name",  entry.name())
+                    .put("cards", cards)
+                    .toString(2);
+
+            Toolkit.getDefaultToolkit().getSystemClipboard()
+                    .setContents(new StringSelection(json), null);
+
+            JOptionPane.showMessageDialog(this,
+                    "Deck JSON copied to clipboard.",
+                    "Export Successful", JOptionPane.INFORMATION_MESSAGE);
+        } catch (SQLException | JSONException e) {
+            JOptionPane.showMessageDialog(this, "Error exporting deck:\n" + e.getMessage(),
+                    "Export Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void onImportDeck() {
+        JTextArea textArea = new JTextArea(16, 50);
+        textArea.setLineWrap(true);
+        textArea.setWrapStyleWord(true);
+        textArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        JScrollPane scroll = new JScrollPane(textArea);
+
+        int result = JOptionPane.showConfirmDialog(this, scroll,
+                "Paste Deck JSON", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result != JOptionPane.OK_OPTION) return;
+
+        String text = textArea.getText().trim();
+        if (text.isBlank()) return;
+
+        try {
+            JSONObject json  = new JSONObject(text);
+            String deckName  = json.getString("name");
+            JSONArray cards  = json.getJSONArray("cards");
+
+            int newId = db.createDeck(deckName);
+            for (int i = 0; i < cards.length(); i++) {
+                JSONObject card = cards.getJSONObject(i);
+                String serial   = card.getString("serial");
+                int qty         = card.getInt("qty");
+                if (qty > 0) db.setCardCount(newId, serial, Math.min(qty, MAX_COPIES));
+            }
+
+            loadDeckList();
+            selectDeckById(newId);
+        } catch (JSONException e) {
+            JOptionPane.showMessageDialog(this, "Invalid JSON format:\n" + e.getMessage(),
+                    "Import Error", JOptionPane.ERROR_MESSAGE);
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(this, "Error importing deck:\n" + e.getMessage(),
+                    "Import Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
