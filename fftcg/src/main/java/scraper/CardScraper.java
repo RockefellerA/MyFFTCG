@@ -303,4 +303,5 @@ public class CardScraper {
             e.printStackTrace();
         }
     }
+    
 }

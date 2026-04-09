@@ -14,6 +14,10 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.regex.Pattern;
 
+import java.util.concurrent.ExecutionException;
+
+import scraper.CardScraper;
+
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
@@ -24,6 +28,7 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
@@ -119,12 +124,32 @@ public class CardBrowser extends JDialog {
         // Also trigger search on Enter in the text field
         searchField.addActionListener(e -> applyFilter(searchField.getText(), columnDropdown.getSelectedIndex()));
 
+        // --- Update button + spinner ---
+        JButton updateButton = new JButton("Update Cards");
+        JProgressBar spinner = new JProgressBar();
+        spinner.setIndeterminate(true);
+        spinner.setVisible(false);
+        spinner.setPreferredSize(new Dimension(120, updateButton.getPreferredSize().height));
+
+        updateButton.addActionListener(e -> {
+            int choice = JOptionPane.showConfirmDialog(
+                    CardBrowser.this,
+                    "This will re-fetch all cards from the Square Enix API and update the database.\nContinue?",
+                    "Update Cards",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.QUESTION_MESSAGE);
+            if (choice != JOptionPane.YES_OPTION) return;
+            runScrape(updateButton, spinner);
+        });
+
         JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
         searchPanel.add(new JLabel("Search:"));
         searchPanel.add(columnDropdown);
         searchPanel.add(searchField);
         searchPanel.add(searchButton);
         searchPanel.add(clearButton);
+        searchPanel.add(updateButton);
+        searchPanel.add(spinner);
 
         // --- Card image preview ---
         cardImageLabel = new JLabel("Select a card to preview", SwingConstants.CENTER);
@@ -158,7 +183,38 @@ public class CardBrowser extends JDialog {
         add(imagePanel, BorderLayout.EAST);
         add(southPanel, BorderLayout.SOUTH);
 
-        loadCards();
+        if (!new java.io.File("fftcg_cards.db").exists()) {
+            int choice = JOptionPane.showConfirmDialog(
+                    this,
+                    "No card database found. Fetch card data from the Square Enix API now?",
+                    "No Database Found",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.QUESTION_MESSAGE);
+            if (choice == JOptionPane.YES_OPTION) {
+                runScrape(updateButton, spinner);
+            }
+        } else {
+            loadCards();
+        }
+    }
+
+    private void runScrape(JButton updateButton, JProgressBar spinner) {
+        updateButton.setEnabled(false);
+        spinner.setVisible(true);
+        new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                CardScraper.main(new String[0]);
+                return null;
+            }
+            @Override
+            protected void done() {
+                spinner.setVisible(false);
+                tableModel.setRowCount(0);
+                loadCards();
+                updateButton.setEnabled(true);
+            }
+        }.execute();
     }
 
     private void applyFilter(String text, int columnDropdownIndex) {
@@ -249,7 +305,7 @@ public class CardBrowser extends JDialog {
                         cardImageLabel.setIcon(null);
                         cardImageLabel.setText("No image available");
                     }
-                } catch (Exception e) {
+                } catch (InterruptedException | ExecutionException e) {
                     cardImageLabel.setIcon(null);
                     cardImageLabel.setText("Error loading image");
                 }
