@@ -183,19 +183,29 @@ public class CardBrowser extends JDialog {
         add(imagePanel, BorderLayout.EAST);
         add(southPanel, BorderLayout.SOUTH);
 
-        if (!new java.io.File("fftcg_cards.db").exists()) {
-            int choice = JOptionPane.showConfirmDialog(
-                    this,
-                    "No card database found. Fetch card data from the Square Enix API now?",
-                    "No Database Found",
-                    JOptionPane.YES_NO_OPTION,
-                    JOptionPane.QUESTION_MESSAGE);
-            if (choice == JOptionPane.YES_OPTION) {
-                runScrape(updateButton, spinner);
+        SwingWorker<Void, Void> initWorker = new SwingWorker<Void, Void>() {
+            @Override
+            protected Void doInBackground() throws Exception {
+                return null;
             }
-        } else {
-            loadCards();
-        }
+            @Override
+            protected void done() {
+                if (!new java.io.File("fftcg_cards.db").exists()) {
+                    int choice = JOptionPane.showConfirmDialog(
+                            CardBrowser.this,
+                            "No card database found. Fetch card data from the Square Enix API now?",
+                            "No Database Found",
+                            JOptionPane.YES_NO_OPTION,
+                            JOptionPane.QUESTION_MESSAGE);
+                    if (choice == JOptionPane.YES_OPTION) {
+                        runScrape(updateButton, spinner);
+                    }
+                } else {
+                    loadCards();
+                }
+            }
+        };
+        initWorker.execute();
     }
 
     private void runScrape(JButton updateButton, JProgressBar spinner) {

@@ -481,21 +481,11 @@ public class MainWindow {
 		if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
 		    try {
 		    	switch(guide) {
-		    		case 0:
-		    			Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-03/fftcgrulesheet-en.pdf"));
-		    			break;
-		    		case 1:
-						Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2025-09/fftcg-comprules-v3.2.1.pdf"));
-		    			break;
-					case 2:
-						Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-03/lb-rule-explanation-eg.pdf"));
-		    			break;
-					case 3:
-						Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-11/priming-rules-explanation-en.pdf"));
-		    			break;
-					case 4:
-						Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-11/priming-supplementary-rules-en.pdf"));
-		    			break;
+		    		case 0 -> Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-03/fftcgrulesheet-en.pdf"));
+		    		case 1 -> Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2025-09/fftcg-comprules-v3.2.1.pdf"));
+					case 2 -> Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-03/lb-rule-explanation-eg.pdf"));
+					case 3 -> Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-11/priming-rules-explanation-en.pdf"));
+					case 4 -> Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-11/priming-supplementary-rules-en.pdf"));
 		    	}
 			} catch (IOException | URISyntaxException e1) {
 				e1.printStackTrace();
