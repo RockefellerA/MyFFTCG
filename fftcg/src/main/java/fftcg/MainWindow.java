@@ -105,6 +105,15 @@ public class MainWindow {
 			}
 		});
 
+		JMenuItem deckManagerMenuItem = new JMenuItem("Deck Manager");
+		fileMenu.add(deckManagerMenuItem);
+		deckManagerMenuItem.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				DeckManager dm = new DeckManager(frame);
+				dm.setVisible(true);
+			}
+		});
+
 		JMenuItem cardBrowserMenuItem = new JMenuItem("Card Browser");
 		fileMenu.add(cardBrowserMenuItem);
 		cardBrowserMenuItem.addActionListener(new ActionListener() {
