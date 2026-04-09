@@ -154,6 +154,34 @@ public class DeckDatabase implements AutoCloseable {
     // -------------------------------------------------------------------------
 
     /**
+     * Returns every copy of every card in the deck (count expanded to individual entries).
+     * Includes imageUrl and isLb — everything needed to populate a game zone.
+     */
+    public List<DeckCardDetail> getDeckCardsDetailed(int deckId) throws SQLException {
+        List<DeckCardDetail> result = new ArrayList<>();
+        String sql = """
+            SELECT dc.count, c.image_url, c.limit_break
+            FROM deck_cards dc
+            LEFT JOIN cards c ON dc.serial = c.serial
+            WHERE dc.deck_id = ?
+            ORDER BY dc.serial
+            """;
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, deckId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String imageUrl = rs.getString("image_url");
+                    boolean isLb    = rs.getInt("limit_break") == 1;
+                    int count       = rs.getInt("count");
+                    for (int i = 0; i < count; i++)
+                        result.add(new DeckCardDetail(imageUrl, isLb));
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
      * Returns all cards in the deck joined with card metadata.
      * Each row: [serial, name_en, type_en, element, cost, power, rarity, count]
      */
@@ -304,6 +332,9 @@ public class DeckDatabase implements AutoCloseable {
         @Override
         public String toString() { return name; }
     }
+
+    /** A single expanded card entry from a deck — one instance per copy. */
+    public record DeckCardDetail(String imageUrl, boolean isLb) {}
 
     /** Deck with separate main and LB card counts, used for deck selection. */
     public record DeckSummary(int id, String name, int mainCardCount, int lbCardCount) {

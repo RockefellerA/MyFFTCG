@@ -1,5 +1,8 @@
 package fftcg;
 
+import scraper.DeckDatabase;
+import scraper.DeckDatabase.DeckCardDetail;
+
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -12,6 +15,8 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Image;
+import java.awt.Point;
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
@@ -20,7 +25,17 @@ import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.net.URL;
+import java.sql.SQLException;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.List;
+import java.util.concurrent.ExecutionException;
 
+import javax.imageio.ImageIO;
+import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -33,8 +48,10 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JSeparator;
 import javax.swing.JTextField;
+import javax.swing.JWindow;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
+import javax.swing.SwingWorker;
 import javax.swing.UIManager;
 import javax.swing.border.BevelBorder;
 import javax.swing.border.SoftBevelBorder;
@@ -42,16 +59,28 @@ import javax.swing.border.SoftBevelBorder;
 public class MainWindow {
 
 	private JFrame frame;
-	
-	int phase = 0; // Track the game phases with this handy button!
-	
-	boolean gameInProgress = false; // placeholder to assume a game is in progress
+
+	int phase = 0;
+
 	private JTextField txtP2;
 	private JTextField txtP1;
-	
-	/**
-	 * Launch the application.
-	 */
+
+	// Card size constants
+	private static final int CARD_W = 140;
+	private static final int CARD_H = 205;
+
+	// P1 zone labels that change during gameplay
+	private JLabel p1DeckLabel;
+	private JLabel p1LimitLabel;
+	// Zoom popup for LB card hover
+	private JWindow zoomPopup;
+
+	// --- P1 game state ---
+	private Deque<String> p1MainDeck  = new ArrayDeque<>();  // imageUrls
+	private List<String>  p1LbDeck    = new ArrayList<>();   // imageUrls
+	private int           p1LbIndex   = 0;
+	private boolean       p1TopFaceUp = false;               // is top main-deck card revealed?
+
 	public static void main(String[] args) {
 		EventQueue.invokeLater(new Runnable() {
 			public void run() {
@@ -67,16 +96,10 @@ public class MainWindow {
 		});
 	}
 
-	/**
-	 * Create the application.
-	 */
 	public MainWindow() {
 		initialize();
 	}
 
-	/**
-	 * Initialize the contents of the frame.
-	 */
 	private void initialize() {
 		frame = new JFrame("MyFFTCG");
 		frame.getContentPane().setBackground(Color.LIGHT_GRAY);
@@ -100,6 +123,8 @@ public class MainWindow {
 			public void actionPerformed(ActionEvent e) {
 				DeckSelectDialog dialog = new DeckSelectDialog(frame);
 				dialog.setVisible(true);
+				int deckId = dialog.getSelectedDeckId();
+				if (deckId >= 0) startGame(deckId);
 			}
 		});
 
@@ -145,9 +170,7 @@ public class MainWindow {
 				int result = JOptionPane.showConfirmDialog(frame, "This will open the FFTCG Starter Guide in your browser. Continue?", howToPlayMenuItem.getText(),
 						JOptionPane.YES_NO_OPTION,
 						JOptionPane.QUESTION_MESSAGE);
-				if (result == JOptionPane.YES_OPTION) {
-					openGuidePdf(0);
-				}
+				if (result == JOptionPane.YES_OPTION) openGuidePdf(0);
 			}
 		});
 
@@ -158,9 +181,7 @@ public class MainWindow {
 				int result = JOptionPane.showConfirmDialog(frame, "This will open the FFTCG Comprehensive Rules in your browser. Continue?", howToPlay2MenuItem.getText(),
 						JOptionPane.YES_NO_OPTION,
 						JOptionPane.QUESTION_MESSAGE);
-				if (result == JOptionPane.YES_OPTION) {
-					openGuidePdf(1);
-				}
+				if (result == JOptionPane.YES_OPTION) openGuidePdf(1);
 			}
 		});
 
@@ -171,9 +192,7 @@ public class MainWindow {
 				int result = JOptionPane.showConfirmDialog(frame, "This will open the FFTCG Limit Break Rules Sheet in your browser. Continue?", limitBreakRulesMenuItem.getText(),
 						JOptionPane.YES_NO_OPTION,
 						JOptionPane.QUESTION_MESSAGE);
-				if (result == JOptionPane.YES_OPTION) {
-					openGuidePdf(2);
-				}
+				if (result == JOptionPane.YES_OPTION) openGuidePdf(2);
 			}
 		});
 
@@ -184,22 +203,18 @@ public class MainWindow {
 				int result = JOptionPane.showConfirmDialog(frame, "This will open the FFTCG Priming Rules Explanation in your browser. Continue?", primingRulesMenuItem.getText(),
 						JOptionPane.YES_NO_OPTION,
 						JOptionPane.QUESTION_MESSAGE);
-				if (result == JOptionPane.YES_OPTION) {
-					openGuidePdf(3);
-				}
+				if (result == JOptionPane.YES_OPTION) openGuidePdf(3);
 			}
 		});
 
-				JMenuItem primingSupplementaryRulesMenuItem = new JMenuItem("Priming Rules Supplementary Explanation");
+		JMenuItem primingSupplementaryRulesMenuItem = new JMenuItem("Priming Rules Supplementary Explanation");
 		helpMenu.add(primingSupplementaryRulesMenuItem);
 		primingSupplementaryRulesMenuItem.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				int result = JOptionPane.showConfirmDialog(frame, "This will open the FFTCG Priming Rules Supplementary Explanation in your browser. Continue?", primingSupplementaryRulesMenuItem.getText(),
 						JOptionPane.YES_NO_OPTION,
 						JOptionPane.QUESTION_MESSAGE);
-				if (result == JOptionPane.YES_OPTION) {
-					openGuidePdf(4);
-				}
+				if (result == JOptionPane.YES_OPTION) openGuidePdf(4);
 			}
 		});
 
@@ -231,21 +246,9 @@ public class MainWindow {
 			}
 		});
 
-		// Card dimensions (cardback.jpg scaled to 110x155, sized to allow full 220x309 preview to fit)
-		Dimension cardSize = new Dimension(110, 155);
-
-		// --- Card Preview (shown on deck mouseover, right side of window) ---
-		JLabel cardPreview = new JLabel();
-		cardPreview.setIcon(new ImageIcon(getClass().getResource("/resources/cardback.jpg")));
-		cardPreview.setVisible(false);
-
-		MouseAdapter deckHover = new MouseAdapter() {
-			@Override public void mouseEntered(MouseEvent e) { cardPreview.setVisible(true); }
-			@Override public void mouseExited(MouseEvent e)  { cardPreview.setVisible(false); }
-		};
+		Dimension cardSize = new Dimension(CARD_W, CARD_H);
 
 		// --- P2 Zones (top of screen) ---
-		// Top-left corner: narrow column (Remove, Limit) beside wide column (Break, Deck)
 		JLabel lblRemove_1 = new JLabel("<html><div style='text-align:center'>REMOVED<br>FROM<br>PLAY</div></html>");
 		lblRemove_1.setToolTipText("Player 2 Removed From Play");
 		lblRemove_1.setHorizontalAlignment(SwingConstants.CENTER);
@@ -280,11 +283,10 @@ public class MainWindow {
 		break1_1.setMinimumSize(cardSize);
 
 		JLabel deck_1 = new JLabel();
-		deck_1.setIcon(new ImageIcon(new ImageIcon(MainWindow.class.getResource("/resources/cardback.jpg")).getImage().getScaledInstance(cardSize.width, cardSize.height, Image.SCALE_SMOOTH)));
+		deck_1.setIcon(scaledCardback(cardSize));
 		deck_1.setToolTipText("Player 2 Deck");
 		deck_1.setHorizontalAlignment(SwingConstants.CENTER);
 		deck_1.setBorder(new BevelBorder(BevelBorder.RAISED, new Color(0, 0, 0), null, null, null));
-		deck_1.addMouseListener(deckHover);
 
 		JPanel p2CornerPanel = new JPanel(new GridLayout(2, 2));
 		p2CornerPanel.add(lblRemove_1);
@@ -292,7 +294,6 @@ public class MainWindow {
 		p2CornerPanel.add(lblLimit_1);
 		p2CornerPanel.add(deck_1);
 
-		// Top-right: damage zone with player label
 		JLabel lblDAM_1 = new JLabel("<html><div style='text-align:center'>D<br>A<br>M<br>A<br>G<br>E</div></html>");
 		lblDAM_1.setToolTipText("Player 2 Damage Zone");
 		lblDAM_1.setHorizontalAlignment(SwingConstants.CENTER);
@@ -326,8 +327,7 @@ public class MainWindow {
 		p2ZonesPanel.add(p2CornerPanel, BorderLayout.WEST);
 		p2ZonesPanel.add(p2DamagePanel, BorderLayout.EAST);
 
-		// --- P1 Zones (bottom of screen, above phase button) ---
-		// Bottom-left: damage zone with player label
+		// --- P1 Zones (bottom of screen) ---
 		JLabel lblDAM = new JLabel("<html><div style='text-align:center'>D<br>A<br>M<br>A<br>G<br>E</div></html>");
 		lblDAM.setToolTipText("Player 1 Damage Zone");
 		lblDAM.setHorizontalAlignment(SwingConstants.CENTER);
@@ -357,13 +357,26 @@ public class MainWindow {
 		p1DamagePanel.add(p1PlayerPanel, BorderLayout.NORTH);
 		p1DamagePanel.add(lblDAM, BorderLayout.CENTER);
 
-		// Bottom-right corner: wide column (Deck, Break) beside narrow column (Limit, Remove)
-		JLabel deck = new JLabel();
-		deck.setIcon(new ImageIcon(new ImageIcon(getClass().getResource("/resources/cardback.jpg")).getImage().getScaledInstance(cardSize.width, cardSize.height, Image.SCALE_SMOOTH)));
-		deck.setToolTipText("Player 1 Deck");
-		deck.setHorizontalAlignment(SwingConstants.CENTER);
-		deck.setBorder(new BevelBorder(BevelBorder.RAISED, new Color(0, 0, 0), null, null, null));
-		deck.addMouseListener(deckHover);
+		// P1 deck label — interactive
+		p1DeckLabel = new JLabel();
+		p1DeckLabel.setIcon(scaledCardback(cardSize));
+		p1DeckLabel.setToolTipText("Player 1 Deck");
+		p1DeckLabel.setHorizontalAlignment(SwingConstants.CENTER);
+		p1DeckLabel.setBorder(new BevelBorder(BevelBorder.RAISED, new Color(0, 0, 0), null, null, null));
+		p1DeckLabel.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(MouseEvent e) {
+				onP1DeckClicked();
+			}
+			@Override
+			public void mouseEntered(MouseEvent e) {
+				if (p1TopFaceUp && !p1MainDeck.isEmpty()) showDeckZoom(p1MainDeck.peek());
+			}
+			@Override
+			public void mouseExited(MouseEvent e) {
+				hideZoom();
+			}
+		});
 
 		JLabel break1 = new JLabel("BREAK");
 		break1.setToolTipText("Player 1 Break Zone");
@@ -376,16 +389,31 @@ public class MainWindow {
 		break1.setPreferredSize(cardSize);
 		break1.setMinimumSize(cardSize);
 
-		JLabel lblLimit = new JLabel("LIMIT");
-		lblLimit.setToolTipText("Player 1 LB");
-		lblLimit.setHorizontalAlignment(SwingConstants.CENTER);
-		lblLimit.setFont(new Font("Pixel NES", Font.PLAIN, 18));
-		lblLimit.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
-		lblLimit.setBackground(Color.DARK_GRAY);
-		lblLimit.setForeground(Color.WHITE);
-		lblLimit.setOpaque(true);
-		lblLimit.setPreferredSize(cardSize);
-		lblLimit.setMinimumSize(cardSize);
+		// P1 limit label — interactive
+		p1LimitLabel = new JLabel("LIMIT");
+		p1LimitLabel.setToolTipText("Player 1 LB Deck");
+		p1LimitLabel.setHorizontalAlignment(SwingConstants.CENTER);
+		p1LimitLabel.setFont(new Font("Pixel NES", Font.PLAIN, 18));
+		p1LimitLabel.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
+		p1LimitLabel.setBackground(Color.DARK_GRAY);
+		p1LimitLabel.setForeground(Color.WHITE);
+		p1LimitLabel.setOpaque(true);
+		p1LimitLabel.setPreferredSize(cardSize);
+		p1LimitLabel.setMinimumSize(cardSize);
+		p1LimitLabel.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(MouseEvent e) {
+				onP1LbClicked();
+			}
+			@Override
+			public void mouseEntered(MouseEvent e) {
+				showLbZoom();
+			}
+			@Override
+			public void mouseExited(MouseEvent e) {
+				hideZoom();
+			}
+		});
 
 		JLabel lblRemove = new JLabel("<html><div style='text-align:center'>REMOVED<br>FROM<br>PLAY</div></html>");
 		lblRemove.setToolTipText("Player 1 Removed From Play");
@@ -399,8 +427,8 @@ public class MainWindow {
 		lblRemove.setMinimumSize(cardSize);
 
 		JPanel p1CornerPanel = new JPanel(new GridLayout(2, 2));
-		p1CornerPanel.add(deck);
-		p1CornerPanel.add(lblLimit);
+		p1CornerPanel.add(p1DeckLabel);
+		p1CornerPanel.add(p1LimitLabel);
 		p1CornerPanel.add(break1);
 		p1CornerPanel.add(lblRemove);
 
@@ -408,17 +436,14 @@ public class MainWindow {
 		p1ZonesPanel.add(p1DamagePanel, BorderLayout.WEST);
 		p1ZonesPanel.add(p1CornerPanel, BorderLayout.EAST);
 
-		// --- South Panel: P1 zones + phase button ---
 		JPanel southPanel = new JPanel(new BorderLayout());
 		southPanel.add(p1ZonesPanel, BorderLayout.CENTER);
 		southPanel.add(phaseButton, BorderLayout.SOUTH);
 
-		// --- Game Board (center, takes all remaining space) ---
-		// --- P2 board half ---
+		// --- Game Board ---
 		JPanel p2Board = new JPanel();
 		p2Board.setBackground(UIManager.getColor("Panel.background"));
 
-		// --- P1 board half ---
 		JPanel p1Board = new JPanel();
 		p1Board.setBackground(UIManager.getColor("Panel.background"));
 
@@ -440,22 +465,217 @@ public class MainWindow {
 		p2ColorBox.addActionListener(e -> applyElementColor((String) p2ColorBox.getSelectedItem(), p2ZonesPanel, p2Board));
 		p1ColorBox.addActionListener(e -> applyElementColor((String) p1ColorBox.getSelectedItem(), p1ZonesPanel, p1Board));
 
-		// --- Card Preview Panel (right side, vertically centered) ---
-		JPanel previewPanel = new JPanel(new GridBagLayout());
-		previewPanel.add(cardPreview);
-		previewPanel.setBackground(UIManager.getColor("Panel.background"));
-
 		// --- Assemble ---
 		frame.getContentPane().add(p2ZonesPanel, BorderLayout.NORTH);
-		frame.getContentPane().add(southPanel, BorderLayout.SOUTH);
-		frame.getContentPane().add(gameBoard, BorderLayout.CENTER);
-		frame.getContentPane().add(previewPanel, BorderLayout.EAST);
-		
+		frame.getContentPane().add(southPanel,   BorderLayout.SOUTH);
+		frame.getContentPane().add(gameBoard,    BorderLayout.CENTER);
 	}
-	
-	/**
-	 * Opens the Starter or Advanced Guide in the browser.  These links could go dead.
-	 */
+
+	// -------------------------------------------------------------------------
+	// Game startup
+	// -------------------------------------------------------------------------
+
+	private void startGame(int deckId) {
+		p1MainDeck.clear();
+		p1LbDeck.clear();
+		p1LbIndex   = 0;
+		p1TopFaceUp = false;
+
+		new SwingWorker<Void, Void>() {
+			List<DeckCardDetail> cards;
+
+			@Override
+			protected Void doInBackground() throws Exception {
+				try (DeckDatabase db = new DeckDatabase()) {
+					cards = db.getDeckCardsDetailed(deckId);
+				}
+				return null;
+			}
+
+			@Override
+			protected void done() {
+				try {
+					get(); // surface any exception
+				} catch (InterruptedException | ExecutionException ex) {
+					JOptionPane.showMessageDialog(frame, "Error loading deck:\n" + ex.getMessage(),
+							"Error", JOptionPane.ERROR_MESSAGE);
+					return;
+				}
+
+				List<String> main = new ArrayList<>();
+				for (DeckCardDetail card : cards) {
+					if (card.isLb()) p1LbDeck.add(card.imageUrl());
+					else             main.add(card.imageUrl());
+				}
+				Collections.shuffle(main);
+				p1MainDeck.addAll(main);
+
+				refreshP1DeckLabel();
+				refreshP1LimitLabel();
+			}
+		}.execute();
+	}
+
+	// -------------------------------------------------------------------------
+	// P1 deck interaction
+	// -------------------------------------------------------------------------
+
+	private void onP1DeckClicked() {
+		if (p1MainDeck.isEmpty()) return;
+
+		if (!p1TopFaceUp) {
+			// Reveal top card
+			p1TopFaceUp = true;
+			String url = p1MainDeck.peek();
+			loadDeckLabelAsync(p1DeckLabel, url);
+		} else {
+			// Put top card on bottom, show cardback again
+			String top = p1MainDeck.poll();
+			p1MainDeck.addLast(top);
+			p1TopFaceUp = false;
+			p1DeckLabel.setIcon(scaledCardback(p1DeckLabel.getSize()));
+		}
+	}
+
+	private void refreshP1DeckLabel() {
+		p1TopFaceUp = false;
+		p1DeckLabel.setIcon(p1MainDeck.isEmpty() ? null : scaledCardback(p1DeckLabel.getSize()));
+		p1DeckLabel.setText(p1MainDeck.isEmpty() ? "EMPTY" : null);
+	}
+
+	// -------------------------------------------------------------------------
+	// P1 LB deck interaction
+	// -------------------------------------------------------------------------
+
+	private void onP1LbClicked() {
+		if (p1LbDeck.isEmpty()) return;
+		// Rotate: current card goes to bottom, advance index
+		String current = p1LbDeck.remove(p1LbIndex % p1LbDeck.size());
+		p1LbDeck.add(current); // add to end
+		p1LbIndex = 0;         // new top is index 0 after rotation
+		refreshP1LimitLabel();
+	}
+
+	private void refreshP1LimitLabel() {
+		if (p1LbDeck.isEmpty()) {
+			p1LimitLabel.setIcon(null);
+			p1LimitLabel.setFont(new Font("Pixel NES", Font.PLAIN, 18));
+			p1LimitLabel.setText("LIMIT");
+			return;
+		}
+		String url = p1LbDeck.get(0);
+		loadLbLabelAsync(url);
+	}
+
+	// -------------------------------------------------------------------------
+	// Async image loading helpers
+	// -------------------------------------------------------------------------
+
+	/** Loads a card image into a zone label at card size. */
+	private void loadDeckLabelAsync(JLabel target, String imageUrl) {
+		new SwingWorker<ImageIcon, Void>() {
+			@Override
+			protected ImageIcon doInBackground() throws Exception {
+				Image img = ImageIO.read(new URL(imageUrl));
+				return img == null ? null : new ImageIcon(
+						img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+			}
+			@Override
+			protected void done() {
+				try {
+					ImageIcon icon = get();
+					if (icon != null) { target.setIcon(icon); target.setText(null); }
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+	}
+
+	/** Loads the current LB card into p1LimitLabel at card size. */
+	private void loadLbLabelAsync(String imageUrl) {
+		new SwingWorker<ImageIcon, Void>() {
+			@Override
+			protected ImageIcon doInBackground() throws Exception {
+				Image img = ImageIO.read(new URL(imageUrl));
+				return img == null ? null : new ImageIcon(
+						img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+			}
+			@Override
+			protected void done() {
+				try {
+					ImageIcon icon = get();
+					if (icon != null) {
+						p1LimitLabel.setText(null);
+						p1LimitLabel.setIcon(icon);
+					}
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+	}
+
+	// -------------------------------------------------------------------------
+	// LB zoom popup (full-resolution on hover)
+	// -------------------------------------------------------------------------
+
+	private void showDeckZoom(String url) {
+		showZoomAt(url, p1DeckLabel);
+	}
+
+	private void showLbZoom() {
+		if (!p1LbDeck.isEmpty()) showZoomAt(p1LbDeck.get(0), p1LimitLabel);
+	}
+
+	private void showZoomAt(String url, JLabel anchor) {
+		if (url == null) return;
+
+		if (zoomPopup == null) zoomPopup = new JWindow(frame);
+
+		new SwingWorker<ImageIcon, Void>() {
+			@Override
+			protected ImageIcon doInBackground() throws Exception {
+				Image img = ImageIO.read(new URL(url));
+				return img == null ? null : new ImageIcon(img);
+			}
+			@Override
+			protected void done() {
+				try {
+					ImageIcon icon = get();
+					if (icon == null) return;
+
+					JLabel zl = new JLabel(icon);
+					zl.setBorder(BorderFactory.createRaisedBevelBorder());
+					zoomPopup.getContentPane().removeAll();
+					zoomPopup.getContentPane().add(zl);
+					zoomPopup.pack();
+
+					int w = icon.getIconWidth();
+					int h = icon.getIconHeight();
+					Point loc = anchor.getLocationOnScreen();
+					int x = loc.x - w - 6;
+					int y = loc.y + (anchor.getHeight() - h) / 2;
+					int screenH = Toolkit.getDefaultToolkit().getScreenSize().height;
+					y = Math.max(0, Math.min(y, screenH - h));
+					zoomPopup.setLocation(x, y);
+					zoomPopup.setVisible(true);
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+	}
+
+	private void hideZoom() {
+		if (zoomPopup != null) zoomPopup.setVisible(false);
+	}
+
+	// -------------------------------------------------------------------------
+	// Helpers
+	// -------------------------------------------------------------------------
+
+	private ImageIcon scaledCardback(Dimension size) {
+		return new ImageIcon(new ImageIcon(getClass().getResource("/resources/cardback.jpg"))
+				.getImage().getScaledInstance(size.width > 0 ? size.width : CARD_W,
+				                              size.height > 0 ? size.height : CARD_H,
+				                              Image.SCALE_SMOOTH));
+	}
+
 	private JComboBox<String> buildColorDropdown() {
 		String[] items = new String[ElementColor.values().length + 1];
 		items[0] = "Default";
@@ -486,14 +706,14 @@ public class MainWindow {
 
 	private void openGuidePdf(int guide) {
 		if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-		    try {
-		    	switch(guide) {
-		    		case 0 -> Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-03/fftcgrulesheet-en.pdf"));
-		    		case 1 -> Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2025-09/fftcg-comprules-v3.2.1.pdf"));
+			try {
+				switch (guide) {
+					case 0 -> Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-03/fftcgrulesheet-en.pdf"));
+					case 1 -> Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2025-09/fftcg-comprules-v3.2.1.pdf"));
 					case 2 -> Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-03/lb-rule-explanation-eg.pdf"));
 					case 3 -> Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-11/priming-rules-explanation-en.pdf"));
 					case 4 -> Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-11/priming-supplementary-rules-en.pdf"));
-		    	}
+				}
 			} catch (IOException | URISyntaxException e1) {
 				e1.printStackTrace();
 			}
