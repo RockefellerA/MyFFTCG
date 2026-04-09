@@ -12,9 +12,10 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.regex.Pattern;
-
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.regex.Pattern;
 
 import scraper.CardScraper;
 
@@ -40,6 +41,7 @@ import javax.swing.SwingConstants;
 import javax.swing.SwingWorker;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableRowSorter;
 
 import java.awt.event.KeyEvent;
@@ -52,10 +54,14 @@ public class CardBrowser extends JDialog {
         "Rarity", "Job", "Category 1", "Category 2"
     };
 
+    private static final Color LB_BG = new Color(50, 50, 50);
+    private static final Color LB_FG = new Color(0xFF, 0xD7, 0x00);
+
     private final DefaultTableModel tableModel;
     private final JLabel cardImageLabel;
     private final JLabel countLabel;
     private TableRowSorter<DefaultTableModel> sorter;
+    private final Set<String> lbSerials = new HashSet<>();
 
     public CardBrowser(JFrame parent) {
         super(parent, "Card Browser", true);
@@ -69,7 +75,23 @@ public class CardBrowser extends JDialog {
             public boolean isCellEditable(int row, int col) { return false; }
         };
 
-        JTable cardTable = new JTable(tableModel);
+        JTable cardTable = new JTable(tableModel) {
+            @Override
+            public java.awt.Component prepareRenderer(TableCellRenderer renderer, int row, int col) {
+                java.awt.Component c = super.prepareRenderer(renderer, row, col);
+                if (!isRowSelected(row) && col == 0) {
+                    String serial = (String) tableModel.getValueAt(convertRowIndexToModel(row), 0);
+                    if (lbSerials.contains(serial)) {
+                        c.setBackground(LB_BG);
+                        c.setForeground(LB_FG);
+                    } else {
+                        c.setBackground(getBackground());
+                        c.setForeground(getForeground());
+                    }
+                }
+                return c;
+            }
+        };
         cardTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         cardTable.getTableHeader().setReorderingAllowed(false);
         cardTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
@@ -262,13 +284,15 @@ public class CardBrowser extends JDialog {
 
     private void loadCards() {
         String sql = "SELECT serial, name_en, type_en, element, cost, power, rarity, job_en, "
-                   + "category_1, category_2 FROM cards ORDER BY serial";
+                   + "category_1, category_2, limit_break FROM cards ORDER BY serial";
         try (Connection conn = DriverManager.getConnection(DB_URL);
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
             while (rs.next()) {
+                String serial = rs.getString("serial");
+                if (rs.getInt("limit_break") == 1) lbSerials.add(serial);
                 tableModel.addRow(new Object[]{
-                    rs.getString("serial"),
+                    serial,
                     rs.getString("name_en"),
                     rs.getString("type_en"),
                     rs.getString("element"),

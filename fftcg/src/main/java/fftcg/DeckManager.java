@@ -10,6 +10,8 @@ import org.json.JSONObject;
 import java.awt.*;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.*;
+import java.util.HashSet;
+import java.util.Set;
 import java.net.URL;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -50,8 +52,12 @@ public class DeckManager extends JDialog {
     private final JLabel countLabel;
     private final JLabel cardImageLabel;
 
+    private static final Color LB_BG = new Color(50, 50, 50);
+    private static final Color LB_FG = new Color(0xFF, 0xD7, 0x00);
+
     private DeckDatabase db;
     private int selectedDeckId = -1;
+    private Set<String> lbSerials = new HashSet<>();
 
     public DeckManager(JFrame parent) {
         super(parent, "Deck Manager", true);
@@ -85,6 +91,7 @@ public class DeckManager extends JDialog {
         // Open DB and load data
         try {
             db = new DeckDatabase();
+            lbSerials = db.getLbSerials();
             loadDeckList();
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(this, "Error opening database:\n" + e.getMessage(),
@@ -179,7 +186,23 @@ public class DeckManager extends JDialog {
     }
 
     private JPanel buildBrowserPanel() {
-        cardTable = new JTable(browserModel);
+        cardTable = new JTable(browserModel) {
+            @Override
+            public Component prepareRenderer(TableCellRenderer renderer, int row, int col) {
+                Component c = super.prepareRenderer(renderer, row, col);
+                if (!isRowSelected(row) && col == 0) {
+                    String serial = (String) browserModel.getValueAt(convertRowIndexToModel(row), 0);
+                    if (lbSerials.contains(serial)) {
+                        c.setBackground(LB_BG);
+                        c.setForeground(LB_FG);
+                    } else {
+                        c.setBackground(getBackground());
+                        c.setForeground(getForeground());
+                    }
+                }
+                return c;
+            }
+        };
         cardTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         cardTable.getTableHeader().setReorderingAllowed(false);
         cardTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
@@ -239,7 +262,23 @@ public class DeckManager extends JDialog {
     }
 
     private JPanel buildDeckContentPanel() {
-        deckTable = new JTable(deckModel);
+        deckTable = new JTable(deckModel) {
+            @Override
+            public Component prepareRenderer(TableCellRenderer renderer, int row, int col) {
+                Component c = super.prepareRenderer(renderer, row, col);
+                if (!isRowSelected(row) && col == 0) {
+                    String serial = (String) deckModel.getValueAt(row, 0);
+                    if (lbSerials.contains(serial)) {
+                        c.setBackground(LB_BG);
+                        c.setForeground(LB_FG);
+                    } else {
+                        c.setBackground(getBackground());
+                        c.setForeground(getForeground());
+                    }
+                }
+                return c;
+            }
+        };
         deckTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         deckTable.getTableHeader().setReorderingAllowed(false);
         deckTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);

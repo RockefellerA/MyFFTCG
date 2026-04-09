@@ -2,7 +2,9 @@ package scraper;
 
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * SQLite persistence layer for FFTCG saved decks.
@@ -232,6 +234,16 @@ public class DeckDatabase implements AutoCloseable {
     // -------------------------------------------------------------------------
     // Card browser data (reuses the same connection to avoid extra open/close)
     // -------------------------------------------------------------------------
+
+    /** Returns the set of serials whose limit_break flag is 1. */
+    public Set<String> getLbSerials() throws SQLException {
+        Set<String> result = new HashSet<>();
+        try (Statement s = conn.createStatement();
+             ResultSet rs = s.executeQuery("SELECT serial FROM cards WHERE limit_break = 1")) {
+            while (rs.next()) result.add(rs.getString("serial"));
+        }
+        return result;
+    }
 
     /**
      * Returns all cards from the cards table for the inline browser.
