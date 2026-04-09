@@ -22,16 +22,16 @@ import java.net.URI;
 import java.net.URISyntaxException;
 
 import javax.swing.ImageIcon;
-import javax.swing.JComboBox;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JFrame;
-import javax.swing.JSeparator;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JSeparator;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
@@ -156,6 +156,47 @@ public class MainWindow {
 				}
 			}
 		});
+
+		JMenuItem limitBreakRulesMenuItem = new JMenuItem("Limit Break Rules Sheet");
+		helpMenu.add(limitBreakRulesMenuItem);
+		limitBreakRulesMenuItem.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				int result = JOptionPane.showConfirmDialog(frame, "This will open the FFTCG Limit Break Rules Sheet in your browser. Continue?", limitBreakRulesMenuItem.getText(),
+						JOptionPane.YES_NO_OPTION,
+						JOptionPane.QUESTION_MESSAGE);
+				if (result == JOptionPane.YES_OPTION) {
+					openGuidePdf(2);
+				}
+			}
+		});
+
+		JMenuItem primingRulesMenuItem = new JMenuItem("Priming Rules Explanation");
+		helpMenu.add(primingRulesMenuItem);
+		primingRulesMenuItem.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				int result = JOptionPane.showConfirmDialog(frame, "This will open the FFTCG Priming Rules Explanation in your browser. Continue?", primingRulesMenuItem.getText(),
+						JOptionPane.YES_NO_OPTION,
+						JOptionPane.QUESTION_MESSAGE);
+				if (result == JOptionPane.YES_OPTION) {
+					openGuidePdf(3);
+				}
+			}
+		});
+
+				JMenuItem primingSupplementaryRulesMenuItem = new JMenuItem("Priming Rules Supplementary Explanation");
+		helpMenu.add(primingSupplementaryRulesMenuItem);
+		primingSupplementaryRulesMenuItem.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				int result = JOptionPane.showConfirmDialog(frame, "This will open the FFTCG Priming Rules Supplementary Explanation in your browser. Continue?", primingSupplementaryRulesMenuItem.getText(),
+						JOptionPane.YES_NO_OPTION,
+						JOptionPane.QUESTION_MESSAGE);
+				if (result == JOptionPane.YES_OPTION) {
+					openGuidePdf(4);
+				}
+			}
+		});
+
+		helpMenu.addSeparator();
 
 		JMenuItem menuItemAbout = new JMenuItem("About MyFFTCG");
 		helpMenu.add(menuItemAbout);
@@ -441,10 +482,19 @@ public class MainWindow {
 		    try {
 		    	switch(guide) {
 		    		case 0:
-		    			Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2020-02/fftcgrulesheet-en.pdf"));
+		    			Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-03/fftcgrulesheet-en.pdf"));
 		    			break;
 		    		case 1:
-						Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/advanced-rules/fftcg-rules-2.1.10.pdf"));
+						Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2025-09/fftcg-comprules-v3.2.1.pdf"));
+		    			break;
+					case 2:
+						Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-03/lb-rule-explanation-eg.pdf"));
+		    			break;
+					case 3:
+						Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-11/priming-rules-explanation-en.pdf"));
+		    			break;
+					case 4:
+						Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-11/priming-supplementary-rules-en.pdf"));
 		    			break;
 		    	}
 			} catch (IOException | URISyntaxException e1) {
