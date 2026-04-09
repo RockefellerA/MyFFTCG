@@ -94,6 +94,11 @@ public class DeckManager extends JDialog {
         // Load card browser in the background so the dialog opens immediately
         loadBrowserCards();
 
+        getRootPane().registerKeyboardAction(
+                e -> dispose(),
+                KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
+                JComponent.WHEN_IN_FOCUSED_WINDOW);
+
         addWindowListener(new WindowAdapter() {
             @Override public void windowClosing(WindowEvent e) {
                 if (db != null) try { db.close(); } catch (SQLException ignored) {}
@@ -345,15 +350,15 @@ public class DeckManager extends JDialog {
             table.getColumnModel().getColumn(col).setCellRenderer(greyIfEmpty);
 
         // Grey out Power (5) when 0 or null
-        table.getColumnModel().getColumn(5).setCellRenderer(powerRenderer(table));
+        table.getColumnModel().getColumn(5).setCellRenderer(powerRenderer());
     }
 
     private void applyDeckRenderers(JTable table) {
         // Grey out Power (5) when 0 or null
-        table.getColumnModel().getColumn(5).setCellRenderer(powerRenderer(table));
+        table.getColumnModel().getColumn(5).setCellRenderer(powerRenderer());
     }
 
-    private DefaultTableCellRenderer powerRenderer(JTable table) {
+    private DefaultTableCellRenderer powerRenderer() {
         return new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(

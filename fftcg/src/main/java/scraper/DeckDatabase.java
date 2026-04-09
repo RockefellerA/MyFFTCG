@@ -121,6 +121,28 @@ public class DeckDatabase implements AutoCloseable {
         return result;
     }
 
+    /** Returns all decks with their total card counts, ordered by creation (oldest first). */
+    public List<DeckSummary> getDecksSummary() throws SQLException {
+        List<DeckSummary> result = new ArrayList<>();
+        String sql = """
+                SELECT d.id, d.name, COALESCE(SUM(dc.count), 0) AS total
+                FROM decks d
+                LEFT JOIN deck_cards dc ON d.id = dc.deck_id
+                GROUP BY d.id, d.name
+                ORDER BY d.id
+                """;
+        try (Statement s = conn.createStatement();
+             ResultSet rs = s.executeQuery(sql)) {
+            while (rs.next()) {
+                result.add(new DeckSummary(
+                        rs.getInt("id"),
+                        rs.getString("name"),
+                        rs.getInt("total")));
+            }
+        }
+        return result;
+    }
+
     // -------------------------------------------------------------------------
     // Deck card operations
     // -------------------------------------------------------------------------
@@ -263,6 +285,12 @@ public class DeckDatabase implements AutoCloseable {
 
     /** Lightweight representation of a saved deck for display in the UI. */
     public record DeckEntry(int id, String name) {
+        @Override
+        public String toString() { return name; }
+    }
+
+    /** Deck with its total card count, used for deck selection. */
+    public record DeckSummary(int id, String name, int cardCount) {
         @Override
         public String toString() { return name; }
     }

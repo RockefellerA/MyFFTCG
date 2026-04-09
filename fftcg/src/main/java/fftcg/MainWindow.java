@@ -98,10 +98,8 @@ public class MainWindow {
 		fileMenu.add(newGameMenuItem);
 		newGameMenuItem.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
-				frame.getContentPane().removeAll();
-				frame.getContentPane().invalidate();
-				frame.getContentPane().add(new GameWindow(frame));
-				frame.getContentPane().revalidate();
+				DeckSelectDialog dialog = new DeckSelectDialog(frame);
+				dialog.setVisible(true);
 			}
 		});
 

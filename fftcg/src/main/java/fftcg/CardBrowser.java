@@ -23,6 +23,7 @@ import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -32,6 +33,7 @@ import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
+import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.RowFilter;
 import javax.swing.SwingConstants;
@@ -39,6 +41,8 @@ import javax.swing.SwingWorker;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
+
+import java.awt.event.KeyEvent;
 
 public class CardBrowser extends JDialog {
 
@@ -182,6 +186,11 @@ public class CardBrowser extends JDialog {
         add(new JScrollPane(cardTable), BorderLayout.CENTER);
         add(imagePanel, BorderLayout.EAST);
         add(southPanel, BorderLayout.SOUTH);
+
+        getRootPane().registerKeyboardAction(
+                e -> dispose(),
+                KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
+                JComponent.WHEN_IN_FOCUSED_WINDOW);
 
         SwingWorker<Void, Void> initWorker = new SwingWorker<Void, Void>() {
             @Override
