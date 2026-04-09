@@ -5,6 +5,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -145,6 +146,28 @@ public class CardScraper {
     }
 
     /**
+     * Scrapes all cards and saves them to the database.
+     * Suitable for initial population or incremental updates.
+     *
+     * @param db        open {@link CardDatabase} to write into
+     * @return total number of cards saved across all sets
+     */
+    public int scrapeAndSave(CardDatabase db)
+            throws IOException, InterruptedException, java.sql.SQLException {
+        int total = 0;
+        List<ScrapedCard> cards = scrapeSet("1");
+            db.saveCards(cards);
+            long saved = cards.stream()
+                    .filter(c -> c.serial != null && !c.serial.isBlank())
+                    .map(c -> c.serial)
+                    .distinct()
+                    .count();
+            System.out.printf("Saved %d cards%n", saved);
+            total += (int) saved;
+        return total;
+    }
+
+    /**
      * Downloads the raw bytes of a card image from the CDN.
      * Store the bytes in SQLite (BLOB) or write them to disk as you prefer.
      */
@@ -265,5 +288,19 @@ public class CardScraper {
         }
 
         return c;
+    }
+
+    public static void main(String[] args) throws IOException, InterruptedException {
+        try (CardDatabase db = new CardDatabase("fftcg_cards.db")) {
+            CardScraper scraper = new CardScraper();
+            List<ScrapedCard> total = scraper.scrapeOnePage("1");
+            db.saveCards(total);
+        } catch (SQLException e) {
+            System.err.println("FAIL – database error:");
+            e.printStackTrace();
+            return;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }

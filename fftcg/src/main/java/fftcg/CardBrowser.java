@@ -17,7 +17,6 @@ import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
-import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JDialog;
@@ -32,12 +31,13 @@ import javax.swing.ListSelectionModel;
 import javax.swing.RowFilter;
 import javax.swing.SwingConstants;
 import javax.swing.SwingWorker;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableRowSorter;
 
 public class CardBrowser extends JDialog {
 
-    private static final String DB_URL = "jdbc:sqlite:fftcg_cards_test.db";
+    private static final String DB_URL = "jdbc:sqlite:fftcg_cards.db";
     private static final String[] COLUMNS = {
         "Serial", "Name", "Type", "Element", "Cost", "Power",
         "Rarity", "Job", "Category 1", "Category 2"

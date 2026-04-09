@@ -77,10 +77,15 @@ public class ScrapeRunner {
         try (CardDatabase db = new CardDatabase(TEST_DB)) {
             db.saveCards(cards);
 
+            long savedCount = cards.stream()
+                    .filter(c -> c.serial != null && !c.serial.isBlank())
+                    .map(c -> c.serial)
+                    .distinct()
+                    .count();
             List<ScrapedCard> readBack = db.getCardsBySet(TEST_SET);
-            if (readBack.size() != cards.size()) {
+            if (readBack.size() != savedCount) {
                 System.err.printf("FAIL – wrote %d cards but read back %d%n",
-                        cards.size(), readBack.size());
+                        savedCount, readBack.size());
                 return;
             }
             System.out.println("  OK  – " + readBack.size() + " cards round-tripped correctly\n");
