@@ -33,8 +33,9 @@ public class DeckManager extends JDialog {
     private static final String[] DECK_COLUMNS = {
         "Serial", "Name", "Type", "Element", "Cost", "Power", "Rarity", "Qty"
     };
-    private static final int MAX_DECK_SIZE = 50;
-    private static final int MAX_COPIES    = 3;
+    private static final int MAX_DECK_SIZE    = 50;
+    private static final int MAX_LB_DECK_SIZE = 8;
+    private static final int MAX_COPIES       = 3;
 
     // Deck list (left panel)
     private final DefaultListModel<DeckEntry> deckListModel = new DefaultListModel<>();
@@ -72,7 +73,7 @@ public class DeckManager extends JDialog {
             @Override public boolean isCellEditable(int r, int c) { return false; }
         };
 
-        countLabel = new JLabel("0 / " + MAX_DECK_SIZE + " cards", SwingConstants.RIGHT);
+        countLabel = new JLabel(formatCountLabel(0, 0), SwingConstants.RIGHT);
         countLabel.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 8));
 
         cardImageLabel = new JLabel("Select a card to preview", SwingConstants.CENTER);
@@ -430,16 +431,34 @@ public class DeckManager extends JDialog {
     private void loadDeckCards(int deckId) {
         deckModel.setRowCount(0);
         try {
-            int total = 0;
-            for (Object[] row : db.getDeckCards(deckId)) {
+            List<Object[]> rows = db.getDeckCards(deckId);
+            rows.sort((a, b) -> {
+                boolean aLb = lbSerials.contains((String) a[0]);
+                boolean bLb = lbSerials.contains((String) b[0]);
+                if (aLb != bLb) return aLb ? 1 : -1;          // non-LB above LB
+                return ((String) a[0]).compareTo((String) b[0]); // then by serial
+            });
+            int mainTotal = 0, lbTotal = 0;
+            for (Object[] row : rows) {
                 deckModel.addRow(row);
-                total += (Integer) row[7];
+                int qty = (Integer) row[7];
+                if (lbSerials.contains((String) row[0])) lbTotal += qty;
+                else                                       mainTotal += qty;
             }
-            countLabel.setText(total + " / " + MAX_DECK_SIZE + " cards");
+            updateCountLabel(mainTotal, lbTotal);
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(this, "Error loading deck:\n" + e.getMessage(),
                     "Database Error", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    private void updateCountLabel(int mainTotal, int lbTotal) {
+        countLabel.setText(formatCountLabel(mainTotal, lbTotal));
+    }
+
+    private static String formatCountLabel(int mainTotal, int lbTotal) {
+        return mainTotal + " / " + MAX_DECK_SIZE + " cards"
+                + "  (+" + lbTotal + "/" + MAX_LB_DECK_SIZE + " LB)";
     }
 
     private void onNewDeck() {
@@ -497,7 +516,7 @@ public class DeckManager extends JDialog {
             db.deleteDeck(entry.id());
             selectedDeckId = -1;
             deckModel.setRowCount(0);
-            countLabel.setText("0 / " + MAX_DECK_SIZE + " cards");
+            countLabel.setText(formatCountLabel(0, 0));
             loadDeckList();
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(this, "Error deleting deck:\n" + e.getMessage(),
@@ -528,21 +547,26 @@ public class DeckManager extends JDialog {
         int modelRow = cardTable.convertRowIndexToModel(viewRow);
         String serial = (String) browserModel.getValueAt(modelRow, 0);
 
+        boolean isLb  = lbSerials.contains(serial);
+        int current   = getCardCountInDeck(serial);
+
+        if (current >= MAX_COPIES) {
+            JOptionPane.showMessageDialog(this,
+                    "You already have " + MAX_COPIES + " copies of this card in the deck.");
+            return;
+        }
+        if (isLb && getLbDeckTotal() >= MAX_LB_DECK_SIZE) {
+            JOptionPane.showMessageDialog(this,
+                    "LB deck is already at " + MAX_LB_DECK_SIZE + " cards.");
+            return;
+        }
+        if (!isLb && getMainDeckTotal() >= MAX_DECK_SIZE) {
+            JOptionPane.showMessageDialog(this,
+                    "Main deck is already at " + MAX_DECK_SIZE + " cards.");
+            return;
+        }
+
         try {
-            int total   = db.getTotalCardCount(selectedDeckId);
-            int current = db.getCardCount(selectedDeckId, serial);
-
-            if (total >= MAX_DECK_SIZE) {
-                JOptionPane.showMessageDialog(this,
-                        "Deck is already at " + MAX_DECK_SIZE + " cards.");
-                return;
-            }
-            if (current >= MAX_COPIES) {
-                JOptionPane.showMessageDialog(this,
-                        "You already have " + MAX_COPIES + " copies of this card in the deck.");
-                return;
-            }
-
             db.setCardCount(selectedDeckId, serial, current + 1);
             loadDeckCards(selectedDeckId);
         } catch (SQLException e) {
@@ -580,6 +604,36 @@ public class DeckManager extends JDialog {
             JOptionPane.showMessageDialog(this, "Error removing card:\n" + e.getMessage(),
                     "Database Error", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Deck count helpers (read from in-memory model to avoid extra DB queries)
+    // -------------------------------------------------------------------------
+
+    private int getCardCountInDeck(String serial) {
+        for (int i = 0; i < deckModel.getRowCount(); i++) {
+            if (serial.equals(deckModel.getValueAt(i, 0)))
+                return (Integer) deckModel.getValueAt(i, 7);
+        }
+        return 0;
+    }
+
+    private int getMainDeckTotal() {
+        int total = 0;
+        for (int i = 0; i < deckModel.getRowCount(); i++) {
+            if (!lbSerials.contains((String) deckModel.getValueAt(i, 0)))
+                total += (Integer) deckModel.getValueAt(i, 7);
+        }
+        return total;
+    }
+
+    private int getLbDeckTotal() {
+        int total = 0;
+        for (int i = 0; i < deckModel.getRowCount(); i++) {
+            if (lbSerials.contains((String) deckModel.getValueAt(i, 0)))
+                total += (Integer) deckModel.getValueAt(i, 7);
+        }
+        return total;
     }
 
     // -------------------------------------------------------------------------
