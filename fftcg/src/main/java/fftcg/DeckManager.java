@@ -293,7 +293,7 @@ public class DeckManager extends JDialog {
             }
         });
 
-        JButton removeBtn    = new JButton("Remove from Deck  ✕");
+        JButton removeBtn    = new JButton("Remove 1 from Deck  ✕");
         JButton removeAllBtn = new JButton("Remove All From Deck");
         removeAllBtn.setEnabled(false);
 
@@ -585,10 +585,24 @@ public class DeckManager extends JDialog {
         try {
             db.setCardCount(selectedDeckId, serial, count - 1);
             loadDeckCards(selectedDeckId);
+            restoreSelection(serial, viewRow);
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(this, "Error removing card:\n" + e.getMessage(),
                     "Database Error", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    /** Re-selects the row with the given serial after a reload, or the nearest row if it was removed. */
+    private void restoreSelection(String serial, int fallbackViewRow) {
+        for (int i = 0; i < deckModel.getRowCount(); i++) {
+            if (serial.equals(deckModel.getValueAt(i, 0))) {
+                deckTable.setRowSelectionInterval(i, i);
+                return;
+            }
+        }
+        // Card was fully removed — select the row that shifted into its position, or the last row
+        int target = Math.min(fallbackViewRow, deckModel.getRowCount() - 1);
+        if (target >= 0) deckTable.setRowSelectionInterval(target, target);
     }
 
     private void removeAllOfSelectedCard() {
@@ -600,6 +614,7 @@ public class DeckManager extends JDialog {
         try {
             db.setCardCount(selectedDeckId, serial, 0);
             loadDeckCards(selectedDeckId);
+            restoreSelection(serial, viewRow);
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(this, "Error removing card:\n" + e.getMessage(),
                     "Database Error", JOptionPane.ERROR_MESSAGE);

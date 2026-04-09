@@ -127,9 +127,12 @@ public class DeckDatabase implements AutoCloseable {
     public List<DeckSummary> getDecksSummary() throws SQLException {
         List<DeckSummary> result = new ArrayList<>();
         String sql = """
-                SELECT d.id, d.name, COALESCE(SUM(dc.count), 0) AS total
+                SELECT d.id, d.name,
+                    COALESCE(SUM(CASE WHEN c.limit_break = 0 THEN dc.count ELSE 0 END), 0) AS main_total,
+                    COALESCE(SUM(CASE WHEN c.limit_break = 1 THEN dc.count ELSE 0 END), 0) AS lb_total
                 FROM decks d
                 LEFT JOIN deck_cards dc ON d.id = dc.deck_id
+                LEFT JOIN cards c ON dc.serial = c.serial
                 GROUP BY d.id, d.name
                 ORDER BY d.id
                 """;
@@ -139,7 +142,8 @@ public class DeckDatabase implements AutoCloseable {
                 result.add(new DeckSummary(
                         rs.getInt("id"),
                         rs.getString("name"),
-                        rs.getInt("total")));
+                        rs.getInt("main_total"),
+                        rs.getInt("lb_total")));
             }
         }
         return result;
@@ -301,8 +305,9 @@ public class DeckDatabase implements AutoCloseable {
         public String toString() { return name; }
     }
 
-    /** Deck with its total card count, used for deck selection. */
-    public record DeckSummary(int id, String name, int cardCount) {
+    /** Deck with separate main and LB card counts, used for deck selection. */
+    public record DeckSummary(int id, String name, int mainCardCount, int lbCardCount) {
+        public int totalCardCount() { return mainCardCount + lbCardCount; }
         @Override
         public String toString() { return name; }
     }

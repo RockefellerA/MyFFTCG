@@ -1,14 +1,30 @@
 package fftcg;
 
-import scraper.DeckDatabase;
-import scraper.DeckDatabase.DeckSummary;
-
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.FlowLayout;
 import java.awt.event.KeyEvent;
 import java.sql.SQLException;
 import java.util.List;
 
-import javax.swing.*;
+import javax.swing.BorderFactory;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.DefaultListModel;
+import javax.swing.JButton;
+import javax.swing.JComponent;
+import javax.swing.JDialog;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.KeyStroke;
+import javax.swing.ListSelectionModel;
+
+import scraper.DeckDatabase;
+import scraper.DeckDatabase.DeckSummary;
 
 public class DeckSelectDialog extends JDialog {
 
@@ -23,7 +39,7 @@ public class DeckSelectDialog extends JDialog {
 
         List<DeckSummary> decks = loadDecks();
 
-        JLabel label = new JLabel("Select a deck with exactly 50 cards:");
+        JLabel label = new JLabel("Select a deck with at least 50 main cards:");
         label.setBorder(BorderFactory.createEmptyBorder(0, 0, 4, 0));
 
         DefaultListModel<DeckSummary> listModel = new DefaultListModel<>();
@@ -34,11 +50,11 @@ public class DeckSelectDialog extends JDialog {
         deckList.setCellRenderer(new DeckListRenderer());
         deckList.setFixedCellHeight(28);
 
-        // Prevent selecting non-50-card decks
+        // Prevent selecting decks without exactly 50 main cards
         deckList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 DeckSummary sel = deckList.getSelectedValue();
-                if (sel != null && sel.cardCount() != 50) deckList.clearSelection();
+                if (sel != null && sel.mainCardCount() != 50) deckList.clearSelection();
             }
         });
 
@@ -49,7 +65,7 @@ public class DeckSelectDialog extends JDialog {
         deckList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 DeckSummary sel = deckList.getSelectedValue();
-                startBtn.setEnabled(sel != null && sel.cardCount() == 50);
+                startBtn.setEnabled(sel != null && sel.mainCardCount() == 50);
             }
         });
 
@@ -94,8 +110,9 @@ public class DeckSelectDialog extends JDialog {
                 JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
             super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
             if (value instanceof DeckSummary d) {
-                setText(d.name() + "  (" + d.cardCount() + " / 50)");
-                if (d.cardCount() != 50) {
+                setText(d.name() + "  (" + d.mainCardCount() + " / 50"
+                        + (d.lbCardCount() > 0 ? " +" + d.lbCardCount() + " LB" : "") + ")");
+                if (d.mainCardCount() != 50) {
                     setForeground(Color.GRAY);
                     setBackground(list.getBackground());
                 }
