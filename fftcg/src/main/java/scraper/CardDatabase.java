@@ -35,29 +35,43 @@ public class CardDatabase implements AutoCloseable {
         try (Statement s = conn.createStatement()) {
             s.execute("""
                 CREATE TABLE IF NOT EXISTS cards (
-                    serial      TEXT PRIMARY KEY,
-                    name_en     TEXT,
-                    type_en     TEXT,
-                    element     TEXT,
-                    cost        INTEGER,
-                    power       INTEGER,
-                    rarity      TEXT,
-                    job_en      TEXT,
-                    category_1  TEXT,
-                    category_2  TEXT,
-                    ex_burst    INTEGER NOT NULL DEFAULT 0,
-                    multicard   INTEGER NOT NULL DEFAULT 0,
-                    text_en     TEXT,
-                    thumb_name  TEXT,
-                    image_url   TEXT,
-                    image_data  BLOB,
-                    set_number  TEXT
+                    serial       TEXT PRIMARY KEY,
+                    name_en      TEXT,
+                    type_en      TEXT,
+                    element      TEXT,
+                    cost         INTEGER,
+                    power        INTEGER,
+                    rarity       TEXT,
+                    job_en       TEXT,
+                    category_1   TEXT,
+                    category_2   TEXT,
+                    ex_burst     INTEGER NOT NULL DEFAULT 0,
+                    multicard    INTEGER NOT NULL DEFAULT 0,
+                    text_en      TEXT,
+                    thumb_name   TEXT,
+                    image_url    TEXT,
+                    image_data   BLOB,
+                    set_number   TEXT,
+                    limit_break  INTEGER NOT NULL DEFAULT 0,
+                    lb_cost      INTEGER
                 )
                 """);
             s.execute("CREATE INDEX IF NOT EXISTS idx_cards_set     ON cards(set_number)");
             s.execute("CREATE INDEX IF NOT EXISTS idx_cards_type    ON cards(type_en)");
             s.execute("CREATE INDEX IF NOT EXISTS idx_cards_element ON cards(element)");
             s.execute("CREATE INDEX IF NOT EXISTS idx_cards_rarity  ON cards(rarity)");
+
+            // Migration: add columns to existing databases that pre-date this schema change
+            try { s.execute("ALTER TABLE cards ADD COLUMN limit_break INTEGER NOT NULL DEFAULT 0"); } catch (SQLException ignored) {}
+            try { s.execute("ALTER TABLE cards ADD COLUMN lb_cost INTEGER"); } catch (SQLException ignored) {}
+
+            // Populate limit_break / lb_cost for any rows not yet processed
+            s.execute("""
+                UPDATE cards SET
+                    limit_break = 1,
+                    lb_cost     = CAST(SUBSTR(text_en, INSTR(text_en, 'Limit Break -- ') + 15) AS INTEGER)
+                WHERE text_en LIKE '%Limit Break -- %' AND lb_cost IS NULL
+                """);
         }
     }
 
@@ -72,24 +86,27 @@ public class CardDatabase implements AutoCloseable {
                 INSERT INTO cards (
                     serial, name_en, type_en, element, cost, power, rarity,
                     job_en, category_1, category_2, ex_burst, multicard,
-                    text_en, thumb_name, image_url, set_number
-                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    text_en, thumb_name, image_url, set_number,
+                    limit_break, lb_cost
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ON CONFLICT(serial) DO UPDATE SET
-                    name_en    = excluded.name_en,
-                    type_en    = excluded.type_en,
-                    element    = excluded.element,
-                    cost       = excluded.cost,
-                    power      = excluded.power,
-                    rarity     = excluded.rarity,
-                    job_en     = excluded.job_en,
-                    category_1 = excluded.category_1,
-                    category_2 = excluded.category_2,
-                    ex_burst   = excluded.ex_burst,
-                    multicard  = excluded.multicard,
-                    text_en    = excluded.text_en,
-                    thumb_name = excluded.thumb_name,
-                    image_url  = excluded.image_url,
-                    set_number = excluded.set_number
+                    name_en     = excluded.name_en,
+                    type_en     = excluded.type_en,
+                    element     = excluded.element,
+                    cost        = excluded.cost,
+                    power       = excluded.power,
+                    rarity      = excluded.rarity,
+                    job_en      = excluded.job_en,
+                    category_1  = excluded.category_1,
+                    category_2  = excluded.category_2,
+                    ex_burst    = excluded.ex_burst,
+                    multicard   = excluded.multicard,
+                    text_en     = excluded.text_en,
+                    thumb_name  = excluded.thumb_name,
+                    image_url   = excluded.image_url,
+                    set_number  = excluded.set_number,
+                    limit_break = excluded.limit_break,
+                    lb_cost     = excluded.lb_cost
                 """)) {
             ps.setString(1,  card.serial);
             ps.setString(2,  card.nameEn);
@@ -108,6 +125,10 @@ public class CardDatabase implements AutoCloseable {
             ps.setString(14, card.thumbName);
             ps.setString(15, card.imageUrl);
             ps.setString(16, card.setNumber);
+            ps.setInt   (17, computeLimitBreak(card.textEn));
+            Integer lbCost = computeLbCost(card.textEn);
+            if (lbCost != null) ps.setInt (18, lbCost);
+            else                ps.setNull(18, Types.INTEGER);
             ps.executeUpdate();
         }
     }
@@ -214,5 +235,32 @@ public class CardDatabase implements AutoCloseable {
     @Override
     public void close() throws SQLException {
         conn.close();
+    }
+
+    /** Run via: mvn compile exec:java -Dexec.mainClass=scraper.CardDatabase */
+    public static void main(String[] args) throws SQLException {
+        try (CardDatabase db = new CardDatabase("fftcg_cards.db")) {
+            System.out.println("Migration complete.");
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    private static final String LB_PHRASE = "Limit Break -- ";
+
+    private static int computeLimitBreak(String textEn) {
+        return textEn != null && textEn.contains(LB_PHRASE) ? 1 : 0;
+    }
+
+    private static Integer computeLbCost(String textEn) {
+        if (textEn == null) return null;
+        int idx = textEn.indexOf(LB_PHRASE);
+        if (idx < 0) return null;
+        int start = idx + LB_PHRASE.length();
+        int end = start;
+        while (end < textEn.length() && Character.isDigit(textEn.charAt(end))) end++;
+        return end > start ? Integer.parseInt(textEn.substring(start, end)) : null;
     }
 }
