@@ -24,6 +24,7 @@ import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.table.*;
+import java.awt.Toolkit;
 
 public class DeckManager extends JDialog {
 
@@ -56,9 +57,13 @@ public class DeckManager extends JDialog {
     private static final Color LB_BG = new Color(50, 50, 50);
     private static final Color LB_FG = new Color(0xFF, 0xD7, 0x00);
 
+    private static final int ZOOM_POSITION_OFFSET = 6;
+
     private DeckDatabase db;
     private int selectedDeckId = -1;
     private Set<String> lbSerials = new HashSet<>();
+    private JWindow zoomPopup;
+    private String currentImageUrl;
 
     public DeckManager(JFrame parent) {
         super(parent, "Deck Manager", true);
@@ -79,6 +84,10 @@ public class DeckManager extends JDialog {
         cardImageLabel = new JLabel("Select a card to preview", SwingConstants.CENTER);
         cardImageLabel.setPreferredSize(new Dimension(220, 309));
         cardImageLabel.setBorder(BorderFactory.createEtchedBorder());
+        cardImageLabel.addMouseListener(new MouseAdapter() {
+            @Override public void mouseEntered(MouseEvent e) { showZoom(); }
+            @Override public void mouseExited(MouseEvent e)  { hideZoom(); }
+        });
 
         JPanel imagePanel = new JPanel(new GridBagLayout());
         imagePanel.setPreferredSize(new Dimension(240, 0));
@@ -109,6 +118,7 @@ public class DeckManager extends JDialog {
 
         addWindowListener(new WindowAdapter() {
             @Override public void windowClosing(WindowEvent e) {
+                hideZoom();
                 if (db != null) try { db.close(); } catch (SQLException ignored) {}
             }
         });
@@ -728,8 +738,11 @@ public class DeckManager extends JDialog {
     private void loadCardImageAsync(String serial) {
         cardImageLabel.setIcon(null);
         cardImageLabel.setText("Loading…");
+        currentImageUrl = null;
 
         new SwingWorker<ImageIcon, Void>() {
+            private String fetchedUrl;
+
             @Override
             protected ImageIcon doInBackground() throws Exception {
                 try (java.sql.Connection conn = DriverManager.getConnection("jdbc:sqlite:fftcg_cards.db");
@@ -738,9 +751,9 @@ public class DeckManager extends JDialog {
                     ps.setString(1, serial);
                     try (ResultSet rs = ps.executeQuery()) {
                         if (rs.next()) {
-                            String imageUrl = rs.getString("image_url");
-                            if (imageUrl != null && !imageUrl.isBlank()) {
-                                Image img = ImageIO.read(new URL(imageUrl));
+                            fetchedUrl = rs.getString("image_url");
+                            if (fetchedUrl != null && !fetchedUrl.isBlank()) {
+                                Image img = ImageIO.read(new URL(fetchedUrl));
                                 if (img != null)
                                     return new ImageIcon(img.getScaledInstance(220, 309, Image.SCALE_SMOOTH));
                             }
@@ -755,18 +768,65 @@ public class DeckManager extends JDialog {
                 try {
                     ImageIcon icon = get();
                     if (icon != null) {
+                        currentImageUrl = fetchedUrl;
                         cardImageLabel.setIcon(icon);
                         cardImageLabel.setText(null);
                     } else {
+                        currentImageUrl = null;
                         cardImageLabel.setIcon(null);
                         cardImageLabel.setText("No image available");
                     }
                 } catch (InterruptedException | ExecutionException e) {
+                    currentImageUrl = null;
                     cardImageLabel.setIcon(null);
                     cardImageLabel.setText("Error loading image");
                 }
             }
         }.execute();
+    }
+
+    private void showZoom() {
+        if (currentImageUrl == null) return;
+        final String urlToFetch = currentImageUrl;
+
+        if (zoomPopup == null) zoomPopup = new JWindow(this);
+
+        new SwingWorker<ImageIcon, Void>() {
+            @Override
+            protected ImageIcon doInBackground() throws Exception {
+                Image img = ImageIO.read(new URL(urlToFetch));
+                return img != null ? new ImageIcon(img) : null;
+            }
+            @Override
+            protected void done() {
+                if (!urlToFetch.equals(currentImageUrl) || zoomPopup == null) return;
+                try {
+                    ImageIcon icon = get();
+                    if (icon == null) return;
+
+                    JLabel zoomLabel = new JLabel(icon);
+                    zoomLabel.setBorder(BorderFactory.createRaisedBevelBorder());
+
+                    zoomPopup.getContentPane().removeAll();
+                    zoomPopup.getContentPane().add(zoomLabel);
+                    zoomPopup.pack();
+
+                    int w = icon.getIconWidth();
+                    int h = icon.getIconHeight();
+                    Point loc = cardImageLabel.getLocationOnScreen();
+                    int x = loc.x - w - ZOOM_POSITION_OFFSET;
+                    int y = loc.y + (cardImageLabel.getHeight() - h) / 2;
+                    Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+                    y = Math.max(0, Math.min(y, screen.height - h));
+                    zoomPopup.setLocation(x, y);
+                    zoomPopup.setVisible(true);
+                } catch (InterruptedException | ExecutionException ignored) {}
+            }
+        }.execute();
+    }
+
+    private void hideZoom() {
+        if (zoomPopup != null) zoomPopup.setVisible(false);
     }
 
     // -------------------------------------------------------------------------

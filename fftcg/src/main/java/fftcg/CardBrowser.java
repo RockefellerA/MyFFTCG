@@ -22,6 +22,7 @@ import scraper.CardScraper;
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
+import javax.swing.JWindow;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
@@ -57,11 +58,15 @@ public class CardBrowser extends JDialog {
     private static final Color LB_BG = new Color(50, 50, 50);
     private static final Color LB_FG = new Color(0xFF, 0xD7, 0x00);
 
+    private static final int ZOOM_POSITION_OFFSET = 6;
+
     private final DefaultTableModel tableModel;
     private final JLabel cardImageLabel;
     private final JLabel countLabel;
     private TableRowSorter<DefaultTableModel> sorter;
     private final Set<String> lbSerials = new HashSet<>();
+    private JWindow zoomPopup;
+    private String currentImageUrl;
 
     public CardBrowser(JFrame parent) {
         super(parent, "Card Browser", true);
@@ -181,6 +186,10 @@ public class CardBrowser extends JDialog {
         cardImageLabel = new JLabel("Select a card to preview", SwingConstants.CENTER);
         cardImageLabel.setPreferredSize(new Dimension(220, 309));
         cardImageLabel.setBorder(BorderFactory.createEtchedBorder());
+        cardImageLabel.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override public void mouseEntered(java.awt.event.MouseEvent e) { showZoom(); }
+            @Override public void mouseExited(java.awt.event.MouseEvent e)  { hideZoom(); }
+        });
 
         JPanel imagePanel = new JPanel(new BorderLayout());
         imagePanel.setPreferredSize(new Dimension(240, 309));
@@ -210,9 +219,12 @@ public class CardBrowser extends JDialog {
         add(southPanel, BorderLayout.SOUTH);
 
         getRootPane().registerKeyboardAction(
-                e -> dispose(),
+                e -> { hideZoom(); dispose(); },
                 KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
                 JComponent.WHEN_IN_FOCUSED_WINDOW);
+        addWindowListener(new java.awt.event.WindowAdapter() {
+            @Override public void windowClosing(java.awt.event.WindowEvent e) { hideZoom(); }
+        });
 
         SwingWorker<Void, Void> initWorker = new SwingWorker<Void, Void>() {
             @Override
@@ -311,11 +323,59 @@ public class CardBrowser extends JDialog {
         updateCount();
     }
 
+    private void showZoom() {
+        if (currentImageUrl == null) return;
+        final String urlToFetch = currentImageUrl;
+
+        if (zoomPopup == null) zoomPopup = new JWindow(this);
+
+        new SwingWorker<ImageIcon, Void>() {
+            @Override
+            protected ImageIcon doInBackground() throws Exception {
+                Image img = ImageIO.read(new URL(urlToFetch));
+                return img != null ? new ImageIcon(img) : null;
+            }
+            @Override
+            protected void done() {
+                // Abort if the user already moused out or switched cards
+                if (!urlToFetch.equals(currentImageUrl) || zoomPopup == null) return;
+                try {
+                    ImageIcon icon = get();
+                    if (icon == null) return;
+
+                    JLabel zoomLabel = new JLabel(icon);
+                    zoomLabel.setBorder(BorderFactory.createRaisedBevelBorder());
+
+                    zoomPopup.getContentPane().removeAll();
+                    zoomPopup.getContentPane().add(zoomLabel);
+                    zoomPopup.pack();
+
+                    int w = icon.getIconWidth();
+                    int h = icon.getIconHeight();
+                    java.awt.Point loc = cardImageLabel.getLocationOnScreen();
+                    int x = loc.x - w - ZOOM_POSITION_OFFSET;
+                    int y = loc.y + (cardImageLabel.getHeight() - h) / 2;
+                    java.awt.Dimension screen = java.awt.Toolkit.getDefaultToolkit().getScreenSize();
+                    y = Math.max(0, Math.min(y, screen.height - h));
+                    zoomPopup.setLocation(x, y);
+                    zoomPopup.setVisible(true);
+                } catch (InterruptedException | ExecutionException ignored) {}
+            }
+        }.execute();
+    }
+
+    private void hideZoom() {
+        if (zoomPopup != null) zoomPopup.setVisible(false);
+    }
+
     private void loadCardImageAsync(String serial) {
         cardImageLabel.setIcon(null);
         cardImageLabel.setText("Loading…");
+        currentImageUrl = null;
 
         new SwingWorker<ImageIcon, Void>() {
+            private String fetchedUrl;
+
             @Override
             protected ImageIcon doInBackground() throws Exception {
                 try (Connection conn = DriverManager.getConnection(DB_URL);
@@ -324,9 +384,9 @@ public class CardBrowser extends JDialog {
                     ps.setString(1, serial);
                     try (ResultSet rs = ps.executeQuery()) {
                         if (rs.next()) {
-                            String imageUrl = rs.getString("image_url");
-                            if (imageUrl != null && !imageUrl.isBlank()) {
-                                Image img = ImageIO.read(new URL(imageUrl));
+                            fetchedUrl = rs.getString("image_url");
+                            if (fetchedUrl != null && !fetchedUrl.isBlank()) {
+                                Image img = ImageIO.read(new URL(fetchedUrl));
                                 if (img != null) {
                                     return new ImageIcon(img.getScaledInstance(220, 309, Image.SCALE_SMOOTH));
                                 }
@@ -342,9 +402,11 @@ public class CardBrowser extends JDialog {
                 try {
                     ImageIcon icon = get();
                     if (icon != null) {
+                        currentImageUrl = fetchedUrl;
                         cardImageLabel.setIcon(icon);
                         cardImageLabel.setText(null);
                     } else {
+                        currentImageUrl = null;
                         cardImageLabel.setIcon(null);
                         cardImageLabel.setText("No image available");
                     }
