@@ -33,3 +33,5 @@ target/
 
 # SQLite databases
 *.db
+*.db-shm
+*.db-wal
