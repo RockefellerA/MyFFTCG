@@ -11,6 +11,9 @@ import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.Font;
+import java.awt.GradientPaint;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
@@ -384,11 +387,8 @@ public class MainWindow {
 		southPanel.add(phaseButton, BorderLayout.SOUTH);
 
 		// --- Game Board ---
-		JPanel p2Board = new JPanel();
-		p2Board.setBackground(UIManager.getColor("Panel.background"));
-
-		JPanel p1Board = new JPanel();
-		p1Board.setBackground(UIManager.getColor("Panel.background"));
+		GradientPanel p2Board = new GradientPanel(true);
+		GradientPanel p1Board = new GradientPanel(false);
 
 		JSeparator divider = new JSeparator(JSeparator.HORIZONTAL);
 		divider.setForeground(Color.LIGHT_GRAY);
@@ -405,8 +405,18 @@ public class MainWindow {
 		gbc.weighty = 0.0; gbc.gridy = 1; gameBoard.add(divider,  gbc);
 		gbc.weighty = 1.0; gbc.gridy = 2; gameBoard.add(p1Board,  gbc);
 
-		p2ColorBox.addActionListener(e -> applyElementColor((String) p2ColorBox.getSelectedItem(), p2ZonesPanel, p2Board));
-		p1ColorBox.addActionListener(e -> applyElementColor((String) p1ColorBox.getSelectedItem(), p1ZonesPanel, p1Board));
+		p2ColorBox.addActionListener(e -> {
+			String sel = (String) p2ColorBox.getSelectedItem();
+			Color c = "Default".equals(sel) ? null : ElementColor.fromName(sel).color;
+			applyElementColor(sel, p2ZonesPanel);
+			p2Board.setGradientColor(c);
+		});
+		p1ColorBox.addActionListener(e -> {
+			String sel = (String) p1ColorBox.getSelectedItem();
+			Color c = "Default".equals(sel) ? null : ElementColor.fromName(sel).color;
+			applyElementColor(sel, p1ZonesPanel);
+			p1Board.setGradientColor(c);
+		});
 
 		// --- Assemble ---
 		frame.getContentPane().add(p2ZonesPanel, BorderLayout.NORTH);
@@ -687,6 +697,36 @@ public class MainWindow {
 			} catch (IOException | URISyntaxException e1) {
 				e1.printStackTrace();
 			}
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// Gradient board panel
+	// -------------------------------------------------------------------------
+
+	private class GradientPanel extends JPanel {
+		private Color gradientColor;
+		private final boolean colorAtTop;
+
+		GradientPanel(boolean colorAtTop) {
+			this.colorAtTop = colorAtTop;
+		}
+
+		void setGradientColor(Color c) {
+			this.gradientColor = c;
+			repaint();
+		}
+
+		@Override
+		protected void paintComponent(Graphics g) {
+			super.paintComponent(g);
+			Color base = UIManager.getColor("Panel.background");
+			Color top    = colorAtTop && gradientColor != null ? gradientColor : base;
+			Color bottom = !colorAtTop && gradientColor != null ? gradientColor : base;
+			Graphics2D g2d = (Graphics2D) g.create();
+			g2d.setPaint(new GradientPaint(0, 0, top, 0, getHeight(), bottom));
+			g2d.fillRect(0, 0, getWidth(), getHeight());
+			g2d.dispose();
 		}
 	}
 }
