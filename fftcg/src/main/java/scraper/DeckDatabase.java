@@ -285,7 +285,7 @@ public class DeckDatabase implements AutoCloseable {
         List<Object[]> result = new ArrayList<>();
         String sql = "SELECT serial, name_en, type_en, element, cost, power, rarity, "
                    + "job_en, category_1, category_2 FROM cards "
-                   + "WHERE type_en != 'Crystal' ORDER BY serial";
+                   + "WHERE type_en != 'Crystal' AND serial NOT LIKE 'B%' ORDER BY serial";
         try (Statement s = conn.createStatement();
              ResultSet rs = s.executeQuery(sql)) {
             while (rs.next()) {
