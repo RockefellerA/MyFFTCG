@@ -144,6 +144,14 @@ public class MainWindow {
 			}
 		});
 
+		JMenuItem preferencesMenuItem = new JMenuItem("Preferences");
+		fileMenu.add(preferencesMenuItem);
+		preferencesMenuItem.addActionListener(e -> {
+			PreferencesDialog dialog = new PreferencesDialog(frame);
+			dialog.setVisible(true);
+		});
+		fileMenu.addSeparator();
+
 		JMenuItem exitMenuItem = new JMenuItem("Exit MyFFTCG");
 		exitMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0));
 		fileMenu.add(exitMenuItem);
