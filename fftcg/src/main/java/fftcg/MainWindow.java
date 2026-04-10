@@ -16,6 +16,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.awt.GridLayout;
 import java.awt.Image;
 import java.awt.Point;
@@ -303,9 +304,18 @@ public class MainWindow {
 		JComboBox<String> p2ColorBox = buildColorDropdown();
 		JPanel p2DamagePanel = buildDamageZonePanel("P2", p2ColorBox);
 
+		JPanel p2BackupZone    = buildBackupZonePanel();
+		JPanel p2BackupWrapper = new JPanel(new GridBagLayout());
+		GridBagConstraints p2BackupGbc = new GridBagConstraints();
+		p2BackupGbc.anchor = GridBagConstraints.NORTH;
+		p2BackupGbc.weighty = 1.0;
+		p2BackupGbc.insets = new Insets(0, 0, 0, CARD_W);
+		p2BackupWrapper.add(p2BackupZone, p2BackupGbc);
+
 		JPanel p2ZonesPanel = new JPanel(new BorderLayout());
-		p2ZonesPanel.add(p2CornerPanel, BorderLayout.WEST);
-		p2ZonesPanel.add(p2DamagePanel, BorderLayout.EAST);
+		p2ZonesPanel.add(p2CornerPanel,   BorderLayout.WEST);
+		p2ZonesPanel.add(p2BackupWrapper, BorderLayout.CENTER);
+		p2ZonesPanel.add(p2DamagePanel,   BorderLayout.EAST);
 
 		// --- P1 Zones (bottom of screen) ---
 		JComboBox<String> p1ColorBox = buildColorDropdown();
@@ -386,13 +396,22 @@ public class MainWindow {
 		p1CornerPanel.add(break1);
 		p1CornerPanel.add(lblRemove);
 
+		JPanel p1BackupZone    = buildBackupZonePanel();
+		JPanel p1BackupWrapper = new JPanel(new GridBagLayout());
+		GridBagConstraints p1BackupGbc = new GridBagConstraints();
+		p1BackupGbc.anchor = GridBagConstraints.SOUTH;
+		p1BackupGbc.weighty = 1.0;
+		p1BackupGbc.insets = new Insets(0, CARD_W, 0, 0);
+		p1BackupWrapper.add(p1BackupZone, p1BackupGbc);
+
 		JPanel p1ZonesPanel = new JPanel(new BorderLayout());
-		p1ZonesPanel.add(p1DamagePanel, BorderLayout.WEST);
-		p1ZonesPanel.add(p1CornerPanel, BorderLayout.EAST);
+		p1ZonesPanel.add(p1DamagePanel,   BorderLayout.WEST);
+		p1ZonesPanel.add(p1BackupWrapper, BorderLayout.CENTER);
+		p1ZonesPanel.add(p1CornerPanel,   BorderLayout.EAST);
 
 		JPanel southPanel = new JPanel(new BorderLayout());
 		southPanel.add(p1ZonesPanel, BorderLayout.CENTER);
-		southPanel.add(phaseButton, BorderLayout.SOUTH);
+		southPanel.add(phaseButton,  BorderLayout.SOUTH);
 
 		// --- Game Board ---
 		GradientPanel p2Board = new GradientPanel(true);
@@ -636,6 +655,25 @@ public class MainWindow {
 	 * each sized to hold a sideways card (CARD_H wide × CARD_W tall).
 	 * The color dropdown sits below the slots.
 	 */
+	private JPanel buildBackupZonePanel() {
+		JPanel slotsPanel = new JPanel(new GridLayout(1, 5, 2, 0));
+		slotsPanel.setBackground(Color.LIGHT_GRAY);
+		for (int i = 1; i <= 5; i++) {
+			JLabel slot = new JLabel("BACKUP " + i, SwingConstants.CENTER);
+			slot.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+			slot.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
+			slot.setBackground(Color.LIGHT_GRAY);
+			slot.setForeground(Color.DARK_GRAY);
+			slot.setOpaque(true);
+			slot.setPreferredSize(new Dimension(CARD_W, CARD_H));
+			slot.setMinimumSize(new Dimension(CARD_W, CARD_H));
+			slotsPanel.add(slot);
+		}
+		JPanel panel = new JPanel(new GridBagLayout());
+		panel.add(slotsPanel, new GridBagConstraints());
+		return panel;
+	}
+
 	private JPanel buildDamageZonePanel(String playerLabel, JComboBox<String> colorBox) {
 		String[] letters = { "D", "A", "M", "A", "G", "E", playerLabel };
 
