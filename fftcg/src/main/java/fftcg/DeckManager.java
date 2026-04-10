@@ -61,6 +61,7 @@ public class DeckManager extends JDialog {
 
     private DeckDatabase db;
     private int selectedDeckId = -1;
+    private JButton addMaxBtn;
     private Set<String> lbSerials = new HashSet<>();
     private JWindow zoomPopup;
     private String currentImageUrl;
@@ -248,13 +249,23 @@ public class DeckManager extends JDialog {
         clearButton.addActionListener(e -> { searchField.setText(""); browserSorter.setRowFilter(null); });
         searchField.addActionListener(e -> doSearch.run());
 
-        JButton addBtn = new JButton("Add to Deck  ▼");
+        JButton addBtn = new JButton("Add 1 to Deck  ▼");
         addBtn.addActionListener(e -> addSelectedCard());
-        // Double-click also adds
+
+        addMaxBtn = new JButton("Add Max to Deck");
+        addMaxBtn.setEnabled(false);
+        addMaxBtn.addActionListener(e -> addMaxOfSelectedCard());
+
+        // Double-click also adds one
         cardTable.addMouseListener(new MouseAdapter() {
             @Override public void mouseClicked(MouseEvent e) {
                 if (e.getClickCount() == 2) addSelectedCard();
             }
+        });
+
+        // Refresh addMaxBtn label/state when the browser selection changes
+        cardTable.getSelectionModel().addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) refreshAddMaxBtn();
         });
 
         JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
@@ -264,6 +275,7 @@ public class DeckManager extends JDialog {
         searchPanel.add(searchButton);
         searchPanel.add(clearButton);
         searchPanel.add(addBtn);
+        searchPanel.add(addMaxBtn);
 
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(BorderFactory.createTitledBorder("Card Browser"));
@@ -305,6 +317,7 @@ public class DeckManager extends JDialog {
 
         JButton removeBtn    = new JButton("Remove 1 from Deck  ✕");
         JButton removeAllBtn = new JButton("Remove All From Deck");
+        removeBtn.setEnabled(false);
         removeAllBtn.setEnabled(false);
 
         removeBtn.addActionListener(e -> removeSelectedCard());
@@ -317,14 +330,16 @@ public class DeckManager extends JDialog {
             }
         });
 
-        // Enable "Remove All" only when the selected card has Qty > 1
+        // Enable/disable remove buttons based on selection and Qty
         deckTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 int row = deckTable.getSelectedRow();
                 if (row >= 0) {
                     Integer qty = (Integer) deckModel.getValueAt(row, 7);
+                    removeBtn.setEnabled(true);
                     removeAllBtn.setEnabled(qty != null && qty > 1);
                 } else {
+                    removeBtn.setEnabled(false);
                     removeAllBtn.setEnabled(false);
                 }
             }
@@ -460,6 +475,7 @@ public class DeckManager extends JDialog {
             JOptionPane.showMessageDialog(this, "Error loading deck:\n" + e.getMessage(),
                     "Database Error", JOptionPane.ERROR_MESSAGE);
         }
+        refreshAddMaxBtn();
     }
 
     private void updateCountLabel(int mainTotal, int lbTotal) {
@@ -583,6 +599,51 @@ public class DeckManager extends JDialog {
             JOptionPane.showMessageDialog(this, "Error adding card:\n" + e.getMessage(),
                     "Database Error", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    private void addMaxOfSelectedCard() {
+        if (selectedDeckId < 0) return;
+        int viewRow = cardTable.getSelectedRow();
+        if (viewRow < 0) return;
+        int modelRow = cardTable.convertRowIndexToModel(viewRow);
+        String serial = (String) browserModel.getValueAt(modelRow, 0);
+        int toAdd = computeMaxAddable(serial);
+        if (toAdd <= 0) return;
+        int current = getCardCountInDeck(serial);
+        try {
+            db.setCardCount(selectedDeckId, serial, current + toAdd);
+            loadDeckCards(selectedDeckId);
+        } catch (SQLException e) {
+            JOptionPane.showMessageDialog(this, "Error adding cards:\n" + e.getMessage(),
+                    "Database Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /** Returns how many more copies of the browser-selected card can still be added. */
+    private int computeMaxAddable(String serial) {
+        if (selectedDeckId < 0) return 0;
+        boolean isLb = lbSerials.contains(serial);
+        int current  = getCardCountInDeck(serial);
+        int byLimit  = MAX_COPIES - current;
+        int byZone   = isLb ? MAX_LB_DECK_SIZE - getLbDeckTotal()
+                            : MAX_DECK_SIZE    - getMainDeckTotal();
+        return Math.max(0, Math.min(byLimit, byZone));
+    }
+
+    /** Updates the label and enabled state of the Add Max button based on the current browser selection. */
+    private void refreshAddMaxBtn() {
+        if (addMaxBtn == null) return;
+        int viewRow = cardTable == null ? -1 : cardTable.getSelectedRow();
+        if (viewRow < 0 || selectedDeckId < 0) {
+            addMaxBtn.setText("Add Max to Deck");
+            addMaxBtn.setEnabled(false);
+            return;
+        }
+        int modelRow = cardTable.convertRowIndexToModel(viewRow);
+        String serial = (String) browserModel.getValueAt(modelRow, 0);
+        int max = computeMaxAddable(serial);
+        addMaxBtn.setText("Add " + max + " to Deck");
+        addMaxBtn.setEnabled(max > 1);
     }
 
     private void removeSelectedCard() {
