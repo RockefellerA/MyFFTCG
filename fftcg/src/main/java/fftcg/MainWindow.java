@@ -16,8 +16,8 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
-import java.awt.Insets;
 import java.awt.GridLayout;
+import java.awt.Insets;
 import java.awt.Image;
 import java.awt.Point;
 import java.awt.Toolkit;
@@ -304,18 +304,29 @@ public class MainWindow {
 		JComboBox<String> p2ColorBox = buildColorDropdown();
 		JPanel p2DamagePanel = buildDamageZonePanel("P2", p2ColorBox);
 
-		JPanel p2BackupZone    = buildBackupZonePanel();
+		JPanel p2BackupSlots = buildBackupZonePanel();
 		JPanel p2BackupWrapper = new JPanel(new GridBagLayout());
 		GridBagConstraints p2BackupGbc = new GridBagConstraints();
 		p2BackupGbc.anchor = GridBagConstraints.NORTH;
 		p2BackupGbc.weighty = 1.0;
-		p2BackupGbc.insets = new Insets(0, 0, 0, CARD_W);
-		p2BackupWrapper.add(p2BackupZone, p2BackupGbc);
+		p2BackupGbc.insets = new Insets(0, CARD_W - 8, 0, 0);
+		p2BackupWrapper.add(p2BackupSlots, p2BackupGbc);
+
+		JPanel p2HandAligned = new JPanel(new GridBagLayout());
+		p2HandAligned.setPreferredSize(new Dimension(2 * CARD_W, CARD_H));
+		GridBagConstraints p2HandGbc = new GridBagConstraints();
+		p2HandGbc.anchor = GridBagConstraints.NORTHWEST;
+		p2HandGbc.weighty = 1.0;
+		p2HandAligned.add(buildHandSlot(), p2HandGbc);
+
+		JPanel p2EastPanel = new JPanel(new BorderLayout(0, 0));
+		p2EastPanel.add(p2HandAligned, BorderLayout.WEST);
+		p2EastPanel.add(p2DamagePanel,  BorderLayout.EAST);
 
 		JPanel p2ZonesPanel = new JPanel(new BorderLayout());
 		p2ZonesPanel.add(p2CornerPanel,   BorderLayout.WEST);
 		p2ZonesPanel.add(p2BackupWrapper, BorderLayout.CENTER);
-		p2ZonesPanel.add(p2DamagePanel,   BorderLayout.EAST);
+		p2ZonesPanel.add(p2EastPanel,     BorderLayout.EAST);
 
 		// --- P1 Zones (bottom of screen) ---
 		JComboBox<String> p1ColorBox = buildColorDropdown();
@@ -396,16 +407,27 @@ public class MainWindow {
 		p1CornerPanel.add(break1);
 		p1CornerPanel.add(lblRemove);
 
-		JPanel p1BackupZone    = buildBackupZonePanel();
+		JPanel p1BackupSlots = buildBackupZonePanel();
 		JPanel p1BackupWrapper = new JPanel(new GridBagLayout());
 		GridBagConstraints p1BackupGbc = new GridBagConstraints();
 		p1BackupGbc.anchor = GridBagConstraints.SOUTH;
 		p1BackupGbc.weighty = 1.0;
-		p1BackupGbc.insets = new Insets(0, CARD_W, 0, 0);
-		p1BackupWrapper.add(p1BackupZone, p1BackupGbc);
+		p1BackupGbc.insets = new Insets(0, 0, 0, CARD_W - 8);
+		p1BackupWrapper.add(p1BackupSlots, p1BackupGbc);
+
+		JPanel p1HandAligned = new JPanel(new GridBagLayout());
+		p1HandAligned.setPreferredSize(new Dimension(2 * CARD_W, CARD_H));
+		GridBagConstraints p1HandGbc = new GridBagConstraints();
+		p1HandGbc.anchor = GridBagConstraints.SOUTHEAST;
+		p1HandGbc.weighty = 1.0;
+		p1HandAligned.add(buildHandSlot(), p1HandGbc);
+
+		JPanel p1WestPanel = new JPanel(new BorderLayout(0, 0));
+		p1WestPanel.add(p1DamagePanel,  BorderLayout.WEST);
+		p1WestPanel.add(p1HandAligned,  BorderLayout.EAST);
 
 		JPanel p1ZonesPanel = new JPanel(new BorderLayout());
-		p1ZonesPanel.add(p1DamagePanel,   BorderLayout.WEST);
+		p1ZonesPanel.add(p1WestPanel,     BorderLayout.WEST);
 		p1ZonesPanel.add(p1BackupWrapper, BorderLayout.CENTER);
 		p1ZonesPanel.add(p1CornerPanel,   BorderLayout.EAST);
 
@@ -669,9 +691,19 @@ public class MainWindow {
 			slot.setMinimumSize(new Dimension(CARD_W, CARD_H));
 			slotsPanel.add(slot);
 		}
-		JPanel panel = new JPanel(new GridBagLayout());
-		panel.add(slotsPanel, new GridBagConstraints());
-		return panel;
+		return slotsPanel;
+	}
+
+	private JLabel buildHandSlot() {
+		JLabel slot = new JLabel("HAND", SwingConstants.CENTER);
+		slot.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		slot.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
+		slot.setBackground(Color.LIGHT_GRAY);
+		slot.setForeground(Color.DARK_GRAY);
+		slot.setOpaque(true);
+		slot.setPreferredSize(new Dimension(CARD_W, CARD_H));
+		slot.setMinimumSize(new Dimension(CARD_W, CARD_H));
+		return slot;
 	}
 
 	private JPanel buildDamageZonePanel(String playerLabel, JComboBox<String> colorBox) {
