@@ -5,6 +5,10 @@ import scraper.DeckDatabase.DeckCardDetail;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.FlowLayout;
+import java.awt.color.ColorSpace;
+import java.awt.image.BufferedImage;
+import java.awt.image.ColorConvertOp;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Desktop;
@@ -47,6 +51,7 @@ import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JSeparator;
@@ -71,14 +76,22 @@ public class MainWindow {
 	// P1 zone labels that change during gameplay
 	private JLabel p1DeckLabel;
 	private JLabel p1LimitLabel;
+	private JLabel p1HandLabel;
+	private GrayscaleLabel p1RemoveLabel;
+	private GrayscaleLabel p2RemoveLabel;
 	// Zoom popup for LB card hover
 	private JWindow zoomPopup;
+	// Opening hand confirmation popup
+	private JWindow openingHandPopup;
 
 	// --- P1 game state ---
 	private Deque<String> p1MainDeck  = new ArrayDeque<>();  // imageUrls
 	private List<String>  p1LbDeck    = new ArrayList<>();   // imageUrls
+	private List<String>  p1Hand      = new ArrayList<>();   // imageUrls
 	private int           p1LbIndex   = 0;
+	private int           p1HandIndex = 0;
 	private boolean       p1TopFaceUp = false;               // is top main-deck card revealed?
+	private boolean       p1OpeningHandPending = false;
 
 	public static void main(String[] args) {
 		EventQueue.invokeLater(new Runnable() {
@@ -256,7 +269,8 @@ public class MainWindow {
 		Dimension cardSize = new Dimension(CARD_W, CARD_H);
 
 		// --- P2 Zones (top of screen) ---
-		JLabel lblRemove_1 = new JLabel("<html><div style='text-align:center'>REMOVED<br>FROM<br>PLAY</div></html>");
+		p2RemoveLabel = new GrayscaleLabel("<html><div style='text-align:center'>REMOVED<br>FROM<br>PLAY</div></html>");
+		GrayscaleLabel lblRemove_1 = p2RemoveLabel;
 		lblRemove_1.setToolTipText("Player 2 Removed From Play");
 		lblRemove_1.setHorizontalAlignment(SwingConstants.CENTER);
 		lblRemove_1.setFont(new Font("Pixel NES", Font.PLAIN, 18));
@@ -266,6 +280,10 @@ public class MainWindow {
 		lblRemove_1.setOpaque(true);
 		lblRemove_1.setPreferredSize(cardSize);
 		lblRemove_1.setMinimumSize(cardSize);
+		lblRemove_1.addMouseListener(new MouseAdapter() {
+			@Override public void mouseEntered(MouseEvent e) { showGrayscaleZoom(p2RemoveLabel); }
+			@Override public void mouseExited(MouseEvent e)  { hideZoom(); }
+		});
 
 		JLabel lblLimit_1 = new JLabel("LIMIT");
 		lblLimit_1.setToolTipText("Player 2 LB");
@@ -390,7 +408,8 @@ public class MainWindow {
 			}
 		});
 
-		JLabel lblRemove = new JLabel("<html><div style='text-align:center'>REMOVED<br>FROM<br>PLAY</div></html>");
+		p1RemoveLabel = new GrayscaleLabel("<html><div style='text-align:center'>REMOVED<br>FROM<br>PLAY</div></html>");
+		GrayscaleLabel lblRemove = p1RemoveLabel;
 		lblRemove.setToolTipText("Player 1 Removed From Play");
 		lblRemove.setHorizontalAlignment(SwingConstants.CENTER);
 		lblRemove.setFont(new Font("Pixel NES", Font.PLAIN, 18));
@@ -400,6 +419,10 @@ public class MainWindow {
 		lblRemove.setOpaque(true);
 		lblRemove.setPreferredSize(cardSize);
 		lblRemove.setMinimumSize(cardSize);
+		lblRemove.addMouseListener(new MouseAdapter() {
+			@Override public void mouseEntered(MouseEvent e) { showGrayscaleZoom(p1RemoveLabel); }
+			@Override public void mouseExited(MouseEvent e)  { hideZoom(); }
+		});
 
 		JPanel p1CornerPanel = new JPanel(new GridLayout(2, 2));
 		p1CornerPanel.add(p1DeckLabel);
@@ -415,12 +438,20 @@ public class MainWindow {
 		p1BackupGbc.insets = new Insets(0, 0, 0, CARD_W - 8);
 		p1BackupWrapper.add(p1BackupSlots, p1BackupGbc);
 
+		p1HandLabel = buildHandSlot();
+		p1HandLabel.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(MouseEvent e) {
+				onP1HandClicked();
+			}
+		});
+
 		JPanel p1HandAligned = new JPanel(new GridBagLayout());
 		p1HandAligned.setPreferredSize(new Dimension(2 * CARD_W, CARD_H));
 		GridBagConstraints p1HandGbc = new GridBagConstraints();
 		p1HandGbc.anchor = GridBagConstraints.SOUTHEAST;
 		p1HandGbc.weighty = 1.0;
-		p1HandAligned.add(buildHandSlot(), p1HandGbc);
+		p1HandAligned.add(p1HandLabel, p1HandGbc);
 
 		JPanel p1WestPanel = new JPanel(new BorderLayout(0, 0));
 		p1WestPanel.add(p1DamagePanel,  BorderLayout.WEST);
@@ -454,6 +485,20 @@ public class MainWindow {
 		gbc.weighty = 0.0; gbc.gridy = 1; gameBoard.add(divider,  gbc);
 		gbc.weighty = 1.0; gbc.gridy = 2; gameBoard.add(p1Board,  gbc);
 
+		MouseAdapter debugRightClick = new MouseAdapter() {
+			@Override
+			public void mousePressed(MouseEvent e)  { maybeShowDebugMenu(e); }
+			@Override
+			public void mouseReleased(MouseEvent e) { maybeShowDebugMenu(e); }
+			private void maybeShowDebugMenu(MouseEvent e) {
+				if (!e.isPopupTrigger()) return;
+				boolean isP2Side = e.getSource() == p2Board;
+				showDebugMenu(e, isP2Side ? p2RemoveLabel : p1RemoveLabel);
+			}
+		};
+		p2Board.addMouseListener(debugRightClick);
+		p1Board.addMouseListener(debugRightClick);
+
 		p2ColorBox.addActionListener(e -> {
 			String sel = (String) p2ColorBox.getSelectedItem();
 			Color c = "Default".equals(sel) ? null : ElementColor.fromName(sel).color;
@@ -480,8 +525,12 @@ public class MainWindow {
 	private void startGame(int deckId) {
 		p1MainDeck.clear();
 		p1LbDeck.clear();
+		p1Hand.clear();
 		p1LbIndex   = 0;
+		p1HandIndex = 0;
 		p1TopFaceUp = false;
+		p1OpeningHandPending = false;
+		refreshP1HandLabel();
 
 		new SwingWorker<Void, Void>() {
 			List<DeckCardDetail> cards;
@@ -512,6 +561,7 @@ public class MainWindow {
 				Collections.shuffle(main);
 				p1MainDeck.addAll(main);
 
+				p1OpeningHandPending = true;
 				refreshP1DeckLabel();
 				refreshP1LimitLabel();
 			}
@@ -525,6 +575,11 @@ public class MainWindow {
 	private void onP1DeckClicked() {
 		if (p1MainDeck.isEmpty()) return;
 
+		if (p1OpeningHandPending) {
+			showOpeningHandConfirm();
+			return;
+		}
+
 		if (!p1TopFaceUp) {
 			// Reveal top card
 			p1TopFaceUp = true;
@@ -537,6 +592,81 @@ public class MainWindow {
 			p1TopFaceUp = false;
 			p1DeckLabel.setIcon(scaledCardback(new Dimension(CARD_W, CARD_H)));
 		}
+	}
+
+	private void showOpeningHandConfirm() {
+		if (openingHandPopup != null) { openingHandPopup.dispose(); }
+		openingHandPopup = new JWindow(frame);
+
+		JButton yesBtn = new JButton("Draw opening hand (5 cards)");
+		yesBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		yesBtn.addActionListener(e -> {
+			openingHandPopup.dispose();
+			openingHandPopup = null;
+			p1OpeningHandPending = false;
+			drawOpeningHand();
+		});
+
+		JButton noBtn = new JButton("Cancel");
+		noBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		noBtn.addActionListener(e -> {
+			openingHandPopup.dispose();
+			openingHandPopup = null;
+		});
+
+		JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 8));
+		panel.setBorder(BorderFactory.createRaisedBevelBorder());
+		panel.add(yesBtn);
+		panel.add(noBtn);
+
+		openingHandPopup.getContentPane().add(panel);
+		openingHandPopup.pack();
+
+		Point loc = p1DeckLabel.getLocationOnScreen();
+		openingHandPopup.setLocation(loc.x - openingHandPopup.getWidth() - 6, loc.y);
+		openingHandPopup.setVisible(true);
+	}
+
+	private void drawOpeningHand() {
+		for (int i = 0; i < 5 && !p1MainDeck.isEmpty(); i++) {
+			p1Hand.add(p1MainDeck.poll());
+		}
+		p1HandIndex = 0;
+		refreshP1DeckLabel();
+		refreshP1HandLabel();
+	}
+
+	private void refreshP1HandLabel() {
+		if (p1Hand.isEmpty()) {
+			p1HandLabel.setIcon(null);
+			p1HandLabel.setText("HAND");
+			return;
+		}
+		loadHandLabelAsync(p1Hand.get(p1HandIndex % p1Hand.size()));
+	}
+
+	private void onP1HandClicked() {
+		if (p1Hand.isEmpty()) return;
+		p1HandIndex = (p1HandIndex + 1) % p1Hand.size();
+		refreshP1HandLabel();
+	}
+
+	private void loadHandLabelAsync(String imageUrl) {
+		new SwingWorker<ImageIcon, Void>() {
+			@Override
+			protected ImageIcon doInBackground() throws Exception {
+				Image img = ImageIO.read(new URL(imageUrl));
+				return img == null ? null : new ImageIcon(
+						img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+			}
+			@Override
+			protected void done() {
+				try {
+					ImageIcon icon = get();
+					if (icon != null) { p1HandLabel.setIcon(icon); p1HandLabel.setText(null); }
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
 	}
 
 	private void refreshP1DeckLabel() {
@@ -667,6 +797,84 @@ public class MainWindow {
 		if (zoomPopup != null) zoomPopup.setVisible(false);
 	}
 
+	private void showGrayscaleZoom(GrayscaleLabel label) {
+		String url = label.getUrl();
+		if (url == null) return;
+
+		if (zoomPopup == null) zoomPopup = new JWindow(frame);
+
+		new SwingWorker<ImageIcon, Void>() {
+			@Override
+			protected ImageIcon doInBackground() throws Exception {
+				Image img = ImageIO.read(new URL(url));
+				if (img == null) return null;
+				BufferedImage buf = new BufferedImage(img.getWidth(null), img.getHeight(null), BufferedImage.TYPE_INT_ARGB);
+				buf.getGraphics().drawImage(img, 0, 0, null);
+				BufferedImage gray = new ColorConvertOp(ColorSpace.getInstance(ColorSpace.CS_GRAY), null).filter(buf, null);
+				return new ImageIcon(gray);
+			}
+			@Override
+			protected void done() {
+				try {
+					ImageIcon icon = get();
+					if (icon == null) return;
+					JLabel zl = new JLabel(icon);
+					zl.setBorder(BorderFactory.createRaisedBevelBorder());
+					zoomPopup.getContentPane().removeAll();
+					zoomPopup.getContentPane().add(zl);
+					zoomPopup.pack();
+					Point loc = label.getLocationOnScreen();
+					int x = loc.x - icon.getIconWidth() - 6;
+					int y = loc.y + (label.getHeight() - icon.getIconHeight()) / 2;
+					int screenH = Toolkit.getDefaultToolkit().getScreenSize().height;
+					y = Math.max(0, Math.min(y, screenH - icon.getIconHeight()));
+					zoomPopup.setLocation(x, y);
+					zoomPopup.setVisible(true);
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+	}
+
+	// -------------------------------------------------------------------------
+	// Debug menu
+	// -------------------------------------------------------------------------
+
+	private void showDebugMenu(MouseEvent e, GrayscaleLabel removeLabel) {
+		JPopupMenu menu = new JPopupMenu("Debug");
+
+		JMenuItem addToRemoved = new JMenuItem("Add random card to Removed from Play");
+		addToRemoved.addActionListener(ev -> debugAddRandomCardToRemoved(removeLabel));
+		menu.add(addToRemoved);
+
+		menu.show(e.getComponent(), e.getX(), e.getY());
+	}
+
+	private void debugAddRandomCardToRemoved(GrayscaleLabel removeLabel) {
+		List<String> pool = new ArrayList<>(p1MainDeck);
+		pool.addAll(p1Hand);
+		if (pool.isEmpty()) return;
+		String url = pool.get((int) (Math.random() * pool.size()));
+		new SwingWorker<ImageIcon, Void>() {
+			@Override
+			protected ImageIcon doInBackground() throws Exception {
+				Image img = ImageIO.read(new URL(url));
+				return img == null ? null : new ImageIcon(
+						img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+			}
+			@Override
+			protected void done() {
+				try {
+					ImageIcon icon = get();
+					if (icon != null) {
+						removeLabel.setText(null);
+						removeLabel.setIcon(icon); // GrayscaleLabel converts automatically
+						removeLabel.setUrl(url);
+					}
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+	}
+
 	// -------------------------------------------------------------------------
 	// Helpers
 	// -------------------------------------------------------------------------
@@ -774,6 +982,36 @@ public class MainWindow {
 				}
 			} catch (IOException | URISyntaxException e1) {
 				e1.printStackTrace();
+			}
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// Gradient board panel
+	// -------------------------------------------------------------------------
+
+	// -------------------------------------------------------------------------
+	// Grayscale label — auto-converts any icon set on it to grayscale
+	// -------------------------------------------------------------------------
+
+	private static class GrayscaleLabel extends JLabel {
+		private String url;
+
+		GrayscaleLabel(String text) { super(text); }
+
+		void setUrl(String u) { this.url = u; }
+		String getUrl()       { return url; }
+
+		@Override
+		public void setIcon(javax.swing.Icon icon) {
+			if (icon instanceof ImageIcon) {
+				Image src = ((ImageIcon) icon).getImage();
+				BufferedImage buf = new BufferedImage(icon.getIconWidth(), icon.getIconHeight(), BufferedImage.TYPE_INT_ARGB);
+				buf.getGraphics().drawImage(src, 0, 0, null);
+				BufferedImage gray = new ColorConvertOp(ColorSpace.getInstance(ColorSpace.CS_GRAY), null).filter(buf, null);
+				super.setIcon(new ImageIcon(gray));
+			} else {
+				super.setIcon(icon);
 			}
 		}
 	}
