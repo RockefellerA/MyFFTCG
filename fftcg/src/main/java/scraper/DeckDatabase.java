@@ -284,7 +284,7 @@ public class DeckDatabase implements AutoCloseable {
     public List<Object[]> getAllCards() throws SQLException {
         List<Object[]> result = new ArrayList<>();
         String sql = "SELECT serial, name_en, type_en, element, cost, power, rarity, "
-                   + "job_en, category_1, category_2 FROM cards "
+                   + "job_en, category_1, category_2, text_en FROM cards "
                    + "WHERE type_en != 'Crystal' AND serial NOT LIKE 'B%' ORDER BY serial";
         try (Statement s = conn.createStatement();
              ResultSet rs = s.executeQuery(sql)) {
@@ -299,7 +299,8 @@ public class DeckDatabase implements AutoCloseable {
                     rs.getString("rarity"),
                     rs.getString("job_en"),
                     rs.getString("category_1"),
-                    rs.getString("category_2")
+                    rs.getString("category_2"),
+                    rs.getString("text_en")
                 });
             }
         }

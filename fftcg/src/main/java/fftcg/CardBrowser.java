@@ -52,11 +52,26 @@ public class CardBrowser extends JDialog {
     private static final String DB_URL = "jdbc:sqlite:fftcg_cards.db";
     private static final String[] COLUMNS = {
         "Serial", "Name", "Type", "Element", "Cost", "Power",
-        "Rarity", "Job", "Category 1", "Category 2"
+        "Rarity", "Job", "Category 1", "Category 2", "Card Text"
     };
 
     private static final Color LB_BG = new Color(50, 50, 50);
     private static final Color LB_FG = new Color(0xFF, 0xD7, 0x00);
+
+    /** Sorts serials numerically on the set prefix (e.g. "9-001C" before "10-001H"). */
+    private static final java.util.Comparator<Object> SERIAL_ORDER = (a, b) -> {
+        String sa = a == null ? "" : a.toString();
+        String sb = b == null ? "" : b.toString();
+        int da = sa.indexOf('-'), db = sb.indexOf('-');
+        if (da > 0 && db > 0) {
+            try {
+                int na = Integer.parseInt(sa.substring(0, da));
+                int nb = Integer.parseInt(sb.substring(0, db));
+                if (na != nb) return Integer.compare(na, nb);
+            } catch (NumberFormatException ignored) {}
+        }
+        return sa.compareTo(sb);
+    };
 
     private static final int ZOOM_POSITION_OFFSET = 6;
 
@@ -102,7 +117,11 @@ public class CardBrowser extends JDialog {
         cardTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
 
         sorter = new TableRowSorter<>(tableModel);
+        sorter.setComparator(0, SERIAL_ORDER);
+        sorter.setSortKeys(java.util.List.of(new javax.swing.RowSorter.SortKey(0, javax.swing.SortOrder.ASCENDING)));
         cardTable.setRowSorter(sorter);
+        // Hide the Card Text column from the view (still searchable via model index 10)
+        cardTable.removeColumn(cardTable.getColumnModel().getColumn(10));
 
         // Grey out empty cells in Job (7), Category 1 (8), Category 2 (9)
         DefaultTableCellRenderer greyIfEmpty = new DefaultTableCellRenderer() {
@@ -296,7 +315,7 @@ public class CardBrowser extends JDialog {
 
     private void loadCards() {
         String sql = "SELECT serial, name_en, type_en, element, cost, power, rarity, job_en, "
-                   + "category_1, category_2, limit_break FROM cards ORDER BY serial";
+                   + "category_1, category_2, text_en, limit_break FROM cards ORDER BY serial";
         try (Connection conn = DriverManager.getConnection(DB_URL);
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
@@ -313,7 +332,8 @@ public class CardBrowser extends JDialog {
                     rs.getString("rarity"),
                     rs.getString("job_en"),
                     rs.getString("category_1"),
-                    rs.getString("category_2")
+                    rs.getString("category_2"),
+                    rs.getString("text_en")
                 });
             }
         } catch (SQLException e) {

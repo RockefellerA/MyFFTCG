@@ -26,7 +26,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.sql.SQLException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -47,7 +46,6 @@ import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JSeparator;
-import javax.swing.JTextField;
 import javax.swing.JWindow;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
@@ -61,9 +59,6 @@ public class MainWindow {
 	private JFrame frame;
 
 	int phase = 0;
-
-	private JTextField txtP2;
-	private JTextField txtP1;
 
 	// Card size constants
 	private static final int CARD_W = 140;
@@ -294,68 +289,16 @@ public class MainWindow {
 		p2CornerPanel.add(lblLimit_1);
 		p2CornerPanel.add(deck_1);
 
-		JLabel lblDAM_1 = new JLabel("<html><div style='text-align:center'>D<br>A<br>M<br>A<br>G<br>E</div></html>");
-		lblDAM_1.setToolTipText("Player 2 Damage Zone");
-		lblDAM_1.setHorizontalAlignment(SwingConstants.CENTER);
-		lblDAM_1.setVerticalAlignment(SwingConstants.CENTER);
-		lblDAM_1.setFont(new Font("Pixel NES", Font.PLAIN, 36));
-		lblDAM_1.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
-		lblDAM_1.setBackground(Color.DARK_GRAY);
-		lblDAM_1.setForeground(Color.WHITE);
-		lblDAM_1.setOpaque(true);
-
-		txtP2 = new JTextField("P2");
-		txtP2.setEditable(false);
-		txtP2.setFocusable(false);
-		txtP2.setBorder(null);
-		txtP2.setHorizontalAlignment(SwingConstants.CENTER);
-		txtP2.setFont(new Font("Pixel NES", Font.PLAIN, 36));
-		txtP2.setBackground(Color.LIGHT_GRAY);
-
 		JComboBox<String> p2ColorBox = buildColorDropdown();
-
-		JPanel p2PlayerPanel = new JPanel(new BorderLayout());
-		p2PlayerPanel.add(txtP2, BorderLayout.CENTER);
-		p2PlayerPanel.add(p2ColorBox, BorderLayout.SOUTH);
-
-		JPanel p2DamagePanel = new JPanel(new BorderLayout());
-		p2DamagePanel.setPreferredSize(new Dimension(cardSize.width, cardSize.height * 2));
-		p2DamagePanel.add(lblDAM_1, BorderLayout.CENTER);
-		p2DamagePanel.add(p2PlayerPanel, BorderLayout.SOUTH);
+		JPanel p2DamagePanel = buildDamageZonePanel("P2", p2ColorBox);
 
 		JPanel p2ZonesPanel = new JPanel(new BorderLayout());
 		p2ZonesPanel.add(p2CornerPanel, BorderLayout.WEST);
 		p2ZonesPanel.add(p2DamagePanel, BorderLayout.EAST);
 
 		// --- P1 Zones (bottom of screen) ---
-		JLabel lblDAM = new JLabel("<html><div style='text-align:center'>D<br>A<br>M<br>A<br>G<br>E</div></html>");
-		lblDAM.setToolTipText("Player 1 Damage Zone");
-		lblDAM.setHorizontalAlignment(SwingConstants.CENTER);
-		lblDAM.setVerticalAlignment(SwingConstants.CENTER);
-		lblDAM.setFont(new Font("Pixel NES", Font.PLAIN, 36));
-		lblDAM.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
-		lblDAM.setBackground(Color.DARK_GRAY);
-		lblDAM.setForeground(Color.WHITE);
-		lblDAM.setOpaque(true);
-
-		txtP1 = new JTextField("P1");
-		txtP1.setEditable(false);
-		txtP1.setFocusable(false);
-		txtP1.setBorder(null);
-		txtP1.setHorizontalAlignment(SwingConstants.CENTER);
-		txtP1.setFont(new Font("Pixel NES", Font.PLAIN, 36));
-		txtP1.setBackground(Color.LIGHT_GRAY);
-
 		JComboBox<String> p1ColorBox = buildColorDropdown();
-
-		JPanel p1PlayerPanel = new JPanel(new BorderLayout());
-		p1PlayerPanel.add(p1ColorBox, BorderLayout.NORTH);
-		p1PlayerPanel.add(txtP1, BorderLayout.CENTER);
-
-		JPanel p1DamagePanel = new JPanel(new BorderLayout());
-		p1DamagePanel.setPreferredSize(new Dimension(cardSize.width, cardSize.height * 2));
-		p1DamagePanel.add(p1PlayerPanel, BorderLayout.NORTH);
-		p1DamagePanel.add(lblDAM, BorderLayout.CENTER);
+		JPanel p1DamagePanel = buildDamageZonePanel("P1", p1ColorBox);
 
 		// P1 deck label — interactive
 		p1DeckLabel = new JLabel();
@@ -533,13 +476,13 @@ public class MainWindow {
 			String top = p1MainDeck.poll();
 			p1MainDeck.addLast(top);
 			p1TopFaceUp = false;
-			p1DeckLabel.setIcon(scaledCardback(p1DeckLabel.getSize()));
+			p1DeckLabel.setIcon(scaledCardback(new Dimension(CARD_W, CARD_H)));
 		}
 	}
 
 	private void refreshP1DeckLabel() {
 		p1TopFaceUp = false;
-		p1DeckLabel.setIcon(p1MainDeck.isEmpty() ? null : scaledCardback(p1DeckLabel.getSize()));
+		p1DeckLabel.setIcon(p1MainDeck.isEmpty() ? null : scaledCardback(new Dimension(CARD_W, CARD_H)));
 		p1DeckLabel.setText(p1MainDeck.isEmpty() ? "EMPTY" : null);
 	}
 
@@ -669,11 +612,38 @@ public class MainWindow {
 	// Helpers
 	// -------------------------------------------------------------------------
 
+	/**
+	 * Builds a damage zone panel for one player.
+	 * Contains 7 slots (D, A, M, A, G, E, Px) stacked vertically,
+	 * each sized to hold a sideways card (CARD_H wide × CARD_W tall).
+	 * The color dropdown sits below the slots.
+	 */
+	private JPanel buildDamageZonePanel(String playerLabel, JComboBox<String> colorBox) {
+		String[] letters = { "D", "A", "M", "A", "G", "E", playerLabel };
+
+		JPanel slotsPanel = new JPanel(new GridLayout(7, 1, 2, 2));
+		slotsPanel.setBackground(Color.DARK_GRAY);
+		for (String letter : letters) {
+			JLabel slot = new JLabel(letter, SwingConstants.CENTER);
+			slot.setFont(new Font("Pixel NES", Font.PLAIN, 14));
+			slot.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
+			slot.setBackground(Color.DARK_GRAY);
+			slot.setForeground(Color.WHITE);
+			slot.setOpaque(true);
+			slotsPanel.add(slot);
+		}
+
+		// Match the original fixed size: one card wide, two cards tall
+		JPanel panel = new JPanel(new BorderLayout(0, 4));
+		panel.setPreferredSize(new Dimension(CARD_W, CARD_H * 2));
+		panel.add(slotsPanel, BorderLayout.CENTER);
+		panel.add(colorBox,   BorderLayout.SOUTH);
+		return panel;
+	}
+
 	private ImageIcon scaledCardback(Dimension size) {
 		return new ImageIcon(new ImageIcon(getClass().getResource("/resources/cardback.jpg"))
-				.getImage().getScaledInstance(size.width > 0 ? size.width : CARD_W,
-				                              size.height > 0 ? size.height : CARD_H,
-				                              Image.SCALE_SMOOTH));
+				.getImage().getScaledInstance(size.width, size.height, Image.SCALE_SMOOTH));
 	}
 
 	private JComboBox<String> buildColorDropdown() {

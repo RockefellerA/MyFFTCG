@@ -29,7 +29,7 @@ import java.awt.Toolkit;
 public class DeckManager extends JDialog {
 
     private static final String[] BROWSER_COLUMNS = {
-        "Serial", "Name", "Type", "Element", "Cost", "Power", "Rarity", "Job", "Category 1", "Category 2"
+        "Serial", "Name", "Type", "Element", "Cost", "Power", "Rarity", "Job", "Category 1", "Category 2", "Card Text"
     };
     private static final String[] DECK_COLUMNS = {
         "Serial", "Name", "Type", "Element", "Cost", "Power", "Rarity", "Qty"
@@ -56,6 +56,21 @@ public class DeckManager extends JDialog {
 
     private static final Color LB_BG = new Color(50, 50, 50);
     private static final Color LB_FG = new Color(0xFF, 0xD7, 0x00);
+
+    /** Sorts serials numerically on the set prefix (e.g. "9-001C" before "10-001H"). */
+    private static final java.util.Comparator<Object> SERIAL_ORDER = (a, b) -> {
+        String sa = a == null ? "" : a.toString();
+        String sb = b == null ? "" : b.toString();
+        int da = sa.indexOf('-'), db = sb.indexOf('-');
+        if (da > 0 && db > 0) {
+            try {
+                int na = Integer.parseInt(sa.substring(0, da));
+                int nb = Integer.parseInt(sb.substring(0, db));
+                if (na != nb) return Integer.compare(na, nb);
+            } catch (NumberFormatException ignored) {}
+        }
+        return sa.compareTo(sb);
+    };
 
     private static final int ZOOM_POSITION_OFFSET = 6;
 
@@ -220,7 +235,11 @@ public class DeckManager extends JDialog {
         cardTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
 
         browserSorter = new TableRowSorter<>(browserModel);
+        browserSorter.setComparator(0, SERIAL_ORDER);
+        browserSorter.setSortKeys(java.util.List.of(new javax.swing.RowSorter.SortKey(0, javax.swing.SortOrder.ASCENDING)));
         cardTable.setRowSorter(browserSorter);
+        // Hide the Card Text column from the view (still searchable via model index 10)
+        cardTable.removeColumn(cardTable.getColumnModel().getColumn(10));
         applyBrowserRenderers(cardTable);
         setNarrowColumns(cardTable);
 
@@ -460,8 +479,8 @@ public class DeckManager extends JDialog {
             rows.sort((a, b) -> {
                 boolean aLb = lbSerials.contains((String) a[0]);
                 boolean bLb = lbSerials.contains((String) b[0]);
-                if (aLb != bLb) return aLb ? 1 : -1;          // non-LB above LB
-                return ((String) a[0]).compareTo((String) b[0]); // then by serial
+                if (aLb != bLb) return aLb ? 1 : -1;     // non-LB above LB
+                return SERIAL_ORDER.compare(a[0], b[0]); // then by serial (numeric set)
             });
             int mainTotal = 0, lbTotal = 0;
             for (Object[] row : rows) {
