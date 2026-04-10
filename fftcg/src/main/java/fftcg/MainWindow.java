@@ -83,6 +83,8 @@ public class MainWindow {
 	private JWindow zoomPopup;
 	// Opening hand confirmation popup
 	private JWindow openingHandPopup;
+	// Removed from Play confirmation popup
+	private JWindow removeConfirmPopup;
 
 	// --- P1 game state ---
 	private Deque<String> p1MainDeck  = new ArrayDeque<>();  // imageUrls
@@ -281,8 +283,9 @@ public class MainWindow {
 		lblRemove_1.setPreferredSize(cardSize);
 		lblRemove_1.setMinimumSize(cardSize);
 		lblRemove_1.addMouseListener(new MouseAdapter() {
-			@Override public void mouseEntered(MouseEvent e) { showGrayscaleZoom(p2RemoveLabel); }
-			@Override public void mouseExited(MouseEvent e)  { hideZoom(); }
+			@Override public void mousePressed(MouseEvent e)  { addRandomCardToRemoved(p2RemoveLabel); }
+			@Override public void mouseEntered(MouseEvent e)  { showGrayscaleZoom(p2RemoveLabel); }
+			@Override public void mouseExited(MouseEvent e)   { hideZoom(); }
 		});
 
 		JLabel lblLimit_1 = new JLabel("LIMIT");
@@ -358,7 +361,7 @@ public class MainWindow {
 		p1DeckLabel.setBorder(new BevelBorder(BevelBorder.RAISED, new Color(0, 0, 0), null, null, null));
 		p1DeckLabel.addMouseListener(new MouseAdapter() {
 			@Override
-			public void mouseClicked(MouseEvent e) {
+			public void mousePressed(MouseEvent e) {
 				onP1DeckClicked();
 			}
 			@Override
@@ -395,7 +398,7 @@ public class MainWindow {
 		p1LimitLabel.setMinimumSize(cardSize);
 		p1LimitLabel.addMouseListener(new MouseAdapter() {
 			@Override
-			public void mouseClicked(MouseEvent e) {
+			public void mousePressed(MouseEvent e) {
 				onP1LbClicked();
 			}
 			@Override
@@ -420,8 +423,9 @@ public class MainWindow {
 		lblRemove.setPreferredSize(cardSize);
 		lblRemove.setMinimumSize(cardSize);
 		lblRemove.addMouseListener(new MouseAdapter() {
-			@Override public void mouseEntered(MouseEvent e) { showGrayscaleZoom(p1RemoveLabel); }
-			@Override public void mouseExited(MouseEvent e)  { hideZoom(); }
+			@Override public void mousePressed(MouseEvent e)  { addRandomCardToRemoved(p1RemoveLabel); }
+			@Override public void mouseEntered(MouseEvent e)  { showGrayscaleZoom(p1RemoveLabel); }
+			@Override public void mouseExited(MouseEvent e)   { hideZoom(); }
 		});
 
 		JPanel p1CornerPanel = new JPanel(new GridLayout(2, 2));
@@ -441,7 +445,7 @@ public class MainWindow {
 		p1HandLabel = buildHandSlot();
 		p1HandLabel.addMouseListener(new MouseAdapter() {
 			@Override
-			public void mouseClicked(MouseEvent e) {
+			public void mousePressed(MouseEvent e) {
 				onP1HandClicked();
 			}
 		});
@@ -485,19 +489,6 @@ public class MainWindow {
 		gbc.weighty = 0.0; gbc.gridy = 1; gameBoard.add(divider,  gbc);
 		gbc.weighty = 1.0; gbc.gridy = 2; gameBoard.add(p1Board,  gbc);
 
-		MouseAdapter debugRightClick = new MouseAdapter() {
-			@Override
-			public void mousePressed(MouseEvent e)  { maybeShowDebugMenu(e); }
-			@Override
-			public void mouseReleased(MouseEvent e) { maybeShowDebugMenu(e); }
-			private void maybeShowDebugMenu(MouseEvent e) {
-				if (!e.isPopupTrigger()) return;
-				boolean isP2Side = e.getSource() == p2Board;
-				showDebugMenu(e, isP2Side ? p2RemoveLabel : p1RemoveLabel);
-			}
-		};
-		p2Board.addMouseListener(debugRightClick);
-		p1Board.addMouseListener(debugRightClick);
 
 		p2ColorBox.addActionListener(e -> {
 			String sel = (String) p2ColorBox.getSelectedItem();
@@ -797,6 +788,64 @@ public class MainWindow {
 		if (zoomPopup != null) zoomPopup.setVisible(false);
 	}
 
+	private void addRandomCardToRemoved(GrayscaleLabel removeLabel) {
+		if (removeConfirmPopup != null) { removeConfirmPopup.dispose(); }
+		removeConfirmPopup = new JWindow(frame);
+
+		JButton yesBtn = new JButton("Add random card to Removed from Play");
+		yesBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		yesBtn.addActionListener(e -> {
+			removeConfirmPopup.dispose();
+			removeConfirmPopup = null;
+			doAddRandomCardToRemoved(removeLabel);
+		});
+
+		JButton noBtn = new JButton("Cancel");
+		noBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		noBtn.addActionListener(e -> {
+			removeConfirmPopup.dispose();
+			removeConfirmPopup = null;
+		});
+
+		JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 8));
+		panel.setBorder(BorderFactory.createRaisedBevelBorder());
+		panel.add(yesBtn);
+		panel.add(noBtn);
+
+		removeConfirmPopup.getContentPane().add(panel);
+		removeConfirmPopup.pack();
+
+		Point loc = removeLabel.getLocationOnScreen();
+		removeConfirmPopup.setLocation(loc.x - removeConfirmPopup.getWidth() - 6, loc.y);
+		removeConfirmPopup.setVisible(true);
+	}
+
+	private void doAddRandomCardToRemoved(GrayscaleLabel removeLabel) {
+		List<String> pool = new ArrayList<>(p1MainDeck);
+		pool.addAll(p1Hand);
+		if (pool.isEmpty()) return;
+		String url = pool.get((int) (Math.random() * pool.size()));
+		new SwingWorker<ImageIcon, Void>() {
+			@Override
+			protected ImageIcon doInBackground() throws Exception {
+				Image img = ImageIO.read(new URL(url));
+				return img == null ? null : new ImageIcon(
+						img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+			}
+			@Override
+			protected void done() {
+				try {
+					ImageIcon icon = get();
+					if (icon != null) {
+						removeLabel.setText(null);
+						removeLabel.setIcon(icon);
+						removeLabel.setUrl(url);
+					}
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+	}
+
 	private void showGrayscaleZoom(GrayscaleLabel label) {
 		String url = label.getUrl();
 		if (url == null) return;
@@ -836,45 +885,6 @@ public class MainWindow {
 	}
 
 	// -------------------------------------------------------------------------
-	// Debug menu
-	// -------------------------------------------------------------------------
-
-	private void showDebugMenu(MouseEvent e, GrayscaleLabel removeLabel) {
-		JPopupMenu menu = new JPopupMenu("Debug");
-
-		JMenuItem addToRemoved = new JMenuItem("Add random card to Removed from Play");
-		addToRemoved.addActionListener(ev -> debugAddRandomCardToRemoved(removeLabel));
-		menu.add(addToRemoved);
-
-		menu.show(e.getComponent(), e.getX(), e.getY());
-	}
-
-	private void debugAddRandomCardToRemoved(GrayscaleLabel removeLabel) {
-		List<String> pool = new ArrayList<>(p1MainDeck);
-		pool.addAll(p1Hand);
-		if (pool.isEmpty()) return;
-		String url = pool.get((int) (Math.random() * pool.size()));
-		new SwingWorker<ImageIcon, Void>() {
-			@Override
-			protected ImageIcon doInBackground() throws Exception {
-				Image img = ImageIO.read(new URL(url));
-				return img == null ? null : new ImageIcon(
-						img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
-			}
-			@Override
-			protected void done() {
-				try {
-					ImageIcon icon = get();
-					if (icon != null) {
-						removeLabel.setText(null);
-						removeLabel.setIcon(icon); // GrayscaleLabel converts automatically
-						removeLabel.setUrl(url);
-					}
-				} catch (InterruptedException | ExecutionException ignored) {}
-			}
-		}.execute();
-	}
-
 	// -------------------------------------------------------------------------
 	// Helpers
 	// -------------------------------------------------------------------------
