@@ -13,11 +13,13 @@ import java.util.List;
 public class GameState {
 
     // --- P1 ---
-    private final Deque<String> p1MainDeck = new ArrayDeque<>();
-    private final List<String>  p1LbDeck   = new ArrayList<>();
-    private final List<String>  p1Hand     = new ArrayList<>();
-    private boolean p1OpeningHandPending = false;
-    private boolean p1MulliganUsed       = false;
+    private final Deque<String> p1MainDeck  = new ArrayDeque<>();
+    private final List<String>  p1LbDeck    = new ArrayList<>();
+    private final List<String>  p1Hand      = new ArrayList<>();
+    private final List<String>  p1BreakZone = new ArrayList<>();
+    private int     p1Cp                  = 0;
+    private boolean p1OpeningHandPending  = false;
+    private boolean p1MulliganUsed        = false;
 
     // -------------------------------------------------------------------------
     // Lifecycle
@@ -28,6 +30,8 @@ public class GameState {
         p1MainDeck.clear();
         p1LbDeck.clear();
         p1Hand.clear();
+        p1BreakZone.clear();
+        p1Cp                 = 0;
         p1OpeningHandPending = false;
         p1MulliganUsed       = false;
     }
@@ -89,12 +93,49 @@ public class GameState {
     }
 
     // -------------------------------------------------------------------------
+    // Hand actions
+    // -------------------------------------------------------------------------
+
+    /**
+     * Discards a card from the player's hand to the Break Zone and awards 1 CP.
+     *
+     * @param idx index into p1Hand
+     * @return the image URL of the discarded card, or {@code null} if idx is invalid
+     */
+    public String discardFromHand(int idx) {
+        if (idx < 0 || idx >= p1Hand.size()) return null;
+        String url = p1Hand.remove(idx);
+        p1BreakZone.add(url);
+        p1Cp++;
+        return url;
+    }
+
+    // -------------------------------------------------------------------------
+    // Crystal Points
+    // -------------------------------------------------------------------------
+
+    public int  getP1Cp()            { return p1Cp; }
+    public void addP1Cp(int amount)  { p1Cp += amount; }
+
+    /**
+     * Spends the given amount of CP if available.
+     *
+     * @return {@code true} if the spend succeeded, {@code false} if insufficient CP
+     */
+    public boolean spendP1Cp(int amount) {
+        if (p1Cp < amount) return false;
+        p1Cp -= amount;
+        return true;
+    }
+
+    // -------------------------------------------------------------------------
     // Accessors
     // -------------------------------------------------------------------------
 
-    public Deque<String> getP1MainDeck()           { return p1MainDeck; }
-    public List<String>  getP1LbDeck()             { return p1LbDeck; }
-    public List<String>  getP1Hand()               { return p1Hand; }
-    public boolean       isP1OpeningHandPending()  { return p1OpeningHandPending; }
-    public boolean       isP1MulliganUsed()        { return p1MulliganUsed; }
+    public Deque<String> getP1MainDeck()          { return p1MainDeck; }
+    public List<String>  getP1LbDeck()            { return p1LbDeck; }
+    public List<String>  getP1Hand()              { return p1Hand; }
+    public List<String>  getP1BreakZone()         { return p1BreakZone; }
+    public boolean       isP1OpeningHandPending() { return p1OpeningHandPending; }
+    public boolean       isP1MulliganUsed()       { return p1MulliganUsed; }
 }

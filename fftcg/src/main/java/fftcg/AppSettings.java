@@ -1,0 +1,63 @@
+package fftcg;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.Properties;
+
+/**
+ * Persists application settings to an .ini (properties) file under the user's
+ * home directory at {@code ~/.fftcg/settings.ini}.
+ *
+ * All access is through static methods; the file is loaded once on class
+ * initialisation and can be saved at any time.
+ */
+public final class AppSettings {
+
+    private static final String DIR  = System.getProperty("user.home") + File.separator + ".fftcg";
+    private static final String PATH = DIR + File.separator + "settings.ini";
+
+    private static final Properties props = new Properties();
+
+    static { load(); }
+
+    private AppSettings() {}
+
+    // -------------------------------------------------------------------------
+    // Load / save
+    // -------------------------------------------------------------------------
+
+    /** Loads settings from disk, silently ignoring any I/O errors. */
+    public static void load() {
+        File file = new File(PATH);
+        if (!file.exists()) return;
+        try (FileInputStream fis = new FileInputStream(file)) {
+            props.load(fis);
+        } catch (IOException ignored) {}
+    }
+
+    /** Writes current settings to disk, creating parent directories as needed. */
+    public static void save() {
+        try {
+            new File(DIR).mkdirs();
+            try (FileOutputStream fos = new FileOutputStream(PATH)) {
+                props.store(fos, "MyFFTCG Settings");
+            }
+        } catch (IOException ignored) {}
+    }
+
+    // -------------------------------------------------------------------------
+    // Settings
+    // -------------------------------------------------------------------------
+
+    /** Returns {@code true} when Debug Mode is enabled. */
+    public static boolean isDebugMode() {
+        return Boolean.parseBoolean(props.getProperty("debug.mode", "false"));
+    }
+
+    /** Enables or disables Debug Mode (call {@link #save()} to persist). */
+    public static void setDebugMode(boolean enabled) {
+        props.setProperty("debug.mode", String.valueOf(enabled));
+    }
+}

@@ -60,8 +60,11 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingWorker;
 import javax.swing.UIManager;
+import javax.swing.SwingUtilities;
 import javax.swing.border.BevelBorder;
 import javax.swing.border.SoftBevelBorder;
+import javax.swing.event.PopupMenuEvent;
+import javax.swing.event.PopupMenuListener;
 
 public class MainWindow {
 
@@ -77,6 +80,7 @@ public class MainWindow {
 	private JLabel p1DeckLabel;
 	private JLabel p1LimitLabel;
 	private JLabel p1HandLabel;
+	private JLabel p1BreakLabel;
 	private GrayscaleLabel p1RemoveLabel;
 	private GrayscaleLabel p2RemoveLabel;
 	// Zoom popup for LB card hover
@@ -85,6 +89,10 @@ public class MainWindow {
 	private JWindow openingHandPopup;
 	// Removed from Play confirmation popup
 	private JWindow removeConfirmPopup;
+	// Hand hover popover (deck zone mouseover)
+	private JWindow handPopup;
+	private javax.swing.Timer handPopupHideTimer;
+	private boolean handCardMenuOpen = false;
 
 	// --- Game state ---
 	private final GameState gameState   = new GameState();
@@ -372,16 +380,16 @@ public class MainWindow {
 			}
 		});
 
-		JLabel break1 = new JLabel("BREAK");
-		break1.setToolTipText("Player 1 Break Zone");
-		break1.setHorizontalAlignment(SwingConstants.CENTER);
-		break1.setFont(new Font("Pixel NES", Font.PLAIN, 18));
-		break1.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
-		break1.setBackground(Color.DARK_GRAY);
-		break1.setForeground(Color.WHITE);
-		break1.setOpaque(true);
-		break1.setPreferredSize(cardSize);
-		break1.setMinimumSize(cardSize);
+		p1BreakLabel = new JLabel("BREAK");
+		p1BreakLabel.setToolTipText("Player 1 Break Zone");
+		p1BreakLabel.setHorizontalAlignment(SwingConstants.CENTER);
+		p1BreakLabel.setFont(new Font("Pixel NES", Font.PLAIN, 18));
+		p1BreakLabel.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
+		p1BreakLabel.setBackground(Color.DARK_GRAY);
+		p1BreakLabel.setForeground(Color.WHITE);
+		p1BreakLabel.setOpaque(true);
+		p1BreakLabel.setPreferredSize(cardSize);
+		p1BreakLabel.setMinimumSize(cardSize);
 
 		// P1 limit label — interactive
 		p1LimitLabel = new JLabel("LIMIT");
@@ -429,7 +437,7 @@ public class MainWindow {
 		JPanel p1CornerPanel = new JPanel(new GridLayout(2, 2));
 		p1CornerPanel.add(p1DeckLabel);
 		p1CornerPanel.add(p1LimitLabel);
-		p1CornerPanel.add(break1);
+		p1CornerPanel.add(p1BreakLabel);
 		p1CornerPanel.add(lblRemove);
 
 		JPanel p1BackupSlots = buildBackupZonePanel();
@@ -445,6 +453,14 @@ public class MainWindow {
 			@Override
 			public void mousePressed(MouseEvent e) {
 				onP1HandClicked();
+			}
+			@Override
+			public void mouseEntered(MouseEvent e) {
+				if (!gameState.getP1Hand().isEmpty()) showHandPopup();
+			}
+			@Override
+			public void mouseExited(MouseEvent e) {
+				scheduleHandPopupHide();
 			}
 		});
 
@@ -926,7 +942,206 @@ public class MainWindow {
 		if (zoomPopup != null) zoomPopup.setVisible(false);
 	}
 
+	// -------------------------------------------------------------------------
+	// Hand hover popover (shown when mousing over the deck zone)
+	// -------------------------------------------------------------------------
+
+	private void showHandPopup() {
+		cancelHandPopupHide();
+		if (handPopup != null && handPopup.isVisible()) return;  // already open
+
+		if (handPopup != null) { handPopup.dispose(); }
+		handPopup = new JWindow(frame);
+
+		List<String> hand = gameState.getP1Hand();
+
+		JPanel cardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+		cardsPanel.setBorder(BorderFactory.createCompoundBorder(
+				BorderFactory.createRaisedBevelBorder(),
+				BorderFactory.createEmptyBorder(4, 4, 4, 4)));
+		cardsPanel.addMouseListener(new MouseAdapter() {
+			@Override public void mouseEntered(MouseEvent e) { cancelHandPopupHide(); }
+			@Override public void mouseExited(MouseEvent e) { scheduleHandPopupHide(); }
+		});
+
+		for (int i = 0; i < hand.size(); i++) {
+			final int idx = i;
+			final String url = hand.get(i);
+
+			JLabel lbl = new JLabel("Loading...", SwingConstants.CENTER);
+			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
+			lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+			lbl.setOpaque(true);
+			lbl.setBackground(Color.DARK_GRAY);
+			lbl.setForeground(Color.WHITE);
+			lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+			lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
+			lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+			lbl.addMouseListener(new MouseAdapter() {
+				@Override public void mouseEntered(MouseEvent e) {
+					cancelHandPopupHide();
+					showHandCardZoom(url, lbl);
+				}
+				@Override public void mouseExited(MouseEvent e) {
+					hideZoom();
+					scheduleHandPopupHide();
+				}
+				@Override public void mousePressed(MouseEvent e) {
+					onHandPopupCardClicked(idx, url, lbl, e);
+				}
+			});
+
+			// Load image async
+			new SwingWorker<ImageIcon, Void>() {
+				@Override protected ImageIcon doInBackground() throws Exception {
+					Image img = ImageIO.read(new URL(url));
+					return img == null ? null
+							: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+				}
+				@Override protected void done() {
+					try {
+						ImageIcon icon = get();
+						if (icon != null) { lbl.setIcon(icon); lbl.setText(null); }
+					} catch (InterruptedException | ExecutionException ignored) {}
+				}
+			}.execute();
+
+			cardsPanel.add(lbl);
+		}
+
+		handPopup.getContentPane().add(cardsPanel);
+		handPopup.pack();
+
+		// Position above the hand label, left-aligned to its left edge
+		Point loc = p1HandLabel.getLocationOnScreen();
+		int x = loc.x;
+		int y = loc.y - handPopup.getHeight() - 4;
+		Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+		x = Math.max(0, Math.min(x, screen.width  - handPopup.getWidth()));
+		y = Math.max(0, Math.min(y, screen.height - handPopup.getHeight()));
+		handPopup.setLocation(x, y);
+		handPopup.setVisible(true);
+	}
+
+	/** Dismisses the hand popover after a short delay (cancelled if mouse re-enters). */
+	private void scheduleHandPopupHide() {
+		if (handCardMenuOpen) return;
+		if (handPopupHideTimer != null) handPopupHideTimer.stop();
+		handPopupHideTimer = new javax.swing.Timer(120, e -> {
+			if (handPopup != null) { handPopup.dispose(); handPopup = null; }
+			handPopupHideTimer = null;
+		});
+		handPopupHideTimer.setRepeats(false);
+		handPopupHideTimer.start();
+	}
+
+	private void cancelHandPopupHide() {
+		if (handPopupHideTimer != null) { handPopupHideTimer.stop(); handPopupHideTimer = null; }
+	}
+
+	private void onHandPopupCardClicked(int handIdx, String url, JLabel cardLabel, MouseEvent e) {
+		cancelHandPopupHide();
+		handCardMenuOpen = true;
+
+		JPopupMenu menu = new JPopupMenu();
+
+		JMenuItem discardItem = new JMenuItem("Discard for CP");
+		discardItem.addActionListener(ae -> {
+			gameState.discardFromHand(handIdx);
+			p1HandIndex = Math.min(p1HandIndex, Math.max(0, gameState.getP1Hand().size() - 1));
+			hideZoom();
+			if (handPopup != null) { handPopup.dispose(); handPopup = null; }
+			refreshP1HandLabel();
+			refreshP1BreakLabel();
+		});
+		menu.add(discardItem);
+
+		JMenuItem playItem = new JMenuItem("Play");
+		playItem.setEnabled(gameState.getP1Cp() > 0);
+		playItem.addActionListener(ae -> {
+			// Play logic to be developed further
+			hideZoom();
+			if (handPopup != null) { handPopup.dispose(); handPopup = null; }
+		});
+		menu.add(playItem);
+
+		menu.addPopupMenuListener(new PopupMenuListener() {
+			@Override public void popupMenuWillBecomeVisible(PopupMenuEvent e) {}
+			@Override public void popupMenuCanceled(PopupMenuEvent e) {
+				handCardMenuOpen = false;
+			}
+			@Override public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
+				handCardMenuOpen = false;
+				scheduleHandPopupHide();
+			}
+		});
+
+		menu.show(cardLabel, e.getX(), e.getY());
+	}
+
+	/** Shows a full-resolution preview of a hand card to the left of the hand popover. */
+	private void showHandCardZoom(String url, JLabel anchor) {
+		if (url == null) return;
+		if (zoomPopup == null) zoomPopup = new JWindow(frame);
+
+		new SwingWorker<ImageIcon, Void>() {
+			@Override protected ImageIcon doInBackground() throws Exception {
+				Image img = ImageIO.read(new URL(url));
+				return img == null ? null : new ImageIcon(img);
+			}
+			@Override protected void done() {
+				try {
+					ImageIcon icon = get();
+					if (icon == null) return;
+					JLabel zl = new JLabel(icon);
+					zl.setBorder(BorderFactory.createRaisedBevelBorder());
+					zoomPopup.getContentPane().removeAll();
+					zoomPopup.getContentPane().add(zl);
+					zoomPopup.pack();
+
+					// Position to the left of the hand popover window
+					Point base = (handPopup != null && handPopup.isVisible())
+							? handPopup.getLocationOnScreen()
+							: anchor.getLocationOnScreen();
+					int x = base.x - icon.getIconWidth() - 6;
+					int y = base.y;
+					Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+					x = Math.max(0, x);
+					y = Math.max(0, Math.min(y, screen.height - icon.getIconHeight()));
+					zoomPopup.setLocation(x, y);
+					zoomPopup.setVisible(true);
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+	}
+
+	private void refreshP1BreakLabel() {
+		List<String> zone = gameState.getP1BreakZone();
+		if (zone.isEmpty()) {
+			p1BreakLabel.setIcon(null);
+			p1BreakLabel.setFont(new Font("Pixel NES", Font.PLAIN, 18));
+			p1BreakLabel.setText("BREAK");
+			return;
+		}
+		String url = zone.get(zone.size() - 1);
+		new SwingWorker<ImageIcon, Void>() {
+			@Override protected ImageIcon doInBackground() throws Exception {
+				Image img = ImageIO.read(new URL(url));
+				return img == null ? null
+						: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+			}
+			@Override protected void done() {
+				try {
+					ImageIcon icon = get();
+					if (icon != null) { p1BreakLabel.setIcon(icon); p1BreakLabel.setText(null); }
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+	}
+
 	private void addRandomCardToRemoved(GrayscaleLabel removeLabel) {
+		if (!AppSettings.isDebugMode()) return;
 		if (removeConfirmPopup != null) { removeConfirmPopup.dispose(); }
 		removeConfirmPopup = new JWindow(frame);
 
