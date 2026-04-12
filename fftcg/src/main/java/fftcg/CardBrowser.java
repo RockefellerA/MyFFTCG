@@ -5,7 +5,6 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Image;
-import java.net.URL;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -19,7 +18,6 @@ import java.util.regex.Pattern;
 
 import scraper.CardScraper;
 
-import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
 import javax.swing.JWindow;
@@ -352,7 +350,7 @@ public class CardBrowser extends JDialog {
         new SwingWorker<ImageIcon, Void>() {
             @Override
             protected ImageIcon doInBackground() throws Exception {
-                Image img = ImageIO.read(new URL(urlToFetch));
+                Image img = ImageCache.load(urlToFetch);
                 return img != null ? new ImageIcon(img) : null;
             }
             @Override
@@ -406,7 +404,7 @@ public class CardBrowser extends JDialog {
                         if (rs.next()) {
                             fetchedUrl = rs.getString("image_url");
                             if (fetchedUrl != null && !fetchedUrl.isBlank()) {
-                                Image img = ImageIO.read(new URL(fetchedUrl));
+                                Image img = ImageCache.load(fetchedUrl);
                                 if (img != null) {
                                     return new ImageIcon(img.getScaledInstance(220, 309, Image.SCALE_SMOOTH));
                                 }

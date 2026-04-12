@@ -6,9 +6,11 @@ import scraper.DeckDatabase.DeckCardDetail;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.FlowLayout;
+import java.awt.RenderingHints;
 import java.awt.color.ColorSpace;
 import java.awt.image.BufferedImage;
 import java.awt.image.ColorConvertOp;
+import java.awt.image.RescaleOp;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Desktop;
@@ -33,15 +35,12 @@ import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
-import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
@@ -61,7 +60,6 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingWorker;
 import javax.swing.UIManager;
-import javax.swing.SwingUtilities;
 import javax.swing.border.BevelBorder;
 import javax.swing.border.SoftBevelBorder;
 import javax.swing.event.PopupMenuEvent;
@@ -95,15 +93,23 @@ public class MainWindow {
 	private javax.swing.Timer handPopupHideTimer;
 	private boolean handCardMenuOpen = false;
 
+	// Backup card state constants
+	private static final int BACKUP_NORMAL = 0;
+	private static final int BACKUP_DULLED = 1;
+	private static final int BACKUP_FROZEN = 2;
+
 	// --- Game state ---
 	private final GameState gameState   = new GameState();
 	// UI-only state (not owned by GameState)
-	private JLabel[]        p1BackupLabels = new JLabel[5];
+	private JLabel[] p1BackupLabels = new JLabel[5];
+	private String[] p1BackupUrls   = new String[5];
+	private int[]    p1BackupStates = new int[5];
 	private int             p1LbIndex   = 0;
 	private int             p1HandIndex = 0;
 	private boolean         p1TopFaceUp = false;  // is top main-deck card revealed?
 
 	public static void main(String[] args) {
+		Runtime.getRuntime().addShutdownHook(new Thread(ImageCache::shutdown));
 		EventQueue.invokeLater(new Runnable() {
 			public void run() {
 				try {
@@ -443,6 +449,16 @@ public class MainWindow {
 		p1CornerPanel.add(lblRemove);
 
 		JPanel p1BackupSlots = buildBackupZonePanel(p1BackupLabels);
+		for (int i = 0; i < p1BackupLabels.length; i++) {
+			final int backupIdx = i;
+			p1BackupLabels[i].addMouseListener(new MouseAdapter() {
+				@Override public void mousePressed(MouseEvent e) {
+					if (p1BackupLabels[backupIdx].getIcon() != null)
+						showBackupContextMenu(backupIdx, p1BackupLabels[backupIdx], e);
+				}
+			});
+		}
+
 		JPanel p1BackupWrapper = new JPanel(new GridBagLayout());
 		GridBagConstraints p1BackupGbc = new GridBagConstraints();
 		p1BackupGbc.anchor = GridBagConstraints.SOUTH;
@@ -711,7 +727,7 @@ public class MainWindow {
 			final String url = handOrder.get(i).imageUrl();
 			new SwingWorker<ImageIcon, Void>() {
 				@Override protected ImageIcon doInBackground() throws Exception {
-					Image img = ImageIO.read(new URL(url));
+					Image img = ImageCache.load(url);
 					return img == null ? null
 							: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
 				}
@@ -804,7 +820,7 @@ public class MainWindow {
 		new SwingWorker<ImageIcon, Void>() {
 			@Override
 			protected ImageIcon doInBackground() throws Exception {
-				Image img = ImageIO.read(new URL(imageUrl));
+				Image img = ImageCache.load(imageUrl);
 				return img == null ? null : new ImageIcon(
 						img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
 			}
@@ -857,7 +873,7 @@ public class MainWindow {
 		new SwingWorker<ImageIcon, Void>() {
 			@Override
 			protected ImageIcon doInBackground() throws Exception {
-				Image img = ImageIO.read(new URL(imageUrl));
+				Image img = ImageCache.load(imageUrl);
 				return img == null ? null : new ImageIcon(
 						img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
 			}
@@ -876,7 +892,7 @@ public class MainWindow {
 		new SwingWorker<ImageIcon, Void>() {
 			@Override
 			protected ImageIcon doInBackground() throws Exception {
-				Image img = ImageIO.read(new URL(imageUrl));
+				Image img = ImageCache.load(imageUrl);
 				return img == null ? null : new ImageIcon(
 						img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
 			}
@@ -913,7 +929,7 @@ public class MainWindow {
 		new SwingWorker<ImageIcon, Void>() {
 			@Override
 			protected ImageIcon doInBackground() throws Exception {
-				Image img = ImageIO.read(new URL(url));
+				Image img = ImageCache.load(url);
 				return img == null ? null : new ImageIcon(img);
 			}
 			@Override
@@ -1000,7 +1016,7 @@ public class MainWindow {
 			// Load image async
 			new SwingWorker<ImageIcon, Void>() {
 				@Override protected ImageIcon doInBackground() throws Exception {
-					Image img = ImageIO.read(new URL(url));
+					Image img = ImageCache.load(url);
 					return img == null ? null
 							: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
 				}
@@ -1081,7 +1097,7 @@ public class MainWindow {
 
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
-				Image img = ImageIO.read(new URL(url));
+				Image img = ImageCache.load(url);
 				return img == null ? null : new ImageIcon(img);
 			}
 			@Override protected void done() {
@@ -1121,7 +1137,7 @@ public class MainWindow {
 		String url = zone.get(zone.size() - 1).imageUrl();
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
-				Image img = ImageIO.read(new URL(url));
+				Image img = ImageCache.load(url);
 				return img == null ? null
 						: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
 			}
@@ -1237,7 +1253,7 @@ public class MainWindow {
 			final boolean grey  = !payable;
 			new SwingWorker<ImageIcon, Void>() {
 				@Override protected ImageIcon doInBackground() throws Exception {
-					Image img = ImageIO.read(new URL(imgUrl));
+					Image img = ImageCache.load(imgUrl);
 					if (img == null) return null;
 					if (grey) {
 						BufferedImage buf = new BufferedImage(img.getWidth(null), img.getHeight(null),
@@ -1332,26 +1348,130 @@ public class MainWindow {
 		refreshP1BreakLabel();
 	}
 
-	/** Places a card image into the first empty P1 backup slot. */
+	/** Places a card into the first empty P1 backup slot and renders it. */
 	private void placeCardInFirstBackupSlot(CardData card) {
 		if (p1BackupLabels == null) return;
-		for (JLabel slot : p1BackupLabels) {
-			if (slot == null || slot.getIcon() != null) continue;
-			new SwingWorker<ImageIcon, Void>() {
-				@Override protected ImageIcon doInBackground() throws Exception {
-					Image img = ImageIO.read(new URL(card.imageUrl()));
-					return img == null ? null
-							: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
-				}
-				@Override protected void done() {
-					try {
-						ImageIcon icon = get();
-						if (icon != null) { slot.setIcon(icon); slot.setText(null); }
-					} catch (InterruptedException | ExecutionException ignored) {}
-				}
-			}.execute();
+		for (int i = 0; i < p1BackupLabels.length; i++) {
+			if (p1BackupLabels[i] == null || p1BackupLabels[i].getIcon() != null) continue;
+			p1BackupUrls[i]   = card.imageUrl();
+			p1BackupStates[i] = BACKUP_NORMAL;
+			refreshP1BackupSlot(i);
 			break;
 		}
+	}
+
+	/** Reloads and re-renders a single P1 backup slot using its stored URL and state. */
+	private void refreshP1BackupSlot(int idx) {
+		String url  = p1BackupUrls[idx];
+		int    state = p1BackupStates[idx];
+		JLabel slot  = p1BackupLabels[idx];
+		if (url == null || slot == null) return;
+		new SwingWorker<ImageIcon, Void>() {
+			@Override protected ImageIcon doInBackground() throws Exception {
+				Image raw = ImageCache.load(url);
+				if (raw == null) return null;
+				BufferedImage card = toARGB(raw, CARD_W, CARD_H);
+				return new ImageIcon(renderBackupCard(card, state));
+			}
+			@Override protected void done() {
+				try {
+					ImageIcon icon = get();
+					if (icon != null) { slot.setIcon(icon); slot.setText(null); }
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+	}
+
+	/**
+	 * Composites a (possibly transformed) card image onto a square
+	 * {@code CARD_H × CARD_H} canvas, respecting the slot alignment rules:
+	 * <ul>
+	 *   <li>Normal / Frozen — upright (or flipped) card pinned to the left edge, top</li>
+	 *   <li>Dulled — card rotated 90° CW ({@code CARD_H × CARD_W}), pinned left + bottom</li>
+	 * </ul>
+	 */
+	private static BufferedImage renderBackupCard(BufferedImage card, int state) {
+		BufferedImage canvas = new BufferedImage(CARD_H, CARD_H, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = canvas.createGraphics();
+		switch (state) {
+			case BACKUP_DULLED -> {
+				BufferedImage rotated = rotateCW90(card);          // now CARD_H × CARD_W
+				g.drawImage(rotated, 0, CARD_H - CARD_W, null);   // pinned to bottom-left
+			}
+			case BACKUP_FROZEN -> {
+				BufferedImage flipped = rotate180(card);
+				g.drawImage(applyBlueTint(flipped), 0, 0, null);  // pinned to top-left
+			}
+			default -> g.drawImage(card, 0, 0, null);             // pinned to top-left
+		}
+		g.dispose();
+		return canvas;
+	}
+
+	/** Converts any {@link Image} to a scaled {@link BufferedImage} (ARGB). */
+	private static BufferedImage toARGB(Image src, int w, int h) {
+		BufferedImage buf = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = buf.createGraphics();
+		g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+		g.drawImage(src, 0, 0, w, h, null);
+		g.dispose();
+		return buf;
+	}
+
+	/** Rotates a {@link BufferedImage} 90° clockwise. Result dimensions are {@code h × w}. */
+	private static BufferedImage rotateCW90(BufferedImage src) {
+		int w = src.getWidth(), h = src.getHeight();
+		BufferedImage dst = new BufferedImage(h, w, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = dst.createGraphics();
+		g.translate(h, 0);
+		g.rotate(Math.PI / 2);
+		g.drawImage(src, 0, 0, null);
+		g.dispose();
+		return dst;
+	}
+
+	/** Rotates a {@link BufferedImage} 180°. */
+	private static BufferedImage rotate180(BufferedImage src) {
+		int w = src.getWidth(), h = src.getHeight();
+		BufferedImage dst = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = dst.createGraphics();
+		g.translate(w, h);
+		g.rotate(Math.PI);
+		g.drawImage(src, 0, 0, null);
+		g.dispose();
+		return dst;
+	}
+
+	/** Applies a blue tint to a {@link BufferedImage} (darkens R/G, boosts B). */
+	private static BufferedImage applyBlueTint(BufferedImage src) {
+		float[] scales  = { 0.4f, 0.4f, 1.0f, 1.0f };
+		float[] offsets = { 0f,   0f,   60f,  0f   };
+		return new RescaleOp(scales, offsets, null).filter(src, null);
+	}
+
+	/**
+	 * Shows a debug context menu for a P1 backup slot.
+	 * Only visible when Debug Mode is enabled.
+	 */
+	private void showBackupContextMenu(int idx, JLabel slot, MouseEvent e) {
+		if (!AppSettings.isDebugMode()) return;
+		JPopupMenu menu = new JPopupMenu();
+
+		JMenuItem dullItem = new JMenuItem("Debug: Dull");
+		dullItem.addActionListener(ae -> {
+			p1BackupStates[idx] = (p1BackupStates[idx] == BACKUP_DULLED) ? BACKUP_NORMAL : BACKUP_DULLED;
+			refreshP1BackupSlot(idx);
+		});
+		menu.add(dullItem);
+
+		JMenuItem freezeItem = new JMenuItem("Debug: Freeze");
+		freezeItem.addActionListener(ae -> {
+			p1BackupStates[idx] = (p1BackupStates[idx] == BACKUP_FROZEN) ? BACKUP_NORMAL : BACKUP_FROZEN;
+			refreshP1BackupSlot(idx);
+		});
+		menu.add(freezeItem);
+
+		menu.show(slot, e.getX(), e.getY());
 	}
 
 	private void addRandomCardToRemoved(GrayscaleLabel removeLabel) {
@@ -1359,7 +1479,7 @@ public class MainWindow {
 		if (removeConfirmPopup != null) { removeConfirmPopup.dispose(); }
 		removeConfirmPopup = new JWindow(frame);
 
-		JButton yesBtn = new JButton("Add random card to Removed from Play");
+		JButton yesBtn = new JButton("Debug: Add Card to Removed from Play");
 		yesBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
 		yesBtn.addActionListener(e -> {
 			removeConfirmPopup.dispose();
@@ -1395,7 +1515,7 @@ public class MainWindow {
 		new SwingWorker<ImageIcon, Void>() {
 			@Override
 			protected ImageIcon doInBackground() throws Exception {
-				Image img = ImageIO.read(new URL(url));
+				Image img = ImageCache.load(url);
 				return img == null ? null : new ImageIcon(
 						img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
 			}
@@ -1422,7 +1542,7 @@ public class MainWindow {
 		new SwingWorker<ImageIcon, Void>() {
 			@Override
 			protected ImageIcon doInBackground() throws Exception {
-				Image img = ImageIO.read(new URL(url));
+				Image img = ImageCache.load(url);
 				if (img == null) return null;
 				BufferedImage buf = new BufferedImage(img.getWidth(null), img.getHeight(null), BufferedImage.TYPE_INT_ARGB);
 				buf.getGraphics().drawImage(img, 0, 0, null);
@@ -1475,8 +1595,8 @@ public class MainWindow {
 			slot.setBackground(Color.LIGHT_GRAY);
 			slot.setForeground(Color.DARK_GRAY);
 			slot.setOpaque(true);
-			slot.setPreferredSize(new Dimension(CARD_W, CARD_H));
-			slot.setMinimumSize(new Dimension(CARD_W, CARD_H));
+			slot.setPreferredSize(new Dimension(CARD_H, CARD_H));
+			slot.setMinimumSize(new Dimension(CARD_H, CARD_H));
 			if (labelStorage != null) labelStorage[i] = slot;
 			slotsPanel.add(slot);
 		}

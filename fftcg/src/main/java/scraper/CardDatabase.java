@@ -62,6 +62,7 @@ public class CardDatabase implements AutoCloseable {
             s.execute("CREATE INDEX IF NOT EXISTS idx_cards_rarity  ON cards(rarity)");
 
             // Migration: add columns to existing databases that pre-date this schema change
+            try { s.execute("ALTER TABLE cards ADD COLUMN image_data BLOB"); } catch (SQLException ignored) {}
             try { s.execute("ALTER TABLE cards ADD COLUMN limit_break INTEGER NOT NULL DEFAULT 0"); } catch (SQLException ignored) {}
             try { s.execute("ALTER TABLE cards ADD COLUMN lb_cost INTEGER"); } catch (SQLException ignored) {}
 
@@ -147,7 +148,7 @@ public class CardDatabase implements AutoCloseable {
         }
     }
 
-    /** Stores raw image bytes for a card already in the database. */
+    /** Stores raw image bytes for a card identified by its serial. */
     public void saveImageData(String serial, byte[] imageData) throws SQLException {
         try (PreparedStatement ps = conn.prepareStatement(
                 "UPDATE cards SET image_data = ? WHERE serial = ?")) {
@@ -155,6 +156,35 @@ public class CardDatabase implements AutoCloseable {
             ps.setString(2, serial);
             ps.executeUpdate();
         }
+    }
+
+    /**
+     * Stores raw image bytes for a card identified by its image URL.
+     *
+     * @return the number of rows updated (0 means no card with that image_url exists)
+     */
+    public int saveImageDataByUrl(String imageUrl, byte[] imageData) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "UPDATE cards SET image_data = ? WHERE image_url = ?")) {
+            ps.setBytes(1, imageData);
+            ps.setString(2, imageUrl);
+            return ps.executeUpdate();
+        }
+    }
+
+    /**
+     * Returns the cached image bytes for the given image URL,
+     * or {@code null} if the blob has not yet been stored.
+     */
+    public byte[] getImageData(String imageUrl) throws SQLException {
+        try (PreparedStatement ps = conn.prepareStatement(
+                "SELECT image_data FROM cards WHERE image_url = ?")) {
+            ps.setString(1, imageUrl);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getBytes("image_data");
+            }
+        }
+        return null;
     }
 
     // -------------------------------------------------------------------------

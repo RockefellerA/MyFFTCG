@@ -12,7 +12,6 @@ import java.awt.datatransfer.StringSelection;
 import java.awt.event.*;
 import java.util.HashSet;
 import java.util.Set;
-import java.net.URL;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -21,7 +20,6 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 
-import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.table.*;
 import java.awt.Toolkit;
@@ -833,7 +831,7 @@ public class DeckManager extends JDialog {
                         if (rs.next()) {
                             fetchedUrl = rs.getString("image_url");
                             if (fetchedUrl != null && !fetchedUrl.isBlank()) {
-                                Image img = ImageIO.read(new URL(fetchedUrl));
+                                Image img = ImageCache.load(fetchedUrl);
                                 if (img != null)
                                     return new ImageIcon(img.getScaledInstance(220, 309, Image.SCALE_SMOOTH));
                             }
@@ -874,7 +872,7 @@ public class DeckManager extends JDialog {
         new SwingWorker<ImageIcon, Void>() {
             @Override
             protected ImageIcon doInBackground() throws Exception {
-                Image img = ImageIO.read(new URL(urlToFetch));
+                Image img = ImageCache.load(urlToFetch);
                 return img != null ? new ImageIcon(img) : null;
             }
             @Override
