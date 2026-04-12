@@ -86,14 +86,12 @@ public class MainWindow {
 	// Removed from Play confirmation popup
 	private JWindow removeConfirmPopup;
 
-	// --- P1 game state ---
-	private Deque<String> p1MainDeck  = new ArrayDeque<>();  // imageUrls
-	private List<String>  p1LbDeck    = new ArrayList<>();   // imageUrls
-	private List<String>  p1Hand      = new ArrayList<>();   // imageUrls
-	private int           p1LbIndex   = 0;
-	private int           p1HandIndex = 0;
-	private boolean       p1TopFaceUp = false;               // is top main-deck card revealed?
-	private boolean       p1OpeningHandPending = false;
+	// --- Game state ---
+	private final GameState gameState   = new GameState();
+	// UI-only state (not owned by GameState)
+	private int             p1LbIndex   = 0;
+	private int             p1HandIndex = 0;
+	private boolean         p1TopFaceUp = false;  // is top main-deck card revealed?
 
 	public static void main(String[] args) {
 		EventQueue.invokeLater(new Runnable() {
@@ -366,7 +364,7 @@ public class MainWindow {
 			}
 			@Override
 			public void mouseEntered(MouseEvent e) {
-				if (p1TopFaceUp && !p1MainDeck.isEmpty()) showDeckZoom(p1MainDeck.peek());
+				if (p1TopFaceUp && !gameState.getP1MainDeck().isEmpty()) showDeckZoom(gameState.getP1MainDeck().peek());
 			}
 			@Override
 			public void mouseExited(MouseEvent e) {
@@ -514,13 +512,10 @@ public class MainWindow {
 	// -------------------------------------------------------------------------
 
 	private void startGame(int deckId) {
-		p1MainDeck.clear();
-		p1LbDeck.clear();
-		p1Hand.clear();
+		gameState.reset();
 		p1LbIndex   = 0;
 		p1HandIndex = 0;
 		p1TopFaceUp = false;
-		p1OpeningHandPending = false;
 		refreshP1HandLabel();
 
 		new SwingWorker<Void, Void>() {
@@ -545,14 +540,12 @@ public class MainWindow {
 				}
 
 				List<String> main = new ArrayList<>();
+				List<String> lb   = new ArrayList<>();
 				for (DeckCardDetail card : cards) {
-					if (card.isLb()) p1LbDeck.add(card.imageUrl());
+					if (card.isLb()) lb.add(card.imageUrl());
 					else             main.add(card.imageUrl());
 				}
-				Collections.shuffle(main);
-				p1MainDeck.addAll(main);
-
-				p1OpeningHandPending = true;
+				gameState.initializeDeck(main, lb);
 				refreshP1DeckLabel();
 				refreshP1LimitLabel();
 			}
@@ -564,9 +557,9 @@ public class MainWindow {
 	// -------------------------------------------------------------------------
 
 	private void onP1DeckClicked() {
-		if (p1MainDeck.isEmpty()) return;
+		if (gameState.getP1MainDeck().isEmpty()) return;
 
-		if (p1OpeningHandPending) {
+		if (gameState.isP1OpeningHandPending()) {
 			showOpeningHandConfirm();
 			return;
 		}
@@ -574,12 +567,12 @@ public class MainWindow {
 		if (!p1TopFaceUp) {
 			// Reveal top card
 			p1TopFaceUp = true;
-			String url = p1MainDeck.peek();
+			String url = gameState.getP1MainDeck().peek();
 			loadDeckLabelAsync(p1DeckLabel, url);
 		} else {
 			// Put top card on bottom, show cardback again
-			String top = p1MainDeck.poll();
-			p1MainDeck.addLast(top);
+			String top = gameState.getP1MainDeck().poll();
+			gameState.getP1MainDeck().addLast(top);
 			p1TopFaceUp = false;
 			p1DeckLabel.setIcon(scaledCardback(new Dimension(CARD_W, CARD_H)));
 		}
@@ -594,7 +587,6 @@ public class MainWindow {
 		yesBtn.addActionListener(e -> {
 			openingHandPopup.dispose();
 			openingHandPopup = null;
-			p1OpeningHandPending = false;
 			drawOpeningHand();
 		});
 
@@ -619,26 +611,172 @@ public class MainWindow {
 	}
 
 	private void drawOpeningHand() {
-		for (int i = 0; i < 5 && !p1MainDeck.isEmpty(); i++) {
-			p1Hand.add(p1MainDeck.poll());
-		}
-		p1HandIndex = 0;
+		List<String> drawn = gameState.drawOpeningHand();
 		refreshP1DeckLabel();
-		refreshP1HandLabel();
+		showOpeningHandPopup(drawn, !gameState.isP1MulliganUsed());
+	}
+
+	/**
+	 * Shows the opening hand popup.
+	 *
+	 * @param cards            the 5 cards to display (image URLs)
+	 * @param mulliganAvailable whether the Mulligan button should be enabled
+	 */
+	private void showOpeningHandPopup(List<String> cards, boolean mulliganAvailable) {
+		if (openingHandPopup != null) openingHandPopup.dispose();
+		openingHandPopup = new JWindow(frame);
+
+		// Mutable display order — swapped in-place when player reorders
+		List<String> handOrder = new ArrayList<>(cards);
+
+		// ── Card labels ──────────────────────────────────────────────────────
+		@SuppressWarnings("unchecked")
+		JLabel[] cardLabels = new JLabel[handOrder.size()];
+		int[] selectedIdx = { -1 };  // -1 = nothing selected
+
+		JPanel cardsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 8));
+
+		for (int i = 0; i < handOrder.size(); i++) {
+			final int idx = i;
+			JLabel lbl = new JLabel("Loading...", SwingConstants.CENTER);
+			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
+			lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+			lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 2));
+			lbl.setOpaque(true);
+			lbl.setBackground(Color.DARK_GRAY);
+			lbl.setForeground(Color.WHITE);
+			lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+			lbl.setHorizontalAlignment(SwingConstants.CENTER);
+
+			lbl.addMouseListener(new MouseAdapter() {
+				@Override
+				public void mousePressed(MouseEvent e) {
+					if (selectedIdx[0] == -1) {
+						// Select this card
+						selectedIdx[0] = idx;
+						cardLabels[idx].setBorder(BorderFactory.createLineBorder(Color.YELLOW, 3));
+					} else if (selectedIdx[0] == idx) {
+						// Deselect
+						selectedIdx[0] = -1;
+						cardLabels[idx].setBorder(BorderFactory.createLineBorder(Color.GRAY, 2));
+					} else {
+						// Swap the two cards
+						int other = selectedIdx[0];
+
+						String tmpUrl = handOrder.get(idx);
+						handOrder.set(idx, handOrder.get(other));
+						handOrder.set(other, tmpUrl);
+
+						javax.swing.Icon tmpIcon = cardLabels[idx].getIcon();
+						String tmpText = cardLabels[idx].getText();
+						cardLabels[idx].setIcon(cardLabels[other].getIcon());
+						cardLabels[idx].setText(cardLabels[other].getText());
+						cardLabels[other].setIcon(tmpIcon);
+						cardLabels[other].setText(tmpText);
+
+						cardLabels[idx].setBorder(BorderFactory.createLineBorder(Color.GRAY, 2));
+						cardLabels[other].setBorder(BorderFactory.createLineBorder(Color.GRAY, 2));
+						selectedIdx[0] = -1;
+					}
+				}
+			});
+
+			cardLabels[i] = lbl;
+			cardsPanel.add(lbl);
+		}
+
+		// Load card images asynchronously
+		for (int i = 0; i < handOrder.size(); i++) {
+			final int idx = i;
+			final String url = handOrder.get(i);
+			new SwingWorker<ImageIcon, Void>() {
+				@Override protected ImageIcon doInBackground() throws Exception {
+					Image img = ImageIO.read(new URL(url));
+					return img == null ? null
+							: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+				}
+				@Override protected void done() {
+					try {
+						ImageIcon icon = get();
+						if (icon != null) { cardLabels[idx].setIcon(icon); cardLabels[idx].setText(null); }
+					} catch (InterruptedException | ExecutionException ignored) {}
+				}
+			}.execute();
+		}
+
+		// ── Instructions label ───────────────────────────────────────────────
+		JLabel instructions = new JLabel(
+				"Click a card to select it, then click another to swap positions.",
+				SwingConstants.CENTER);
+		instructions.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+
+		// ── Buttons ──────────────────────────────────────────────────────────
+		JButton keepBtn = new JButton("Keep Hand");
+		keepBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		keepBtn.addActionListener(e -> {
+			openingHandPopup.dispose();
+			openingHandPopup = null;
+			gameState.keepHand(handOrder);
+			p1HandIndex = 0;
+			refreshP1HandLabel();
+		});
+
+		JButton mulliganBtn = new JButton("Mulligan");
+		mulliganBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		mulliganBtn.setEnabled(mulliganAvailable);
+		mulliganBtn.setToolTipText(mulliganAvailable
+				? "Put these cards on the bottom (in this order) and draw 5 new cards"
+				: "Mulligan already used");
+		mulliganBtn.addActionListener(e -> {
+			// handOrder is the player's chosen bottom-of-deck order
+			List<String> newCards = gameState.mulligan(new ArrayList<>(handOrder));
+			refreshP1DeckLabel();
+			showOpeningHandPopup(newCards, false);
+		});
+
+		JPanel buttonsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
+		buttonsPanel.add(keepBtn);
+		buttonsPanel.add(mulliganBtn);
+
+		// ── Assemble ─────────────────────────────────────────────────────────
+		JLabel titleLabel = new JLabel("Opening Hand", SwingConstants.CENTER);
+		titleLabel.setFont(new Font("Pixel NES", Font.PLAIN, 14));
+
+		JPanel bottomPanel = new JPanel(new BorderLayout(0, 2));
+		bottomPanel.add(instructions, BorderLayout.NORTH);
+		bottomPanel.add(buttonsPanel,  BorderLayout.SOUTH);
+
+		JPanel mainPanel = new JPanel(new BorderLayout(0, 6));
+		mainPanel.setBorder(BorderFactory.createCompoundBorder(
+				BorderFactory.createRaisedBevelBorder(),
+				BorderFactory.createEmptyBorder(8, 8, 8, 8)));
+		mainPanel.add(titleLabel,  BorderLayout.NORTH);
+		mainPanel.add(cardsPanel,  BorderLayout.CENTER);
+		mainPanel.add(bottomPanel, BorderLayout.SOUTH);
+
+		openingHandPopup.getContentPane().add(mainPanel);
+		openingHandPopup.pack();
+
+		// Centre on screen
+		Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+		openingHandPopup.setLocation(
+				(screen.width  - openingHandPopup.getWidth())  / 2,
+				(screen.height - openingHandPopup.getHeight()) / 2);
+		openingHandPopup.setVisible(true);
 	}
 
 	private void refreshP1HandLabel() {
-		if (p1Hand.isEmpty()) {
+		if (gameState.getP1Hand().isEmpty()) {
 			p1HandLabel.setIcon(null);
 			p1HandLabel.setText("HAND");
 			return;
 		}
-		loadHandLabelAsync(p1Hand.get(p1HandIndex % p1Hand.size()));
+		loadHandLabelAsync(gameState.getP1Hand().get(p1HandIndex % gameState.getP1Hand().size()));
 	}
 
 	private void onP1HandClicked() {
-		if (p1Hand.isEmpty()) return;
-		p1HandIndex = (p1HandIndex + 1) % p1Hand.size();
+		if (gameState.getP1Hand().isEmpty()) return;
+		p1HandIndex = (p1HandIndex + 1) % gameState.getP1Hand().size();
 		refreshP1HandLabel();
 	}
 
@@ -662,8 +800,8 @@ public class MainWindow {
 
 	private void refreshP1DeckLabel() {
 		p1TopFaceUp = false;
-		p1DeckLabel.setIcon(p1MainDeck.isEmpty() ? null : scaledCardback(new Dimension(CARD_W, CARD_H)));
-		p1DeckLabel.setText(p1MainDeck.isEmpty() ? "EMPTY" : null);
+		p1DeckLabel.setIcon(gameState.getP1MainDeck().isEmpty() ? null : scaledCardback(new Dimension(CARD_W, CARD_H)));
+		p1DeckLabel.setText(gameState.getP1MainDeck().isEmpty() ? "EMPTY" : null);
 	}
 
 	// -------------------------------------------------------------------------
@@ -671,22 +809,22 @@ public class MainWindow {
 	// -------------------------------------------------------------------------
 
 	private void onP1LbClicked() {
-		if (p1LbDeck.isEmpty()) return;
+		if (gameState.getP1LbDeck().isEmpty()) return;
 		// Rotate: current card goes to bottom, advance index
-		String current = p1LbDeck.remove(p1LbIndex % p1LbDeck.size());
-		p1LbDeck.add(current); // add to end
-		p1LbIndex = 0;         // new top is index 0 after rotation
+		String current = gameState.getP1LbDeck().remove(p1LbIndex % gameState.getP1LbDeck().size());
+		gameState.getP1LbDeck().add(current); // add to end
+		p1LbIndex = 0;                        // new top is index 0 after rotation
 		refreshP1LimitLabel();
 	}
 
 	private void refreshP1LimitLabel() {
-		if (p1LbDeck.isEmpty()) {
+		if (gameState.getP1LbDeck().isEmpty()) {
 			p1LimitLabel.setIcon(null);
 			p1LimitLabel.setFont(new Font("Pixel NES", Font.PLAIN, 18));
 			p1LimitLabel.setText("LIMIT");
 			return;
 		}
-		String url = p1LbDeck.get(0);
+		String url = gameState.getP1LbDeck().get(0);
 		loadLbLabelAsync(url);
 	}
 
@@ -744,7 +882,7 @@ public class MainWindow {
 	}
 
 	private void showLbZoom() {
-		if (!p1LbDeck.isEmpty()) showZoomAt(p1LbDeck.get(0), p1LimitLabel);
+		if (!gameState.getP1LbDeck().isEmpty()) showZoomAt(gameState.getP1LbDeck().get(0), p1LimitLabel);
 	}
 
 	private void showZoomAt(String url, JLabel anchor) {
@@ -821,8 +959,8 @@ public class MainWindow {
 	}
 
 	private void doAddRandomCardToRemoved(GrayscaleLabel removeLabel) {
-		List<String> pool = new ArrayList<>(p1MainDeck);
-		pool.addAll(p1Hand);
+		List<String> pool = new ArrayList<>(gameState.getP1MainDeck());
+		pool.addAll(gameState.getP1Hand());
 		if (pool.isEmpty()) return;
 		String url = pool.get((int) (Math.random() * pool.size()));
 		new SwingWorker<ImageIcon, Void>() {
