@@ -4,7 +4,9 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Holds all mutable game state for an in-progress FFTCG match.
@@ -13,11 +15,11 @@ import java.util.List;
 public class GameState {
 
     // --- P1 ---
-    private final Deque<String> p1MainDeck  = new ArrayDeque<>();
-    private final List<String>  p1LbDeck    = new ArrayList<>();
-    private final List<String>  p1Hand      = new ArrayList<>();
-    private final List<String>  p1BreakZone = new ArrayList<>();
-    private int     p1Cp                  = 0;
+    private final Deque<CardData>          p1MainDeck  = new ArrayDeque<>();
+    private final List<CardData>           p1LbDeck    = new ArrayList<>();
+    private final List<CardData>           p1Hand      = new ArrayList<>();
+    private final List<CardData>           p1BreakZone = new ArrayList<>();
+    private final Map<String, Integer>     p1CpByElement = new HashMap<>();
     private boolean p1OpeningHandPending  = false;
     private boolean p1MulliganUsed        = false;
 
@@ -31,20 +33,20 @@ public class GameState {
         p1LbDeck.clear();
         p1Hand.clear();
         p1BreakZone.clear();
-        p1Cp                 = 0;
+        p1CpByElement.clear();
         p1OpeningHandPending = false;
         p1MulliganUsed       = false;
     }
 
     /**
-     * Populates decks from lists of image URLs (already separated into main / LB).
+     * Populates decks from lists of CardData (already separated into main / LB).
      * Shuffles the main deck before loading it.
      */
-    public void initializeDeck(List<String> mainUrls, List<String> lbUrls) {
-        List<String> shuffled = new ArrayList<>(mainUrls);
+    public void initializeDeck(List<CardData> mainCards, List<CardData> lbCards) {
+        List<CardData> shuffled = new ArrayList<>(mainCards);
         Collections.shuffle(shuffled);
         p1MainDeck.addAll(shuffled);
-        p1LbDeck.addAll(lbUrls);
+        p1LbDeck.addAll(lbCards);
         p1OpeningHandPending = true;
     }
 
@@ -57,8 +59,8 @@ public class GameState {
      *
      * @return the drawn cards in draw order (index 0 = first card drawn)
      */
-    public List<String> drawOpeningHand() {
-        List<String> drawn = new ArrayList<>();
+    public List<CardData> drawOpeningHand() {
+        List<CardData> drawn = new ArrayList<>();
         for (int i = 0; i < 5 && !p1MainDeck.isEmpty(); i++) {
             drawn.add(p1MainDeck.poll());
         }
@@ -73,9 +75,9 @@ public class GameState {
      *                    them placed on the bottom (index 0 goes first / deepest)
      * @return the newly drawn 5 cards
      */
-    public List<String> mulligan(List<String> bottomOrder) {
-        for (String url : bottomOrder) {
-            p1MainDeck.addLast(url);
+    public List<CardData> mulligan(List<CardData> bottomOrder) {
+        for (CardData card : bottomOrder) {
+            p1MainDeck.addLast(card);
         }
         p1MulliganUsed = true;
         return drawOpeningHand();
@@ -87,7 +89,7 @@ public class GameState {
      *
      * @param cards the cards in the order they were kept
      */
-    public void keepHand(List<String> cards) {
+    public void keepHand(List<CardData> cards) {
         p1Hand.addAll(cards);
         p1OpeningHandPending = false;
     }
@@ -97,34 +99,66 @@ public class GameState {
     // -------------------------------------------------------------------------
 
     /**
-     * Discards a card from the player's hand to the Break Zone and awards 1 CP.
+     * Discards a card from the player's hand to the Break Zone and awards 2 CP
+     * of the card's element.  Light and Dark cards cannot be discarded for CP
+     * (they are still moved to the Break Zone but grant 0 CP).
      *
      * @param idx index into p1Hand
-     * @return the image URL of the discarded card, or {@code null} if idx is invalid
+     * @return the discarded CardData, or {@code null} if idx is invalid
      */
-    public String discardFromHand(int idx) {
+    public CardData discardFromHand(int idx) {
         if (idx < 0 || idx >= p1Hand.size()) return null;
-        String url = p1Hand.remove(idx);
-        p1BreakZone.add(url);
-        p1Cp++;
-        return url;
+        CardData card = p1Hand.remove(idx);
+        p1BreakZone.add(card);
+        if (!card.isLightOrDark()) {
+            addP1Cp(card.element(), 2);
+        }
+        return card;
+    }
+
+    /**
+     * Removes a card from the player's hand without sending it to the Break Zone
+     * and without granting CP.  Used when playing a card (the card goes to a zone
+     * via separate logic).
+     *
+     * @param idx index into p1Hand
+     * @return the removed CardData, or {@code null} if idx is invalid
+     */
+    public CardData removeFromHand(int idx) {
+        if (idx < 0 || idx >= p1Hand.size()) return null;
+        return p1Hand.remove(idx);
     }
 
     // -------------------------------------------------------------------------
     // Crystal Points
     // -------------------------------------------------------------------------
 
-    public int  getP1Cp()            { return p1Cp; }
-    public void addP1Cp(int amount)  { p1Cp += amount; }
+    /**
+     * Returns the current CP for the given element (0 if never accumulated).
+     */
+    public int getP1CpForElement(String element) {
+        return p1CpByElement.getOrDefault(element, 0);
+    }
+
+    /** Returns an unmodifiable view of all CP buckets. */
+    public Map<String, Integer> getP1CpByElement() {
+        return Collections.unmodifiableMap(p1CpByElement);
+    }
+
+    /** Adds {@code amount} CP to the given element bucket. */
+    public void addP1Cp(String element, int amount) {
+        p1CpByElement.merge(element, amount, Integer::sum);
+    }
 
     /**
-     * Spends the given amount of CP if available.
+     * Spends {@code amount} CP from the given element bucket if available.
      *
      * @return {@code true} if the spend succeeded, {@code false} if insufficient CP
      */
-    public boolean spendP1Cp(int amount) {
-        if (p1Cp < amount) return false;
-        p1Cp -= amount;
+    public boolean spendP1Cp(String element, int amount) {
+        int current = getP1CpForElement(element);
+        if (current < amount) return false;
+        p1CpByElement.put(element, current - amount);
         return true;
     }
 
@@ -132,10 +166,10 @@ public class GameState {
     // Accessors
     // -------------------------------------------------------------------------
 
-    public Deque<String> getP1MainDeck()          { return p1MainDeck; }
-    public List<String>  getP1LbDeck()            { return p1LbDeck; }
-    public List<String>  getP1Hand()              { return p1Hand; }
-    public List<String>  getP1BreakZone()         { return p1BreakZone; }
-    public boolean       isP1OpeningHandPending() { return p1OpeningHandPending; }
-    public boolean       isP1MulliganUsed()       { return p1MulliganUsed; }
+    public Deque<CardData> getP1MainDeck()          { return p1MainDeck; }
+    public List<CardData>  getP1LbDeck()            { return p1LbDeck; }
+    public List<CardData>  getP1Hand()              { return p1Hand; }
+    public List<CardData>  getP1BreakZone()         { return p1BreakZone; }
+    public boolean         isP1OpeningHandPending() { return p1OpeningHandPending; }
+    public boolean         isP1MulliganUsed()       { return p1MulliganUsed; }
 }

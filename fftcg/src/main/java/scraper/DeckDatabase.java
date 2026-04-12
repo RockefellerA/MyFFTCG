@@ -155,12 +155,12 @@ public class DeckDatabase implements AutoCloseable {
 
     /**
      * Returns every copy of every card in the deck (count expanded to individual entries).
-     * Includes imageUrl and isLb — everything needed to populate a game zone.
+     * Includes all fields needed to construct a {@link fftcg.CardData} for game state.
      */
     public List<DeckCardDetail> getDeckCardsDetailed(int deckId) throws SQLException {
         List<DeckCardDetail> result = new ArrayList<>();
         String sql = """
-            SELECT dc.count, c.image_url, c.limit_break
+            SELECT dc.count, c.image_url, c.name_en, c.element, c.cost, c.type_en, c.limit_break
             FROM deck_cards dc
             LEFT JOIN cards c ON dc.serial = c.serial
             WHERE dc.deck_id = ?
@@ -170,11 +170,15 @@ public class DeckDatabase implements AutoCloseable {
             ps.setInt(1, deckId);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
-                    String imageUrl = rs.getString("image_url");
-                    boolean isLb    = rs.getInt("limit_break") == 1;
-                    int count       = rs.getInt("count");
+                    String  imageUrl = rs.getString("image_url");
+                    String  name     = rs.getString("name_en");
+                    String  element  = rs.getString("element");
+                    int     cost     = rs.getInt("cost");
+                    String  type     = rs.getString("type_en");
+                    boolean isLb     = rs.getInt("limit_break") == 1;
+                    int     count    = rs.getInt("count");
                     for (int i = 0; i < count; i++)
-                        result.add(new DeckCardDetail(imageUrl, isLb));
+                        result.add(new DeckCardDetail(imageUrl, name, element, cost, type, isLb));
                 }
             }
         }
@@ -335,7 +339,7 @@ public class DeckDatabase implements AutoCloseable {
     }
 
     /** A single expanded card entry from a deck — one instance per copy. */
-    public record DeckCardDetail(String imageUrl, boolean isLb) {}
+    public record DeckCardDetail(String imageUrl, String name, String element, int cost, String type, boolean isLb) {}
 
     /** Deck with separate main and LB card counts, used for deck selection. */
     public record DeckSummary(int id, String name, int mainCardCount, int lbCardCount) {
