@@ -49,29 +49,17 @@ public final class ImageCache {
         if (url == null) return null;
 
         byte[] bytes = mem.get(url);
-        if (bytes != null) {
-            System.out.println("[ImageCache] MEM hit: " + url);
-        }
 
         if (bytes == null) {
             bytes = fetchFromDb(url);
-            if (bytes != null) {
-                System.out.println("[ImageCache] DB hit: " + url);
-                mem.putIfAbsent(url, bytes);
-            } else {
-                System.out.println("[ImageCache] DB miss: " + url);
-            }
+            if (bytes != null) mem.putIfAbsent(url, bytes);
         }
 
         if (bytes == null) {
-            System.out.println("[ImageCache] Fetching from network: " + url);
             bytes = fetchFromNetwork(url);
             if (bytes != null) {
-                System.out.println("[ImageCache] Network OK (" + bytes.length + " bytes), persisting...");
                 mem.putIfAbsent(url, bytes);
                 persistToDb(url, bytes);
-            } else {
-                System.out.println("[ImageCache] Network returned null for: " + url);
             }
         }
 

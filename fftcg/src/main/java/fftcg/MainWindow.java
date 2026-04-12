@@ -715,6 +715,14 @@ public class MainWindow {
 						selectedIdx[0] = -1;
 					}
 				}
+				@Override
+				public void mouseEntered(MouseEvent e) {
+					showZoomAt(handOrder.get(idx).imageUrl(), lbl);
+				}
+				@Override
+				public void mouseExited(MouseEvent e) {
+					hideZoom();
+				}
 			});
 
 			cardLabels[i] = lbl;
@@ -750,11 +758,16 @@ public class MainWindow {
 		JButton keepBtn = new JButton("Keep Hand");
 		keepBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
 		keepBtn.addActionListener(e -> {
+			hideZoom();
 			openingHandPopup.dispose();
 			openingHandPopup = null;
 			gameState.keepHand(handOrder);
+			// Player 1 goes first: draw 1 card at the start of their first Active phase
+			// (subsequent turns draw 2; Player 2 also draws 2 on their first turn)
+			gameState.drawToHand(1);
 			p1HandIndex = 0;
 			refreshP1HandLabel();
+			refreshP1DeckLabel();
 		});
 
 		JButton mulliganBtn = new JButton("Mulligan");
@@ -764,6 +777,7 @@ public class MainWindow {
 				? "Put these cards on the bottom (in this order) and draw 5 new cards"
 				: "Mulligan already used");
 		mulliganBtn.addActionListener(e -> {
+			hideZoom();
 			// handOrder is the player's chosen bottom-of-deck order
 			List<CardData> newCards = gameState.mulligan(new ArrayList<>(handOrder));
 			refreshP1DeckLabel();

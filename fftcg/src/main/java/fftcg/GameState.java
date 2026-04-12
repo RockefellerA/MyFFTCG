@@ -95,6 +95,25 @@ public class GameState {
     }
 
     // -------------------------------------------------------------------------
+    // Draw
+    // -------------------------------------------------------------------------
+
+    /**
+     * Draws {@code count} cards from the top of the main deck into the hand.
+     *
+     * @return the cards actually drawn (may be fewer than {@code count} if the deck runs out)
+     */
+    public List<CardData> drawToHand(int count) {
+        List<CardData> drawn = new ArrayList<>();
+        for (int i = 0; i < count && !p1MainDeck.isEmpty(); i++) {
+            CardData card = p1MainDeck.poll();
+            p1Hand.add(card);
+            drawn.add(card);
+        }
+        return drawn;
+    }
+
+    // -------------------------------------------------------------------------
     // Hand actions
     // -------------------------------------------------------------------------
 
