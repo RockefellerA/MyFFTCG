@@ -1,28 +1,67 @@
 package fftcg;
 
-import scraper.DeckDatabase;
-import scraper.DeckDatabase.DeckEntry;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.GridBagLayout;
+import java.awt.GridLayout;
+import java.awt.Image;
+import java.awt.Point;
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
+import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.regex.Pattern;
+
+import javax.swing.BorderFactory;
+import javax.swing.DefaultListModel;
+import javax.swing.ImageIcon;
+import javax.swing.JButton;
+import javax.swing.JComboBox;
+import javax.swing.JComponent;
+import javax.swing.JDialog;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
+import javax.swing.JTable;
+import javax.swing.JTextArea;
+import javax.swing.JTextField;
+import javax.swing.JWindow;
+import javax.swing.KeyStroke;
+import javax.swing.ListSelectionModel;
+import javax.swing.RowFilter;
+import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableCellRenderer;
+import javax.swing.table.TableRowSorter;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.awt.*;
-import java.awt.datatransfer.StringSelection;
-import java.awt.event.*;
-import java.util.HashSet;
-import java.util.Set;
-import java.sql.DriverManager;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.regex.Pattern;
-
-import javax.swing.*;
-import javax.swing.table.*;
-import java.awt.Toolkit;
+import scraper.DeckDatabase;
+import scraper.DeckDatabase.DeckEntry;
 
 public class DeckManager extends JDialog {
 
@@ -737,6 +776,20 @@ public class DeckManager extends JDialog {
                 total += (Integer) deckModel.getValueAt(i, 7);
         }
         return total;
+    }
+
+    // -------------------------------------------------------------------------
+    // Deck Format Legality
+    // -------------------------------------------------------------------------
+
+    private void setFormatLegality() {
+        // Determine what format legalities the current deck satisfies
+        // Standard Constructed: As long as no Standard banned cards are present and it has 50/50 main cards, it's SC legal.
+        // L3 Constructed: No L3 banned cards, 50/50 main cards, only includes latest 3 sets and PR promos.
+        // L6 Constructed: No L6 banned cards, 50/50 main cards, only includes latest 6 sets and PR promos.
+        // Limited: Booster draft, not supported by MyFFTCG.
+        // Title: Choose a category (e.g. FFVII), must have 30/50 cards from that category.  Primary category cannot be Special/Anniversary/FFRK/MQ.
+        //        Can use up to 3 of any Special card or 3 of any Standard Unit backup. LB cards are NOT allowed.
     }
 
     // -------------------------------------------------------------------------
