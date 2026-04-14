@@ -1438,6 +1438,7 @@ public class MainWindow {
 			if (di < cardHandIdx) cardHandIdx--;
 		}
 		gameState.spendP1Cp(card.element(), card.cost());
+		gameState.clearP1Cp(card.element());
 		gameState.removeFromHand(cardHandIdx);
 
 		if (card.isBackup()) {

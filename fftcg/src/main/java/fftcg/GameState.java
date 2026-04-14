@@ -181,6 +181,11 @@ public class GameState {
         return true;
     }
 
+    /** Zeroes the CP bucket for the given element. */
+    public void clearP1Cp(String element) {
+        p1CpByElement.put(element, 0);
+    }
+
     // -------------------------------------------------------------------------
     // Accessors
     // -------------------------------------------------------------------------
