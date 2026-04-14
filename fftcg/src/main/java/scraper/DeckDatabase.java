@@ -311,6 +311,34 @@ public class DeckDatabase implements AutoCloseable {
         return result;
     }
 
+    /**
+     * Returns serial, category_1, category_2, and count for all cards in the deck.
+     * Used for format legality checks (Title format).
+     */
+    public List<Object[]> getDeckCardsWithCategories(int deckId) throws SQLException {
+        List<Object[]> result = new ArrayList<>();
+        String sql = """
+            SELECT dc.serial, c.category_1, c.category_2, dc.count
+            FROM deck_cards dc
+            LEFT JOIN cards c ON dc.serial = c.serial
+            WHERE dc.deck_id = ?
+            """;
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, deckId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    result.add(new Object[]{
+                        rs.getString("serial"),
+                        rs.getString("category_1"),
+                        rs.getString("category_2"),
+                        rs.getInt("count")
+                    });
+                }
+            }
+        }
+        return result;
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------

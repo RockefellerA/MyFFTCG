@@ -21,8 +21,10 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
@@ -94,6 +96,15 @@ public class DeckManager extends JDialog {
     private static final Color LB_BG = new Color(50, 50, 50);
     private static final Color LB_FG = new Color(0xFF, 0xD7, 0x00);
 
+    private static final Color FORMAT_INACTIVE = new Color(0x60, 0x60, 0x60);
+    private static final Color FORMAT_S_COLOR  = new Color(0x15, 0x65, 0xC0);
+    private static final Color FORMAT_L3_COLOR = new Color(0xE6, 0x51, 0x00);
+    private static final Color FORMAT_L6_COLOR = new Color(0x2E, 0x7D, 0x32);
+    private static final Color FORMAT_T_COLOR  = new Color(0x6A, 0x1B, 0x9A);
+
+    private static final Set<String> TITLE_EXCLUDED_CATEGORIES =
+            Set.of("Special", "Anniversary", "FFRK", "MQ");
+
     /** Sorts serials numerically on the set prefix (e.g. "9-001C" before "10-001H"). */
     private static final java.util.Comparator<Object> SERIAL_ORDER = (a, b) -> {
         String sa = a == null ? "" : a.toString();
@@ -117,6 +128,9 @@ public class DeckManager extends JDialog {
     private Set<String> lbSerials = new HashSet<>();
     private JWindow zoomPopup;
     private String currentImageUrl;
+
+    // Format legality labels
+    private JLabel formatS, formatL3, formatL6, formatT;
 
     public DeckManager(JFrame parent) {
         super(parent, "Deck Manager", true);
@@ -401,9 +415,25 @@ public class DeckManager extends JDialog {
             }
         });
 
-        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
-        btnPanel.add(removeBtn);
-        btnPanel.add(removeAllBtn);
+        formatS  = makeFormatLabel("S",  "Standard Constructed");
+        formatL3 = makeFormatLabel("L3", "L3 Constructed");
+        formatL6 = makeFormatLabel("L6", "L6 Constructed");
+        formatT  = makeFormatLabel("T",  "Title");
+
+        JPanel removePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 4));
+        removePanel.add(removeBtn);
+        removePanel.add(removeAllBtn);
+
+        JPanel formatPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 4));
+        formatPanel.add(new JLabel("Formats:"));
+        formatPanel.add(formatS);
+        formatPanel.add(formatL3);
+        formatPanel.add(formatL6);
+        formatPanel.add(formatT);
+
+        JPanel btnPanel = new JPanel(new BorderLayout());
+        btnPanel.add(removePanel, BorderLayout.WEST);
+        btnPanel.add(formatPanel, BorderLayout.EAST);
 
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(BorderFactory.createTitledBorder("Deck Contents"));
@@ -532,6 +562,7 @@ public class DeckManager extends JDialog {
                     "Database Error", JOptionPane.ERROR_MESSAGE);
         }
         refreshAddMaxBtn();
+        refreshFormatLegality();
     }
 
     private void updateCountLabel(int mainTotal, int lbTotal) {
@@ -599,6 +630,7 @@ public class DeckManager extends JDialog {
             selectedDeckId = -1;
             deckModel.setRowCount(0);
             countLabel.setText(formatCountLabel(0, 0));
+            refreshFormatLegality();
             loadDeckList();
         } catch (SQLException e) {
             JOptionPane.showMessageDialog(this, "Error deleting deck:\n" + e.getMessage(),
@@ -782,14 +814,107 @@ public class DeckManager extends JDialog {
     // Deck Format Legality
     // -------------------------------------------------------------------------
 
-    private void setFormatLegality() {
-        // Determine what format legalities the current deck satisfies
-        // Standard Constructed: As long as no Standard banned cards are present and it has 50/50 main cards, it's SC legal.
-        // L3 Constructed: No L3 banned cards, 50/50 main cards, only includes latest 3 sets and PR promos.
-        // L6 Constructed: No L6 banned cards, 50/50 main cards, only includes latest 6 sets and PR promos.
-        // Limited: Booster draft, not supported by MyFFTCG.
-        // Title: Choose a category (e.g. FFVII), must have 30/50 cards from that category.  Primary category cannot be Special/Anniversary/FFRK/MQ.
-        //        Can use up to 3 of any Special card or 3 of any Standard Unit backup. LB cards are NOT allowed.
+    private void applyFormatState(JLabel lbl, boolean legal, Color activeColor) {
+        lbl.setForeground(legal ? activeColor : FORMAT_INACTIVE);
+        lbl.setFont(lbl.getFont().deriveFont(legal ? Font.BOLD : Font.PLAIN));
+    }
+
+    private JLabel makeFormatLabel(String text, String tooltip) {
+        JLabel lbl = new JLabel(text);
+        lbl.setToolTipText(tooltip);
+        lbl.setForeground(FORMAT_INACTIVE);
+        return lbl;
+    }
+
+    private void refreshFormatLegality() {
+        if (formatS == null) return;
+
+        int mainTotal = getMainDeckTotal();
+
+        // Standard: exactly 50 main deck cards
+        boolean legalS = (mainTotal == MAX_DECK_SIZE);
+
+        // Find the highest numeric set prefix across the entire card pool
+        int maxPrefix = computeMaxGlobalSetPrefix();
+
+        // L3 / L6: all non-LB deck cards must be from the latest N sets or PR-
+        boolean legalL3 = legalS && isLimitedSetLegal(3, maxPrefix);
+        boolean legalL6 = legalS && isLimitedSetLegal(6, maxPrefix);
+
+        // Title: no LB cards, 50 main cards, 30+ from one non-excluded category
+        boolean legalT = checkTitleLegal();
+
+        applyFormatState(formatS,   legalS,  FORMAT_S_COLOR);
+        applyFormatState(formatL3,  legalL3, FORMAT_L3_COLOR);
+        applyFormatState(formatL6,  legalL6, FORMAT_L6_COLOR);
+        applyFormatState(formatT,   legalT,  FORMAT_T_COLOR);
+    }
+
+    /** Extracts the numeric set prefix from a serial (e.g. "28-001C" → 28). Returns 0 for non-numeric prefixes (PR-, B-, etc.). */
+    private static int getSetPrefix(String serial) {
+        if (serial == null) return 0;
+        int dash = serial.indexOf('-');
+        if (dash <= 0) return 0;
+        try {
+            return Integer.parseInt(serial.substring(0, dash));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /** Returns the highest numeric set prefix found in the card browser model (the global card pool). */
+    private int computeMaxGlobalSetPrefix() {
+        int max = 0;
+        for (int i = 0; i < browserModel.getRowCount(); i++) {
+            int p = getSetPrefix((String) browserModel.getValueAt(i, 0));
+            if (p > max) max = p;
+        }
+        return max;
+    }
+
+    /**
+     * Returns true if every card in the current deck belongs to the latest {@code setCount} sets or is a PR- promo.
+     * LB cards are included in the check — a Title-less LB card from an old set would make L3/L6 illegal.
+     */
+    private boolean isLimitedSetLegal(int setCount, int maxPrefix) {
+        if (maxPrefix == 0) return false;
+        int minPrefix = maxPrefix - setCount + 1;
+        for (int i = 0; i < deckModel.getRowCount(); i++) {
+            String serial = (String) deckModel.getValueAt(i, 0);
+            if (serial.startsWith("PR-")) continue;
+            int prefix = getSetPrefix(serial);
+            if (prefix == 0 || prefix < minPrefix) return false;
+        }
+        return true;
+    }
+
+    /** Returns true if the deck satisfies Title format legality. */
+    private boolean checkTitleLegal() {
+        // No LB cards allowed in Title
+        if (getLbDeckTotal() > 0) return false;
+        // Must have a full 50-card main deck
+        if (getMainDeckTotal() != MAX_DECK_SIZE) return false;
+
+        try {
+            Map<String, Integer> catCounts = new HashMap<>();
+            for (Object[] row : db.getDeckCardsWithCategories(selectedDeckId)) {
+                String serial = (String) row[0];
+                if (lbSerials.contains(serial)) continue;
+                String cat1 = (String) row[1];
+                String cat2 = (String) row[2];
+                int qty = (Integer) row[3];
+                // Use a set so a card with cat1==cat2 doesn't double-count
+                Set<String> cats = new HashSet<>();
+                if (cat1 != null && !cat1.isBlank()) cats.add(cat1);
+                if (cat2 != null && !cat2.isBlank()) cats.add(cat2);
+                for (String cat : cats) catCounts.merge(cat, qty, Integer::sum);
+            }
+            for (Map.Entry<String, Integer> entry : catCounts.entrySet()) {
+                if (!TITLE_EXCLUDED_CATEGORIES.contains(entry.getKey()) && entry.getValue() >= 30)
+                    return true;
+            }
+        } catch (SQLException ignored) {}
+        return false;
     }
 
     // -------------------------------------------------------------------------
