@@ -42,8 +42,10 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 
 import javax.swing.BorderFactory;
+import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
+import javax.swing.JScrollPane;
 import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
@@ -101,12 +103,11 @@ public class MainWindow {
 	// --- Game state ---
 	private final GameState gameState   = new GameState();
 	// UI-only state (not owned by GameState)
-	private JLabel[] p1BackupLabels = new JLabel[5];
-	private String[] p1BackupUrls   = new String[5];
-	private int[]    p1BackupStates = new int[5];
+	private JLabel[]    p1BackupLabels = new JLabel[5];
+	private String[]    p1BackupUrls   = new String[5];
+	private CardData[]  p1BackupCards  = new CardData[5];
+	private int[]       p1BackupStates = new int[5];
 	private int             p1LbIndex   = 0;
-	private int             p1HandIndex = 0;
-	private boolean         p1TopFaceUp = false;  // is top main-deck card revealed?
 
 	public static void main(String[] args) {
 		Runtime.getRuntime().addShutdownHook(new Thread(ImageCache::shutdown));
@@ -380,7 +381,7 @@ public class MainWindow {
 			}
 			@Override
 			public void mouseEntered(MouseEvent e) {
-				if (p1TopFaceUp && !gameState.getP1MainDeck().isEmpty()) showDeckZoom(gameState.getP1MainDeck().peek().imageUrl());
+				if (!gameState.getP1MainDeck().isEmpty()) showDeckZoom(gameState.getP1MainDeck().peek().imageUrl());
 			}
 			@Override
 			public void mouseExited(MouseEvent e) {
@@ -469,10 +470,6 @@ public class MainWindow {
 		p1HandLabel = buildHandSlot();
 		p1HandLabel.addMouseListener(new MouseAdapter() {
 			@Override
-			public void mousePressed(MouseEvent e) {
-				onP1HandClicked();
-			}
-			@Override
 			public void mouseEntered(MouseEvent e) {
 				if (!gameState.getP1Hand().isEmpty()) showHandPopup();
 			}
@@ -548,8 +545,6 @@ public class MainWindow {
 	private void startGame(int deckId) {
 		gameState.reset();
 		p1LbIndex   = 0;
-		p1HandIndex = 0;
-		p1TopFaceUp = false;
 		refreshP1HandLabel();
 
 		new SwingWorker<Void, Void>() {
@@ -600,18 +595,6 @@ public class MainWindow {
 			return;
 		}
 
-		if (!p1TopFaceUp) {
-			// Reveal top card
-			p1TopFaceUp = true;
-			String url = gameState.getP1MainDeck().peek().imageUrl();
-			loadDeckLabelAsync(p1DeckLabel, url);
-		} else {
-			// Put top card on bottom, show cardback again
-			CardData top = gameState.getP1MainDeck().poll();
-			gameState.getP1MainDeck().addLast(top);
-			p1TopFaceUp = false;
-			p1DeckLabel.setIcon(scaledCardback(new Dimension(CARD_W, CARD_H)));
-		}
 	}
 
 	private void showOpeningHandConfirm() {
@@ -765,7 +748,6 @@ public class MainWindow {
 			// Player 1 goes first: draw 1 card at the start of their first Active phase
 			// (subsequent turns draw 2; Player 2 also draws 2 on their first turn)
 			gameState.drawToHand(1);
-			p1HandIndex = 0;
 			refreshP1HandLabel();
 			refreshP1DeckLabel();
 		});
@@ -821,13 +803,7 @@ public class MainWindow {
 			p1HandLabel.setText("HAND");
 			return;
 		}
-		loadHandLabelAsync(gameState.getP1Hand().get(p1HandIndex % gameState.getP1Hand().size()).imageUrl());
-	}
-
-	private void onP1HandClicked() {
-		if (gameState.getP1Hand().isEmpty()) return;
-		p1HandIndex = (p1HandIndex + 1) % gameState.getP1Hand().size();
-		refreshP1HandLabel();
+		loadHandLabelAsync(gameState.getP1Hand().get(0).imageUrl());
 	}
 
 	private void loadHandLabelAsync(String imageUrl) {
@@ -849,7 +825,6 @@ public class MainWindow {
 	}
 
 	private void refreshP1DeckLabel() {
-		p1TopFaceUp = false;
 		p1DeckLabel.setIcon(gameState.getP1MainDeck().isEmpty() ? null : scaledCardback(new Dimension(CARD_W, CARD_H)));
 		p1DeckLabel.setText(gameState.getP1MainDeck().isEmpty() ? "EMPTY" : null);
 	}
@@ -1181,9 +1156,13 @@ public class MainWindow {
 		for (int i = 0; i < hand.size(); i++) {
 			if (i == excludeHandIdx) continue;
 			CardData h = hand.get(i);
-			if (!h.isLightOrDark() && card.element().equalsIgnoreCase(h.element())) {
+			if (!h.isLightOrDark() && card.element().equalsIgnoreCase(h.element()))
 				canGenerate += 2;
-			}
+		}
+		for (int i = 0; i < p1BackupCards.length; i++) {
+			if (p1BackupCards[i] != null && p1BackupStates[i] == BACKUP_NORMAL
+					&& card.element().equalsIgnoreCase(p1BackupCards[i].element()))
+				canGenerate += 1;
 		}
 		return existing + canGenerate >= card.cost();
 	}
@@ -1198,19 +1177,34 @@ public class MainWindow {
 	}
 
 	/**
-	 * Opens a modal payment dialog where the player selects hand cards to
-	 * discard (same element, non-Light/Dark) to cover the cost of {@code card}.
+	 * Opens a modal payment dialog where the player selects backups to dull (1 CP each)
+	 * and/or hand cards to discard (2 CP each) to cover the cost of {@code card}.
+	 *
+	 * Constraints enforced:
+	 *   - Backups may not cause total CP to exceed the cost (no overpay via backups).
+	 *   - Discards may cause total CP to exceed cost by at most 1 (unavoidable with 2-CP increments).
+	 *   - Both gates reduce to: an item can only be added when current total is still below cost.
 	 */
 	private void showPaymentDialog(CardData card, int handIdx) {
 		JDialog dlg = new JDialog(frame, "Play " + card.name(), true);
 		dlg.setResizable(false);
 		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 
-		List<CardData> hand  = gameState.getP1Hand();
-		String         elem  = card.element();
-		int            cost  = card.cost();
+		List<CardData> hand   = gameState.getP1Hand();
+		String         elem   = card.element();
+		int            cost   = card.cost();
+		int            bankCp = gameState.getP1CpForElement(elem);
 
+		List<Integer> selectedBackups  = new ArrayList<>();
 		List<Integer> selectedDiscards = new ArrayList<>();
+
+		// Collect eligible (undulled, matching-element) backup slot indices
+		List<Integer> eligibleBackupSlots = new ArrayList<>();
+		for (int i = 0; i < p1BackupCards.length; i++) {
+			if (p1BackupCards[i] != null && p1BackupStates[i] == BACKUP_NORMAL
+					&& elem.equalsIgnoreCase(p1BackupCards[i].element()))
+				eligibleBackupSlots.add(i);
+		}
 
 		JLabel cpLabel = new JLabel();
 		cpLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
@@ -1219,22 +1213,108 @@ public class MainWindow {
 		JButton confirmBtn = new JButton("Confirm");
 		confirmBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
 
-		// Updates the CP counter and Confirm button state
-		Runnable updateCp = () -> {
-			int total = gameState.getP1CpForElement(elem) + selectedDiscards.size() * 2;
+		// Labels tracked for visual refresh; parallel lists with their slot/hand indices
+		List<JLabel>   backupLbls  = new ArrayList<>();
+		List<Integer>  backupSlots = new ArrayList<>();
+		List<JLabel>   discardLbls  = new ArrayList<>();
+		List<Integer>  discardIdxs  = new ArrayList<>();
+
+		// Refreshes CP counter, Confirm state, and the clickable appearance of every card label.
+		// An unselected item is active (hand cursor, bright border) only when total < cost,
+		// ensuring backups never overpay and discards overpay by at most 1.
+		Runnable updateAll = () -> {
+			int total      = bankCp + selectedBackups.size() + selectedDiscards.size() * 2;
+			boolean canAdd = total < cost;
 			cpLabel.setText("CP: " + total + " / " + cost + "  (" + elem + ")");
 			confirmBtn.setEnabled(total >= cost);
+			for (int i = 0; i < backupLbls.size(); i++) {
+				JLabel  lbl      = backupLbls.get(i);
+				boolean selected = selectedBackups.contains(backupSlots.get(i));
+				lbl.setBorder(BorderFactory.createLineBorder(
+						selected ? Color.YELLOW : (canAdd ? Color.GRAY : new Color(80, 80, 80)),
+						selected ? 3 : 1));
+				lbl.setBackground(selected || canAdd ? Color.DARK_GRAY : new Color(50, 50, 50));
+				lbl.setCursor(selected || canAdd
+						? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+			}
+			for (int i = 0; i < discardLbls.size(); i++) {
+				JLabel  lbl      = discardLbls.get(i);
+				boolean selected = selectedDiscards.contains(discardIdxs.get(i));
+				lbl.setBorder(BorderFactory.createLineBorder(
+						selected ? Color.YELLOW : (canAdd ? Color.GRAY : new Color(80, 80, 80)),
+						selected ? 3 : 1));
+				lbl.setBackground(selected || canAdd ? Color.DARK_GRAY : new Color(50, 50, 50));
+				lbl.setCursor(selected || canAdd
+						? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+			}
 		};
-		updateCp.run();
+		updateAll.run();
 
-		// ── Card selection panel ─────────────────────────────────────────────
-		JPanel cardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
-		JLabel[] cardLabels = new JLabel[hand.size()];
+		// ── Backup section ───────────────────────────────────────────────────
+		JPanel centerPanel = new JPanel();
+		centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+
+		if (!eligibleBackupSlots.isEmpty()) {
+			JLabel backupHeader = new JLabel("Backups — dull for 1 CP each:");
+			backupHeader.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			backupHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
+			JPanel backupCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+			backupCardsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+			for (int slot : eligibleBackupSlots) {
+				JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+				lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
+				lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+				lbl.setOpaque(true);
+				lbl.setBackground(Color.DARK_GRAY);
+				lbl.setForeground(Color.WHITE);
+				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+				lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
+				lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mousePressed(MouseEvent e) {
+						int total = bankCp + selectedBackups.size() + selectedDiscards.size() * 2;
+						if (selectedBackups.remove(Integer.valueOf(slot))) {
+							// deselect always allowed
+						} else if (total < cost) {
+							selectedBackups.add(slot);
+						}
+						updateAll.run();
+					}
+				});
+				final String url = p1BackupUrls[slot];
+				new SwingWorker<ImageIcon, Void>() {
+					@Override protected ImageIcon doInBackground() throws Exception {
+						Image img = ImageCache.load(url);
+						return img == null ? null
+								: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+					}
+					@Override protected void done() {
+						try {
+							ImageIcon icon = get();
+							if (icon != null) { lbl.setIcon(icon); lbl.setText(null); }
+						} catch (InterruptedException | ExecutionException ignored) {}
+					}
+				}.execute();
+				backupLbls.add(lbl);
+				backupSlots.add(slot);
+				backupCardsPanel.add(lbl);
+			}
+			centerPanel.add(backupHeader);
+			centerPanel.add(backupCardsPanel);
+		}
+
+		// ── Hand discard section ─────────────────────────────────────────────
+		JLabel discardHeader = new JLabel("Hand — discard for 2 CP each:");
+		discardHeader.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+		discardHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
+		JPanel discardCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+		discardCardsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
 		for (int i = 0; i < hand.size(); i++) {
-			if (i == handIdx) { cardLabels[i] = null; continue; }  // skip played card
-			final int hi    = i;
-			CardData  hc    = hand.get(i);
+			if (i == handIdx) continue;
+			final int hi   = i;
+			CardData  hc   = hand.get(i);
 			boolean payable = !hc.isLightOrDark() && elem.equalsIgnoreCase(hc.element());
 
 			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
@@ -1246,25 +1326,26 @@ public class MainWindow {
 			lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
 			lbl.setBorder(BorderFactory.createLineBorder(payable ? Color.GRAY : new Color(80, 80, 80), 1));
 			lbl.setCursor(payable
-					? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
-					: Cursor.getDefaultCursor());
+					? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
 
 			if (payable) {
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mousePressed(MouseEvent e) {
+						int total = bankCp + selectedBackups.size() + selectedDiscards.size() * 2;
 						if (selectedDiscards.remove(Integer.valueOf(hi))) {
-							lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
-						} else {
+							// deselect always allowed
+						} else if (total < cost) {
 							selectedDiscards.add(hi);
-							lbl.setBorder(BorderFactory.createLineBorder(Color.YELLOW, 3));
 						}
-						updateCp.run();
+						updateAll.run();
 					}
 				});
+				discardLbls.add(lbl);
+				discardIdxs.add(hi);
 			}
 
-			final String imgUrl = hc.imageUrl();
-			final boolean grey  = !payable;
+			final String  imgUrl = hc.imageUrl();
+			final boolean grey   = !payable;
 			new SwingWorker<ImageIcon, Void>() {
 				@Override protected ImageIcon doInBackground() throws Exception {
 					Image img = ImageCache.load(imgUrl);
@@ -1286,15 +1367,15 @@ public class MainWindow {
 					} catch (InterruptedException | ExecutionException ignored) {}
 				}
 			}.execute();
-
-			cardLabels[i] = lbl;
-			cardsPanel.add(lbl);
+			discardCardsPanel.add(lbl);
 		}
+		centerPanel.add(discardHeader);
+		centerPanel.add(discardCardsPanel);
 
 		// ── Hint ─────────────────────────────────────────────────────────────
 		JLabel hint = new JLabel(
-				"<html><center>Click " + elem + " cards to pay (2 CP each)." +
-				"<br>Light/Dark and other elements cannot contribute.</center></html>",
+				"<html><center>Backups: dull for 1 CP. Hand cards (" + elem
+				+ ", non-Light/Dark): discard for 2 CP.</center></html>",
 				SwingConstants.CENTER);
 		hint.setFont(new Font("Pixel NES", Font.PLAIN, 9));
 
@@ -1305,7 +1386,7 @@ public class MainWindow {
 
 		confirmBtn.addActionListener(e -> {
 			dlg.dispose();
-			executePlay(card, handIdx, new ArrayList<>(selectedDiscards));
+			executePlay(card, handIdx, new ArrayList<>(selectedDiscards), new ArrayList<>(selectedBackups));
 		});
 
 		JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
@@ -1326,8 +1407,8 @@ public class MainWindow {
 
 		JPanel mainPanel = new JPanel(new BorderLayout(0, 4));
 		mainPanel.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 8));
-		mainPanel.add(cardsPanel,  BorderLayout.CENTER);
-		mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+		mainPanel.add(new JScrollPane(centerPanel), BorderLayout.CENTER);
+		mainPanel.add(buttonPanel,                  BorderLayout.SOUTH);
 
 		dlg.getContentPane().setLayout(new BorderLayout());
 		dlg.getContentPane().add(topPanel,  BorderLayout.NORTH);
@@ -1339,13 +1420,20 @@ public class MainWindow {
 	}
 
 	/**
-	 * Executes the play: discards payment cards (high-index first to preserve
-	 * indices), spends CP, removes the played card from hand, and places it in
-	 * the appropriate zone.
+	 * Executes the play: dulls selected backups, discards payment cards (high-index
+	 * first to preserve indices), adds the generated CP to the bank, spends the cost,
+	 * removes the played card from hand, and places it in the appropriate zone.
 	 */
-	private void executePlay(CardData card, int cardHandIdx, List<Integer> discardIndices) {
+	private void executePlay(CardData card, int cardHandIdx,
+			List<Integer> discardIndices, List<Integer> backupDullIndices) {
+		for (int bi : backupDullIndices) {
+			p1BackupStates[bi] = BACKUP_DULLED;
+			refreshP1BackupSlot(bi);
+			gameState.addP1Cp(card.element(), 1);
+		}
 		discardIndices.sort(Collections.reverseOrder());
 		for (int di : discardIndices) {
+			gameState.addP1Cp(card.element(), 2);
 			gameState.discardFromHand(di);
 			if (di < cardHandIdx) cardHandIdx--;
 		}
@@ -1357,7 +1445,6 @@ public class MainWindow {
 		}
 		// Forward / other types: field zone not yet implemented — card is removed from hand.
 
-		p1HandIndex = Math.min(p1HandIndex, Math.max(0, gameState.getP1Hand().size() - 1));
 		refreshP1HandLabel();
 		refreshP1BreakLabel();
 	}
@@ -1368,6 +1455,7 @@ public class MainWindow {
 		for (int i = 0; i < p1BackupLabels.length; i++) {
 			if (p1BackupLabels[i] == null || p1BackupLabels[i].getIcon() != null) continue;
 			p1BackupUrls[i]   = card.imageUrl();
+			p1BackupCards[i]  = card;
 			p1BackupStates[i] = BACKUP_NORMAL;
 			refreshP1BackupSlot(i);
 			break;
