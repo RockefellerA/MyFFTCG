@@ -107,6 +107,13 @@ public class MainWindow {
 	private String[]    p1BackupUrls   = new String[5];
 	private CardData[]  p1BackupCards  = new CardData[5];
 	private int[]       p1BackupStates = new int[5];
+
+	private final List<JLabel>   p1ForwardLabels = new ArrayList<>();
+	private final List<String>   p1ForwardUrls;
+	private final List<CardData> p1ForwardCards  = new ArrayList<>();
+	private final List<Integer>  p1ForwardStates = new ArrayList<>();
+	private JPanel p1ForwardPanel;
+
 	private int             p1LbIndex   = 0;
 
 	public static void main(String[] args) {
@@ -126,6 +133,7 @@ public class MainWindow {
 	}
 
 	public MainWindow() {
+        this.p1ForwardUrls = new ArrayList<>();
 		initialize();
 	}
 
@@ -348,6 +356,8 @@ public class MainWindow {
 		p2BackupGbc.insets = new Insets(0, CARD_W - 8, 0, 0);
 		p2BackupWrapper.add(p2BackupSlots, p2BackupGbc);
 
+		JScrollPane p2ForwardZone = buildForwardZonePanel(null);
+
 		JPanel p2HandAligned = new JPanel(new GridBagLayout());
 		p2HandAligned.setPreferredSize(new Dimension(2 * CARD_W, CARD_H));
 		GridBagConstraints p2HandGbc = new GridBagConstraints();
@@ -355,14 +365,18 @@ public class MainWindow {
 		p2HandGbc.weighty = 1.0;
 		p2HandAligned.add(buildHandSlot(), p2HandGbc);
 
-		JPanel p2EastPanel = new JPanel(new BorderLayout(0, 0));
-		p2EastPanel.add(p2HandAligned, BorderLayout.WEST);
-		p2EastPanel.add(p2DamagePanel,  BorderLayout.EAST);
+		JPanel p2TopRow = new JPanel(new BorderLayout());
+		p2TopRow.add(p2BackupWrapper, BorderLayout.CENTER);
+		p2TopRow.add(p2HandAligned,   BorderLayout.EAST);
+
+		JPanel p2MainArea = new JPanel(new BorderLayout(0, 4));
+		p2MainArea.add(p2TopRow,      BorderLayout.NORTH);
+		p2MainArea.add(p2ForwardZone, BorderLayout.SOUTH);
 
 		JPanel p2ZonesPanel = new JPanel(new BorderLayout());
-		p2ZonesPanel.add(p2CornerPanel,   BorderLayout.WEST);
-		p2ZonesPanel.add(p2BackupWrapper, BorderLayout.CENTER);
-		p2ZonesPanel.add(p2EastPanel,     BorderLayout.EAST);
+		p2ZonesPanel.add(p2CornerPanel,  BorderLayout.WEST);
+		p2ZonesPanel.add(p2MainArea,     BorderLayout.CENTER);
+		p2ZonesPanel.add(p2DamagePanel,  BorderLayout.EAST);
 
 		// --- P1 Zones (bottom of screen) ---
 		JComboBox<String> p1ColorBox = buildColorDropdown();
@@ -467,6 +481,8 @@ public class MainWindow {
 		p1BackupGbc.insets = new Insets(0, 0, 0, CARD_W - 8);
 		p1BackupWrapper.add(p1BackupSlots, p1BackupGbc);
 
+		JScrollPane p1ForwardZone = buildForwardZonePanel(p1ForwardPanel);
+
 		p1HandLabel = buildHandSlot();
 		p1HandLabel.addMouseListener(new MouseAdapter() {
 			@Override
@@ -486,14 +502,18 @@ public class MainWindow {
 		p1HandGbc.weighty = 1.0;
 		p1HandAligned.add(p1HandLabel, p1HandGbc);
 
-		JPanel p1WestPanel = new JPanel(new BorderLayout(0, 0));
-		p1WestPanel.add(p1DamagePanel,  BorderLayout.WEST);
-		p1WestPanel.add(p1HandAligned,  BorderLayout.EAST);
+		JPanel p1BottomRow = new JPanel(new BorderLayout());
+		p1BottomRow.add(p1HandAligned,   BorderLayout.WEST);
+		p1BottomRow.add(p1BackupWrapper, BorderLayout.CENTER);
+
+		JPanel p1MainArea = new JPanel(new BorderLayout(0, 4));
+		p1MainArea.add(p1ForwardZone,  BorderLayout.NORTH);
+		p1MainArea.add(p1BottomRow,    BorderLayout.SOUTH);
 
 		JPanel p1ZonesPanel = new JPanel(new BorderLayout());
-		p1ZonesPanel.add(p1WestPanel,     BorderLayout.WEST);
-		p1ZonesPanel.add(p1BackupWrapper, BorderLayout.CENTER);
-		p1ZonesPanel.add(p1CornerPanel,   BorderLayout.EAST);
+		p1ZonesPanel.add(p1DamagePanel,  BorderLayout.WEST);
+		p1ZonesPanel.add(p1MainArea,     BorderLayout.CENTER);
+		p1ZonesPanel.add(p1CornerPanel,  BorderLayout.EAST);
 
 		JPanel southPanel = new JPanel(new BorderLayout());
 		southPanel.add(p1ZonesPanel, BorderLayout.CENTER);
@@ -1443,8 +1463,9 @@ public class MainWindow {
 
 		if (card.isBackup()) {
 			placeCardInFirstBackupSlot(card);
+		} else if (card.isForward()) {
+			placeCardInForwardZone(card);
 		}
-		// Forward / other types: field zone not yet implemented — card is removed from hand.
 
 		refreshP1HandLabel();
 		refreshP1BreakLabel();
@@ -1688,6 +1709,122 @@ public class MainWindow {
 	/**
 	 * @param labelStorage if non-null, the 5 created slot labels are stored here (index 0-4)
 	 */
+	/**
+	 * Builds the Forward zone: a horizontally-scrollable row of card slots.
+	 * Pass {@code panelOut} non-null only for P1 (interactive zone); the reference
+	 * is stored so cards can be added dynamically.  Pass {@code null} for P2.
+	 */
+	private JScrollPane buildForwardZonePanel(JPanel panelOut) {
+		JLabel forwardTag = new JLabel("FORWARDS", SwingConstants.CENTER);
+		forwardTag.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		forwardTag.setBorder(BorderFactory.createEmptyBorder());
+		forwardTag.setBackground(Color.LIGHT_GRAY);
+		forwardTag.setForeground(Color.DARK_GRAY);
+		forwardTag.setOpaque(true);
+
+		JPanel inner = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0)) {
+			@Override
+			public Dimension getPreferredSize() {
+				int cardSlots = Math.max(getComponentCount() - 1, 0);
+				int tagW  = forwardTag.getPreferredSize().width;
+				int slotW = CARD_H;
+				int gap   = 4;
+				int width = gap + tagW + gap + (slotW + gap) * cardSlots;
+				return new Dimension(Math.max(width, tagW + gap * 2), CARD_H);
+			}
+		};
+		inner.setBackground(Color.LIGHT_GRAY);
+		inner.add(forwardTag);
+
+		if (panelOut != null) {
+			p1ForwardPanel = inner;
+		}
+
+		JScrollPane scroll = new JScrollPane(inner,
+				JScrollPane.VERTICAL_SCROLLBAR_NEVER,
+				JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+		scroll.setBorder(BorderFactory.createEmptyBorder());
+		scroll.setPreferredSize(new Dimension(0, CARD_H));
+		return scroll;
+	}
+
+	/** Adds a Forward card to P1's forward zone and wires up the debug context menu. */
+	private void placeCardInForwardZone(CardData card) {
+		if (p1ForwardPanel == null) return;
+		int idx = p1ForwardLabels.size();
+
+		JLabel lbl = new JLabel("", SwingConstants.CENTER);
+		lbl.setPreferredSize(new Dimension(CARD_H, CARD_H));
+		lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
+		lbl.setOpaque(true);
+		lbl.setBackground(Color.LIGHT_GRAY);
+		lbl.setForeground(Color.DARK_GRAY);
+		lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		lbl.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
+		lbl.addMouseListener(new MouseAdapter() {
+			@Override public void mousePressed(MouseEvent e) {
+				if (lbl.getIcon() != null) showForwardContextMenu(idx, lbl, e);
+			}
+		});
+
+		p1ForwardUrls.add(card.imageUrl());
+		p1ForwardCards.add(card);
+		p1ForwardStates.add(BACKUP_NORMAL);
+		p1ForwardLabels.add(lbl);
+
+		p1ForwardPanel.add(lbl);
+		p1ForwardPanel.revalidate();
+		p1ForwardPanel.repaint();
+
+		refreshP1ForwardSlot(idx);
+	}
+
+	/** Reloads and re-renders a single P1 forward slot using its stored URL and state. */
+	private void refreshP1ForwardSlot(int idx) {
+		String url   = p1ForwardUrls.get(idx);
+		int    state = p1ForwardStates.get(idx);
+		JLabel slot  = p1ForwardLabels.get(idx);
+		if (url == null) return;
+		new SwingWorker<ImageIcon, Void>() {
+			@Override protected ImageIcon doInBackground() throws Exception {
+				Image raw = ImageCache.load(url);
+				if (raw == null) return null;
+				BufferedImage card = toARGB(raw, CARD_W, CARD_H);
+				return new ImageIcon(renderBackupCard(card, state));
+			}
+			@Override protected void done() {
+				try {
+					ImageIcon icon = get();
+					if (icon != null) { slot.setIcon(icon); slot.setText(null); }
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+	}
+
+	/** Shows a debug context menu for a P1 forward slot. */
+	private void showForwardContextMenu(int idx, JLabel slot, MouseEvent e) {
+		if (!AppSettings.isDebugMode()) return;
+		JPopupMenu menu = new JPopupMenu();
+
+		JMenuItem dullItem = new JMenuItem("Debug: Dull");
+		dullItem.addActionListener(ae -> {
+			p1ForwardStates.set(idx,
+					p1ForwardStates.get(idx) == BACKUP_DULLED ? BACKUP_NORMAL : BACKUP_DULLED);
+			refreshP1ForwardSlot(idx);
+		});
+		menu.add(dullItem);
+
+		JMenuItem freezeItem = new JMenuItem("Debug: Freeze");
+		freezeItem.addActionListener(ae -> {
+			p1ForwardStates.set(idx,
+					p1ForwardStates.get(idx) == BACKUP_FROZEN ? BACKUP_NORMAL : BACKUP_FROZEN);
+			refreshP1ForwardSlot(idx);
+		});
+		menu.add(freezeItem);
+
+		menu.show(slot, e.getX(), e.getY());
+	}
+
 	private JPanel buildBackupZonePanel(JLabel[] labelStorage) {
 		JPanel slotsPanel = new JPanel(new GridLayout(1, 5, 2, 0));
 		slotsPanel.setBackground(Color.LIGHT_GRAY);
