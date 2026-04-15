@@ -422,13 +422,20 @@ public class MainWindow {
 			Color c = "Default".equals(sel) ? null : ElementColor.fromName(sel).color;
 			applyElementColor(sel, p2ZonesPanel);
 			p2Board.setGradientColor(c);
+			AppSettings.setP2BoardColor(sel);
+			AppSettings.save();
 		});
 		p1ColorBox.addActionListener(e -> {
 			String sel = (String) p1ColorBox.getSelectedItem();
 			Color c = "Default".equals(sel) ? null : ElementColor.fromName(sel).color;
 			applyElementColor(sel, p1ZonesPanel);
 			p1Board.setGradientColor(c);
+			AppSettings.setP1BoardColor(sel);
+			AppSettings.save();
 		});
+
+		p2ColorBox.setSelectedItem(AppSettings.getP2BoardColor());
+		p1ColorBox.setSelectedItem(AppSettings.getP1BoardColor());
 
 		// --- Assemble ---
 		frame.getContentPane().add(p2ZonesPanel, BorderLayout.NORTH);

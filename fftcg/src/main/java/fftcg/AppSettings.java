@@ -60,4 +60,24 @@ public final class AppSettings {
     public static void setDebugMode(boolean enabled) {
         props.setProperty("debug.mode", String.valueOf(enabled));
     }
+
+    /** Returns the saved P1 board color selection, or {@code "Default"} if unset. */
+    public static String getP1BoardColor() {
+        return props.getProperty("p1.board.color", "Default");
+    }
+
+    /** Saves the P1 board color selection (call {@link #save()} to persist). */
+    public static void setP1BoardColor(String color) {
+        props.setProperty("p1.board.color", color);
+    }
+
+    /** Returns the saved P2 board color selection, or {@code "Default"} if unset. */
+    public static String getP2BoardColor() {
+        return props.getProperty("p2.board.color", "Default");
+    }
+
+    /** Saves the P2 board color selection (call {@link #save()} to persist). */
+    public static void setP2BoardColor(String color) {
+        props.setProperty("p2.board.color", color);
+    }
 }
