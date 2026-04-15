@@ -1,20 +1,12 @@
 package fftcg;
 
-import scraper.DeckDatabase;
-import scraper.DeckDatabase.DeckCardDetail;
-
 import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.FlowLayout;
-import java.awt.RenderingHints;
-import java.awt.color.ColorSpace;
-import java.awt.image.BufferedImage;
-import java.awt.image.ColorConvertOp;
-import java.awt.image.RescaleOp;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.EventQueue;
+import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GradientPaint;
 import java.awt.Graphics;
@@ -22,14 +14,17 @@ import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
-import java.awt.Insets;
 import java.awt.Image;
+import java.awt.Insets;
 import java.awt.Point;
+import java.awt.RenderingHints;
 import java.awt.Toolkit;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.awt.color.ColorSpace;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
+import java.awt.image.ColorConvertOp;
+import java.awt.image.RescaleOp;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -39,16 +34,16 @@ import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
-import javax.swing.JScrollPane;
 import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
-import javax.swing.JPopupMenu;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.JScrollPane;
 import javax.swing.JSeparator;
 import javax.swing.JWindow;
 import javax.swing.SwingConstants;
@@ -59,11 +54,12 @@ import javax.swing.border.SoftBevelBorder;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 
+import scraper.DeckDatabase;
+import scraper.DeckDatabase.DeckCardDetail;
+
 public class MainWindow {
 
 	private JFrame frame;
-
-	int phase = 0;
 
 	// Card size constants
 	private static final int CARD_W = 140;
@@ -144,22 +140,6 @@ public class MainWindow {
 		frame.setJMenuBar(menuBar);
 		menuBar.add(new FileMenu(frame, this::startGame));
 		menuBar.add(new HelpMenu(frame));
-
-		// --- Phase Button ---
-		JButton phaseButton = new JButton("Active Phase");
-		phaseButton.setFont(new Font("Pixel NES", Font.PLAIN, 11));
-		phaseButton.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				switch (phase) {
-					case 0: phaseButton.setText("Draw Phase");   phase++; break;
-					case 1: phaseButton.setText("Main Phase 1"); phase++; break;
-					case 2: phaseButton.setText("Attack Phase"); phase++; break;
-					case 3: phaseButton.setText("Main Phase 2"); phase++; break;
-					case 4: phaseButton.setText("End Phase");    phase++; break;
-					case 5: phaseButton.setText("Active Phase"); phase = 0; break;
-				}
-			}
-		});
 
 		Dimension cardSize = new Dimension(CARD_W, CARD_H);
 
@@ -397,7 +377,6 @@ public class MainWindow {
 
 		JPanel southPanel = new JPanel(new BorderLayout());
 		southPanel.add(p1ZonesPanel, BorderLayout.CENTER);
-		southPanel.add(phaseButton,  BorderLayout.SOUTH);
 
 		// --- Game Board ---
 		GradientPanel p2Board = new GradientPanel(true);
@@ -861,10 +840,17 @@ public class MainWindow {
 		if (!gameState.getP1LbDeck().isEmpty()) showZoomAt(gameState.getP1LbDeck().get(0).imageUrl(), p1LimitLabel);
 	}
 
+	private void ensureZoomPopup() {
+		if (zoomPopup == null) {
+			zoomPopup = new JWindow(frame);
+			zoomPopup.setAlwaysOnTop(true);
+		}
+	}
+
 	private void showZoomAt(String url, JLabel anchor) {
 		if (url == null) return;
 
-		if (zoomPopup == null) zoomPopup = new JWindow(frame);
+		ensureZoomPopup();
 
 		new SwingWorker<ImageIcon, Void>() {
 			@Override
@@ -1033,7 +1019,7 @@ public class MainWindow {
 	/** Shows a full-resolution preview of a hand card to the left of the hand popover. */
 	private void showHandCardZoom(String url, JLabel anchor) {
 		if (url == null) return;
-		if (zoomPopup == null) zoomPopup = new JWindow(frame);
+		ensureZoomPopup();
 
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
@@ -1222,6 +1208,7 @@ public class MainWindow {
 				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
 				lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
 				lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+				final String url = p1BackupUrls[slot];
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mousePressed(MouseEvent e) {
 						int total = bankCp + selectedBackups.size() + selectedDiscards.size() * 2;
@@ -1232,8 +1219,11 @@ public class MainWindow {
 						}
 						updateAll.run();
 					}
+					@Override public void mouseEntered(MouseEvent e) {
+						if (lbl.getIcon() != null) showZoomAt(url, lbl);
+					}
+					@Override public void mouseExited(MouseEvent e) { hideZoom(); }
 				});
-				final String url = p1BackupUrls[slot];
 				new SwingWorker<ImageIcon, Void>() {
 					@Override protected ImageIcon doInBackground() throws Exception {
 						Image img = ImageCache.load(url);
@@ -1279,6 +1269,8 @@ public class MainWindow {
 			lbl.setCursor(payable
 					? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
 
+			final String  imgUrl = hc.imageUrl();
+			final boolean grey   = !payable;
 			if (payable) {
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mousePressed(MouseEvent e) {
@@ -1290,26 +1282,37 @@ public class MainWindow {
 						}
 						updateAll.run();
 					}
+					@Override public void mouseEntered(MouseEvent e) {
+						if (lbl.getIcon() != null) showZoomAt(imgUrl, lbl);
+					}
+					@Override public void mouseExited(MouseEvent e) { hideZoom(); }
 				});
 				discardLbls.add(lbl);
 				discardIdxs.add(hi);
+			} else {
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mouseEntered(MouseEvent e) {
+						if (lbl.getIcon() != null) showZoomAt(imgUrl, lbl);
+					}
+					@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+				});
 			}
 
-			final String  imgUrl = hc.imageUrl();
-			final boolean grey   = !payable;
 			new SwingWorker<ImageIcon, Void>() {
 				@Override protected ImageIcon doInBackground() throws Exception {
 					Image img = ImageCache.load(imgUrl);
 					if (img == null) return null;
+					BufferedImage buf = new BufferedImage(CARD_W, CARD_H, BufferedImage.TYPE_INT_ARGB);
+					Graphics2D g2 = buf.createGraphics();
+					g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+					g2.drawImage(img, 0, 0, CARD_W, CARD_H, null);
+					g2.dispose();
 					if (grey) {
-						BufferedImage buf = new BufferedImage(img.getWidth(null), img.getHeight(null),
-								BufferedImage.TYPE_INT_ARGB);
-						buf.getGraphics().drawImage(img, 0, 0, null);
 						return new ImageIcon(
 								new ColorConvertOp(ColorSpace.getInstance(ColorSpace.CS_GRAY), null)
 										.filter(buf, null));
 					}
-					return new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+					return new ImageIcon(buf);
 				}
 				@Override protected void done() {
 					try {
@@ -1592,7 +1595,7 @@ public class MainWindow {
 		String url = label.getUrl();
 		if (url == null) return;
 
-		if (zoomPopup == null) zoomPopup = new JWindow(frame);
+		ensureZoomPopup();
 
 		new SwingWorker<ImageIcon, Void>() {
 			@Override
