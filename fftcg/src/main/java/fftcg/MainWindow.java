@@ -234,7 +234,7 @@ public class MainWindow {
 		p2BackupGbc.insets = new Insets(0, CARD_W - 8, 0, 0);
 		p2BackupWrapper.add(p2BackupSlots, p2BackupGbc);
 
-		JScrollPane p2ForwardZone = buildForwardZonePanel(null);
+		JScrollPane p2ForwardZone = buildForwardZonePanel(false);
 
 		JPanel p2HandAligned = new JPanel(new GridBagLayout());
 		p2HandAligned.setPreferredSize(new Dimension(2 * CARD_W, CARD_H));
@@ -270,14 +270,6 @@ public class MainWindow {
 			@Override
 			public void mousePressed(MouseEvent e) {
 				onP1DeckClicked();
-			}
-			@Override
-			public void mouseEntered(MouseEvent e) {
-				if (!gameState.getP1MainDeck().isEmpty()) showDeckZoom(gameState.getP1MainDeck().peek().imageUrl());
-			}
-			@Override
-			public void mouseExited(MouseEvent e) {
-				hideZoom();
 			}
 		});
 
@@ -359,7 +351,7 @@ public class MainWindow {
 		p1BackupGbc.insets = new Insets(0, 0, 0, CARD_W - 8);
 		p1BackupWrapper.add(p1BackupSlots, p1BackupGbc);
 
-		JScrollPane p1ForwardZone = buildForwardZonePanel(p1ForwardPanel);
+		JScrollPane p1ForwardZone = buildForwardZonePanel(true);
 
 		p1HandLabel = buildHandSlot();
 		p1HandLabel.addMouseListener(new MouseAdapter() {
@@ -449,7 +441,8 @@ public class MainWindow {
 
 	private void startGame(int deckId) {
 		gameState.reset();
-		p1LbIndex   = 0;
+		p1LbIndex = 0;
+		clearUIZones();
 		refreshP1HandLabel();
 
 		new SwingWorker<Void, Void>() {
@@ -734,6 +727,47 @@ public class MainWindow {
 		p1DeckLabel.setText(gameState.getP1MainDeck().isEmpty() ? "EMPTY" : null);
 	}
 
+	/** Resets all interactive UI zones to their empty state for a new game. */
+	private void clearUIZones() {
+		// Backup slots
+		for (int i = 0; i < p1BackupLabels.length; i++) {
+			if (p1BackupLabels[i] != null) {
+				p1BackupLabels[i].setIcon(null);
+				p1BackupLabels[i].setText("BACKUP " + (i + 1));
+			}
+			p1BackupUrls[i]   = null;
+			p1BackupCards[i]  = null;
+			p1BackupStates[i] = 0;
+		}
+
+		// Forward zone
+		if (p1ForwardPanel != null && p1ForwardPanel.getComponentCount() > 1) {
+			while (p1ForwardPanel.getComponentCount() > 1) {
+				p1ForwardPanel.remove(p1ForwardPanel.getComponentCount() - 1);
+			}
+			p1ForwardPanel.revalidate();
+			p1ForwardPanel.repaint();
+		}
+		p1ForwardLabels.clear();
+		p1ForwardUrls.clear();
+		p1ForwardCards.clear();
+		p1ForwardStates.clear();
+
+		// Break zone label
+		refreshP1BreakLabel();
+
+		// Limit label
+		refreshP1LimitLabel();
+
+		// Removed from play labels
+		p1RemoveLabel.setIcon(null);
+		p1RemoveLabel.setUrl(null);
+		p1RemoveLabel.setText("<html><div style='text-align:center'>REMOVED<br>FROM<br>PLAY</div></html>");
+		p2RemoveLabel.setIcon(null);
+		p2RemoveLabel.setUrl(null);
+		p2RemoveLabel.setText("<html><div style='text-align:center'>REMOVED<br>FROM<br>PLAY</div></html>");
+	}
+
 	// -------------------------------------------------------------------------
 	// P1 LB deck interaction
 	// -------------------------------------------------------------------------
@@ -806,10 +840,6 @@ public class MainWindow {
 	// -------------------------------------------------------------------------
 	// LB zoom popup (full-resolution on hover)
 	// -------------------------------------------------------------------------
-
-	private void showDeckZoom(String url) {
-		showZoomAt(url, p1DeckLabel);
-	}
 
 	private void showLbZoom() {
 		if (!gameState.getP1LbDeck().isEmpty()) showZoomAt(gameState.getP1LbDeck().get(0).imageUrl(), p1LimitLabel);
@@ -1596,10 +1626,9 @@ public class MainWindow {
 	 */
 	/**
 	 * Builds the Forward zone: a horizontally-scrollable row of card slots.
-	 * Pass {@code panelOut} non-null only for P1 (interactive zone); the reference
-	 * is stored so cards can be added dynamically.  Pass {@code null} for P2.
+	 * Pass {@code true} for P1 to store a reference for dynamic card placement.
 	 */
-	private JScrollPane buildForwardZonePanel(JPanel panelOut) {
+	private JScrollPane buildForwardZonePanel(boolean isP1) {
 		JLabel forwardTag = new JLabel("FORWARDS", SwingConstants.CENTER);
 		forwardTag.setFont(new Font("Pixel NES", Font.PLAIN, 11));
 		forwardTag.setBorder(BorderFactory.createEmptyBorder());
@@ -1621,7 +1650,7 @@ public class MainWindow {
 		inner.setBackground(Color.LIGHT_GRAY);
 		inner.add(forwardTag);
 
-		if (panelOut != null) {
+		if (isP1) {
 			p1ForwardPanel = inner;
 		}
 
