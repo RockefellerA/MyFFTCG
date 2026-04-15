@@ -13,7 +13,6 @@ import java.awt.image.ColorConvertOp;
 import java.awt.image.RescaleOp;
 import java.awt.Component;
 import java.awt.Cursor;
-import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.Font;
@@ -29,15 +28,10 @@ import java.awt.Point;
 import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 
@@ -50,7 +44,6 @@ import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
-import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
@@ -58,7 +51,6 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JSeparator;
 import javax.swing.JWindow;
-import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.SwingWorker;
 import javax.swing.UIManager;
@@ -283,6 +275,13 @@ public class MainWindow {
 		p1BreakLabel.setOpaque(true);
 		p1BreakLabel.setPreferredSize(cardSize);
 		p1BreakLabel.setMinimumSize(cardSize);
+		p1BreakLabel.addMouseListener(new MouseAdapter() {
+			@Override public void mouseEntered(MouseEvent e) {
+				List<CardData> zone = gameState.getP1BreakZone();
+				if (!zone.isEmpty()) showZoomAt(zone.get(zone.size() - 1).imageUrl(), p1BreakLabel);
+			}
+			@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+		});
 
 		// P1 limit label — interactive
 		p1LimitLabel = new JLabel("LIMIT");
@@ -341,6 +340,11 @@ public class MainWindow {
 					if (p1BackupLabels[backupIdx].getIcon() != null)
 						showBackupContextMenu(backupIdx, p1BackupLabels[backupIdx], e);
 				}
+				@Override public void mouseEntered(MouseEvent e) {
+					if (p1BackupLabels[backupIdx].getIcon() != null)
+						showZoomAt(p1BackupUrls[backupIdx], p1BackupLabels[backupIdx]);
+				}
+				@Override public void mouseExited(MouseEvent e) { hideZoom(); }
 			});
 		}
 
@@ -1679,6 +1683,10 @@ public class MainWindow {
 			@Override public void mousePressed(MouseEvent e) {
 				if (lbl.getIcon() != null) showForwardContextMenu(idx, lbl, e);
 			}
+			@Override public void mouseEntered(MouseEvent e) {
+				if (lbl.getIcon() != null) showZoomAt(p1ForwardUrls.get(idx), lbl);
+			}
+			@Override public void mouseExited(MouseEvent e) { hideZoom(); }
 		});
 
 		p1ForwardUrls.add(card.imageUrl());
