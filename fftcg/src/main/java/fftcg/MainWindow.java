@@ -45,6 +45,7 @@ import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JSeparator;
+import javax.swing.JTextArea;
 import javax.swing.JWindow;
 import javax.swing.SwingConstants;
 import javax.swing.SwingWorker;
@@ -72,6 +73,8 @@ public class MainWindow {
 	private JLabel p1BreakLabel;
 	private GrayscaleLabel p1RemoveLabel;
 	private GrayscaleLabel p2RemoveLabel;
+	// Game event log
+	private JTextArea gameLog;
 	// Zoom popup for LB card hover
 	private JWindow zoomPopup;
 	// Opening hand confirmation popup
@@ -418,10 +421,27 @@ public class MainWindow {
 		p2ColorBox.setSelectedItem(AppSettings.getP2BoardColor());
 		p1ColorBox.setSelectedItem(AppSettings.getP1BoardColor());
 
+		// --- Game Log ---
+		gameLog = new JTextArea();
+		gameLog.setEditable(false);
+		gameLog.setLineWrap(true);
+		gameLog.setWrapStyleWord(true);
+		gameLog.setFont(new Font("Trebuchet MS", Font.PLAIN, 12));
+		gameLog.setBackground(Color.WHITE);
+		gameLog.setForeground(Color.BLACK);
+		gameLog.setMargin(new Insets(4, 4, 4, 4));
+
+		JScrollPane logScrollPane = new JScrollPane(gameLog,
+				JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
+				JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+		logScrollPane.setPreferredSize(new Dimension(180, 0));
+		logScrollPane.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Color.LIGHT_GRAY));
+
 		// --- Assemble ---
-		frame.getContentPane().add(p2ZonesPanel, BorderLayout.NORTH);
-		frame.getContentPane().add(southPanel,   BorderLayout.SOUTH);
-		frame.getContentPane().add(gameBoard,    BorderLayout.CENTER);
+		frame.getContentPane().add(p2ZonesPanel,  BorderLayout.NORTH);
+		frame.getContentPane().add(southPanel,     BorderLayout.SOUTH);
+		frame.getContentPane().add(gameBoard,      BorderLayout.CENTER);
+		frame.getContentPane().add(logScrollPane,  BorderLayout.WEST);
 	}
 
 	// -------------------------------------------------------------------------
@@ -432,6 +452,8 @@ public class MainWindow {
 		gameState.reset();
 		p1LbIndex = 0;
 		clearUIZones();
+		if (gameLog != null) gameLog.setText("");
+		logEntry("Game Start");
 		refreshP1HandLabel();
 
 		new SwingWorker<Void, Void>() {
@@ -519,6 +541,7 @@ public class MainWindow {
 	private void drawOpeningHand() {
 		List<CardData> drawn = gameState.drawOpeningHand();
 		refreshP1DeckLabel();
+		logEntry("Drew opening hand (" + drawn.size() + " cards)");
 		showOpeningHandPopup(drawn, !gameState.isP1MulliganUsed());
 	}
 
@@ -631,10 +654,12 @@ public class MainWindow {
 			hideZoom();
 			openingHandPopup.dispose();
 			openingHandPopup = null;
+			logEntry("Kept opening hand");
 			gameState.keepHand(handOrder);
 			// Player 1 goes first: draw 1 card at the start of their first Active phase
 			// (subsequent turns draw 2; Player 2 also draws 2 on their first turn)
 			gameState.drawToHand(1);
+			logEntry("Drew 1 card");
 			refreshP1HandLabel();
 			refreshP1DeckLabel();
 		});
@@ -647,6 +672,7 @@ public class MainWindow {
 				: "Mulligan already used");
 		mulliganBtn.addActionListener(e -> {
 			hideZoom();
+			logEntry("Took mulligan");
 			// handOrder is the player's chosen bottom-of-deck order
 			List<CardData> newCards = gameState.mulligan(new ArrayList<>(handOrder));
 			refreshP1DeckLabel();
@@ -720,6 +746,15 @@ public class MainWindow {
 			p1DeckLabel.setIcon(scaledCardbackWithCount(new Dimension(CARD_W, CARD_H), count));
 			p1DeckLabel.setText(null);
 		}
+	}
+
+	/** Appends a timestamped entry to the game log. */
+	private void logEntry(String text) {
+		if (gameLog == null) return;
+		String time = java.time.LocalTime.now()
+				.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
+		gameLog.append(time + "  " + text + "\n");
+		gameLog.setCaretPosition(gameLog.getDocument().getLength());
 	}
 
 	/** Resets all interactive UI zones to their empty state for a new game. */
@@ -1394,6 +1429,7 @@ public class MainWindow {
 		gameState.spendP1Cp(card.element(), card.cost());
 		gameState.clearP1Cp(card.element());
 		gameState.removeFromHand(cardHandIdx);
+		logEntry("Played \"" + card.name() + "\"");
 
 		if (card.isBackup()) {
 			placeCardInFirstBackupSlot(card);
