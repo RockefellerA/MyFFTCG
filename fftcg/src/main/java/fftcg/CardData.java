@@ -10,7 +10,8 @@ public record CardData(
         String element,
         int    cost,
         String type,
-        boolean isLb
+        boolean isLb,
+        int     lbCost
 ) {
     /** Returns {@code true} for Light or Dark element cards, which cannot be discarded for CP. */
     public boolean isLightOrDark() {

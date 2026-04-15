@@ -160,7 +160,7 @@ public class DeckDatabase implements AutoCloseable {
     public List<DeckCardDetail> getDeckCardsDetailed(int deckId) throws SQLException {
         List<DeckCardDetail> result = new ArrayList<>();
         String sql = """
-            SELECT dc.count, c.image_url, c.name_en, c.element, c.cost, c.type_en, c.limit_break
+            SELECT dc.count, c.image_url, c.name_en, c.element, c.cost, c.type_en, c.limit_break, c.lb_cost
             FROM deck_cards dc
             LEFT JOIN cards c ON dc.serial = c.serial
             WHERE dc.deck_id = ?
@@ -176,9 +176,10 @@ public class DeckDatabase implements AutoCloseable {
                     int     cost     = rs.getInt("cost");
                     String  type     = rs.getString("type_en");
                     boolean isLb     = rs.getInt("limit_break") == 1;
+                    int     lbCost   = rs.getInt("lb_cost");
                     int     count    = rs.getInt("count");
                     for (int i = 0; i < count; i++)
-                        result.add(new DeckCardDetail(imageUrl, name, element, cost, type, isLb));
+                        result.add(new DeckCardDetail(imageUrl, name, element, cost, type, isLb, lbCost));
                 }
             }
         }
@@ -367,7 +368,7 @@ public class DeckDatabase implements AutoCloseable {
     }
 
     /** A single expanded card entry from a deck — one instance per copy. */
-    public record DeckCardDetail(String imageUrl, String name, String element, int cost, String type, boolean isLb) {}
+    public record DeckCardDetail(String imageUrl, String name, String element, int cost, String type, boolean isLb, int lbCost) {}
 
     /** Deck with separate main and LB card counts, used for deck selection. */
     public record DeckSummary(int id, String name, int mainCardCount, int lbCardCount) {
