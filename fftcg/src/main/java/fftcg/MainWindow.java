@@ -150,130 +150,8 @@ public class MainWindow {
 		// --- Menu Bar ---
 		JMenuBar menuBar = new JMenuBar();
 		frame.setJMenuBar(menuBar);
-
-		JMenu fileMenu = new JMenu("File");
-		menuBar.add(fileMenu);
-
-		JMenuItem newGameMenuItem = new JMenuItem("New Game");
-		fileMenu.add(newGameMenuItem);
-		newGameMenuItem.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				DeckSelectDialog dialog = new DeckSelectDialog(frame);
-				dialog.setVisible(true);
-				int deckId = dialog.getSelectedDeckId();
-				if (deckId >= 0) startGame(deckId);
-			}
-		});
-
-		JMenuItem deckManagerMenuItem = new JMenuItem("Deck Manager");
-		fileMenu.add(deckManagerMenuItem);
-		deckManagerMenuItem.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				DeckManager dm = new DeckManager(frame);
-				dm.setVisible(true);
-			}
-		});
-
-		JMenuItem cardBrowserMenuItem = new JMenuItem("Card Browser");
-		fileMenu.add(cardBrowserMenuItem);
-		cardBrowserMenuItem.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				CardBrowser cb = new CardBrowser(frame);
-				cb.setVisible(true);
-			}
-		});
-
-		JMenuItem preferencesMenuItem = new JMenuItem("Preferences");
-		fileMenu.add(preferencesMenuItem);
-		preferencesMenuItem.addActionListener(e -> {
-			PreferencesDialog dialog = new PreferencesDialog(frame);
-			dialog.setVisible(true);
-		});
-		fileMenu.addSeparator();
-
-		JMenuItem exitMenuItem = new JMenuItem("Exit MyFFTCG");
-		exitMenuItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0));
-		fileMenu.add(exitMenuItem);
-		exitMenuItem.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				int result = JOptionPane.showConfirmDialog(frame, "Are you sure you want to quit?", exitMenuItem.getText(),
-						JOptionPane.YES_NO_OPTION,
-						JOptionPane.WARNING_MESSAGE);
-				if (result == JOptionPane.YES_OPTION) {
-					System.exit(0);
-				}
-			}
-		});
-
-		JMenu helpMenu = new JMenu("Help");
-		menuBar.add(helpMenu);
-
-		JMenuItem howToPlayMenuItem = new JMenuItem("How to Play (Basics)");
-		helpMenu.add(howToPlayMenuItem);
-		howToPlayMenuItem.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				int result = JOptionPane.showConfirmDialog(frame, "This will open the FFTCG Starter Guide in your browser. Continue?", howToPlayMenuItem.getText(),
-						JOptionPane.YES_NO_OPTION,
-						JOptionPane.QUESTION_MESSAGE);
-				if (result == JOptionPane.YES_OPTION) openGuidePdf(0);
-			}
-		});
-
-		JMenuItem howToPlay2MenuItem = new JMenuItem("How to Play (Advanced)");
-		helpMenu.add(howToPlay2MenuItem);
-		howToPlay2MenuItem.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				int result = JOptionPane.showConfirmDialog(frame, "This will open the FFTCG Comprehensive Rules in your browser. Continue?", howToPlay2MenuItem.getText(),
-						JOptionPane.YES_NO_OPTION,
-						JOptionPane.QUESTION_MESSAGE);
-				if (result == JOptionPane.YES_OPTION) openGuidePdf(1);
-			}
-		});
-
-		JMenuItem limitBreakRulesMenuItem = new JMenuItem("Limit Break Rules Sheet");
-		helpMenu.add(limitBreakRulesMenuItem);
-		limitBreakRulesMenuItem.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				int result = JOptionPane.showConfirmDialog(frame, "This will open the FFTCG Limit Break Rules Sheet in your browser. Continue?", limitBreakRulesMenuItem.getText(),
-						JOptionPane.YES_NO_OPTION,
-						JOptionPane.QUESTION_MESSAGE);
-				if (result == JOptionPane.YES_OPTION) openGuidePdf(2);
-			}
-		});
-
-		JMenuItem primingRulesMenuItem = new JMenuItem("Priming Rules Explanation");
-		helpMenu.add(primingRulesMenuItem);
-		primingRulesMenuItem.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				int result = JOptionPane.showConfirmDialog(frame, "This will open the FFTCG Priming Rules Explanation in your browser. Continue?", primingRulesMenuItem.getText(),
-						JOptionPane.YES_NO_OPTION,
-						JOptionPane.QUESTION_MESSAGE);
-				if (result == JOptionPane.YES_OPTION) openGuidePdf(3);
-			}
-		});
-
-		JMenuItem primingSupplementaryRulesMenuItem = new JMenuItem("Priming Rules Supplementary Explanation");
-		helpMenu.add(primingSupplementaryRulesMenuItem);
-		primingSupplementaryRulesMenuItem.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				int result = JOptionPane.showConfirmDialog(frame, "This will open the FFTCG Priming Rules Supplementary Explanation in your browser. Continue?", primingSupplementaryRulesMenuItem.getText(),
-						JOptionPane.YES_NO_OPTION,
-						JOptionPane.QUESTION_MESSAGE);
-				if (result == JOptionPane.YES_OPTION) openGuidePdf(4);
-			}
-		});
-
-		helpMenu.addSeparator();
-
-		JMenuItem menuItemAbout = new JMenuItem("About MyFFTCG");
-		helpMenu.add(menuItemAbout);
-		menuItemAbout.addActionListener(new ActionListener() {
-			public void actionPerformed(ActionEvent e) {
-				About dialog = new About();
-				dialog.setLocationRelativeTo(frame);
-				dialog.setVisible(true);
-			}
-		});
+		menuBar.add(new FileMenu(frame, this::startGame));
+		menuBar.add(new HelpMenu(frame));
 
 		// --- Phase Button ---
 		JButton phaseButton = new JButton("Active Phase");
@@ -1907,22 +1785,6 @@ public class MainWindow {
 		for (Component c : panel.getComponents()) {
 			if (c instanceof JPanel) {
 				setPanelBackground((JPanel) c, color);
-			}
-		}
-	}
-
-	private void openGuidePdf(int guide) {
-		if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-			try {
-				switch (guide) {
-					case 0 -> Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-03/fftcgrulesheet-en.pdf"));
-					case 1 -> Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2025-09/fftcg-comprules-v3.2.1.pdf"));
-					case 2 -> Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-03/lb-rule-explanation-eg.pdf"));
-					case 3 -> Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-11/priming-rules-explanation-en.pdf"));
-					case 4 -> Desktop.getDesktop().browse(new URI("https://fftcg.cdn.sewest.net/2024-11/priming-supplementary-rules-en.pdf"));
-				}
-			} catch (IOException | URISyntaxException e1) {
-				e1.printStackTrace();
 			}
 		}
 	}
