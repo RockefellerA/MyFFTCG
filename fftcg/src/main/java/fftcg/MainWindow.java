@@ -273,6 +273,9 @@ public class MainWindow {
 				if (!zone.isEmpty()) showZoomAt(zone.get(zone.size() - 1).imageUrl(), p1BreakLabel);
 			}
 			@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+			@Override public void mousePressed(MouseEvent e) {
+				if (!gameState.getP1BreakZone().isEmpty()) { hideZoom(); showBreakZoneDialog(); }
+			}
 		});
 
 		// P1 limit label — interactive
@@ -425,11 +428,13 @@ public class MainWindow {
 		gameLog.setBackground(Color.WHITE);
 		gameLog.setForeground(Color.BLACK);
 		gameLog.setMargin(new Insets(4, 4, 4, 4));
+		gameLog.setCaretColor(Color.WHITE);
+		logEntry("Welcome to MyFFTCG!");
 
 		JScrollPane logScrollPane = new JScrollPane(gameLog,
 				JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
 				JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-		logScrollPane.setPreferredSize(new Dimension(180, 0));
+		logScrollPane.setPreferredSize(new Dimension(200, 0));
 		logScrollPane.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Color.LIGHT_GRAY));
 
 		// --- Assemble ---
@@ -805,20 +810,111 @@ public class MainWindow {
 			p1LimitLabel.setText("LIMIT");
 			return;
 		}
+		int playable = gameState.getP1LbDeck().size() - spentLbIndices.size();
 		p1LimitLabel.setText(null);
-		p1LimitLabel.setIcon(goldenCardback(new Dimension(CARD_W, CARD_H)));
+		p1LimitLabel.setIcon(goldenCardback(new Dimension(CARD_W, CARD_H), playable));
 	}
 
-	private ImageIcon goldenCardback(Dimension size) {
+	private ImageIcon goldenCardback(Dimension size, int count) {
 		Image base = new ImageIcon(getClass().getResource("/resources/cardback.jpg")).getImage();
 		BufferedImage buf = new BufferedImage(size.width, size.height, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = buf.createGraphics();
 		g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 		g.drawImage(base, 0, 0, size.width, size.height, null);
 		g.setColor(new Color(255, 200, 0, 90));
 		g.fillRect(0, 0, size.width, size.height);
+		String text = String.valueOf(count);
+		g.setFont(new Font("Pixel NES", Font.PLAIN, 12));
+		int textW = g.getFontMetrics().stringWidth(text);
+		int textH = g.getFontMetrics().getAscent();
+		int x = size.width - textW - 4;
+		int y = textH + 4;
+		g.setColor(Color.BLACK);
+		g.drawString(text, x + 1, y + 1);
+		g.setColor(Color.WHITE);
+		g.drawString(text, x, y);
 		g.dispose();
 		return new ImageIcon(buf);
+	}
+
+	private void showBreakZoneDialog() {
+		List<CardData> zone = gameState.getP1BreakZone();
+		if (zone.isEmpty()) return;
+
+		JDialog dlg = new JDialog(frame, "Break Zone (" + zone.size() + " cards)", true);
+		dlg.setResizable(false);
+		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+		JPanel cardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+
+		for (CardData cd : zone) {
+			JPanel cardWrapper = new JPanel(new BorderLayout(0, 4));
+			cardWrapper.setBackground(cardsPanel.getBackground());
+
+			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
+			lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+			lbl.setOpaque(true);
+			lbl.setBackground(Color.DARK_GRAY);
+			lbl.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1));
+
+			lbl.addMouseListener(new MouseAdapter() {
+				@Override public void mouseEntered(MouseEvent e) {
+					if (lbl.getIcon() != null) showZoomAt(cd.imageUrl(), lbl);
+				}
+				@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+			});
+
+			new SwingWorker<ImageIcon, Void>() {
+				@Override protected ImageIcon doInBackground() throws Exception {
+					Image img = ImageCache.load(cd.imageUrl());
+					if (img == null) return null;
+					BufferedImage buf = new BufferedImage(CARD_W, CARD_H, BufferedImage.TYPE_INT_ARGB);
+					Graphics2D g2 = buf.createGraphics();
+					g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+					g2.drawImage(img, 0, 0, CARD_W, CARD_H, null);
+					g2.dispose();
+					return new ImageIcon(buf);
+				}
+				@Override protected void done() {
+					try {
+						ImageIcon icon = get();
+						if (icon != null) { lbl.setIcon(icon); lbl.setText(null); }
+					} catch (InterruptedException | ExecutionException ignored) {}
+				}
+			}.execute();
+
+			JLabel nameLabel = new JLabel(cd.name(), SwingConstants.CENTER);
+			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
+
+			cardWrapper.add(lbl,       BorderLayout.CENTER);
+			cardWrapper.add(nameLabel, BorderLayout.SOUTH);
+			cardsPanel.add(cardWrapper);
+		}
+
+		JScrollPane scrollPane = new JScrollPane(cardsPanel,
+				JScrollPane.VERTICAL_SCROLLBAR_NEVER,
+				JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+		scrollPane.setPreferredSize(new Dimension(
+				Math.min(zone.size() * (CARD_W + 16) + 16, 900),
+				CARD_H + 60));
+
+		JButton closeBtn = new JButton("Close");
+		closeBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		closeBtn.addActionListener(ae -> { hideZoom(); dlg.dispose(); });
+
+		JPanel south = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
+		south.add(closeBtn);
+		south.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 8));
+
+		dlg.getContentPane().setLayout(new BorderLayout(0, 4));
+		dlg.getContentPane().add(scrollPane, BorderLayout.CENTER);
+		dlg.getContentPane().add(south,      BorderLayout.SOUTH);
+		dlg.pack();
+		dlg.setLocationRelativeTo(frame);
+		dlg.setVisible(true);
 	}
 
 	private void showLbDialog() {
@@ -883,20 +979,23 @@ public class MainWindow {
 
 		confirmCastBtn.addActionListener(ae -> {
 			CardData cast = lbDeck.get(castingIdx[0]);
-			spentLbIndices.add(castingIdx[0]);
-			spentLbIndices.addAll(paymentSet);
-			logEntry("Cast LB \"" + cast.name() + "\"");
 			dlg.dispose();
-			if (cast.isBackup()) {
-				placeCardInFirstBackupSlot(cast);
-			} else if (cast.isForward()) {
-				placeCardInForwardZone(cast);
+			if (cast.cost() == 0) {
+				// No CP dialog — commit immediately
+				spentLbIndices.add(castingIdx[0]);
+				spentLbIndices.addAll(paymentSet);
+				logEntry("Cast LB \"" + cast.name() + "\"");
+				executeLbPlay(cast, Collections.emptyList(), Collections.emptyList());
+			} else {
+				// Defer committing until CP payment is confirmed
+				int pendingCastIdx = castingIdx[0];
+				Set<Integer> pendingPayment = new java.util.HashSet<>(paymentSet);
+				showLbCpPaymentDialog(cast, pendingCastIdx, pendingPayment);
 			}
-			refreshP1HandLabel();
-			refreshP1BreakLabel();
 		});
 
 		cancelCastBtn.addActionListener(ae -> {
+			hideZoom();
 			castingIdx[0] = -1;
 			paymentSet.clear();
 			paymentChosen[0] = 0;
@@ -980,7 +1079,7 @@ public class MainWindow {
 				}
 			}.execute();
 
-			JLabel nameLabel = new JLabel(cd.name() + "  (LB " + cd.lbCost() + ")",
+			JLabel nameLabel = new JLabel(cd.name() + " - LB " + cd.lbCost() + "",
 					SwingConstants.CENTER);
 			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
 			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
@@ -1006,7 +1105,7 @@ public class MainWindow {
 
 		JButton closeBtn = new JButton("Close");
 		closeBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
-		closeBtn.addActionListener(ae -> dlg.dispose());
+		closeBtn.addActionListener(ae -> { hideZoom(); dlg.dispose(); });
 
 		JPanel south = new JPanel(new BorderLayout());
 		south.add(statusBar,  BorderLayout.CENTER);
@@ -1591,6 +1690,281 @@ public class MainWindow {
 		refreshP1BreakLabel();
 	}
 
+	/**
+	 * CP payment dialog for LB casting — mirrors showPaymentDialog but has no
+	 * hand-card to exclude and calls executeLbPlay on confirm.
+	 */
+	private void showLbCpPaymentDialog(CardData card, int lbCastIdx, Set<Integer> pendingLbPayment) {
+		JDialog dlg = new JDialog(frame, "Pay CP for LB: " + card.name(), true);
+		dlg.setResizable(false);
+		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+		List<CardData> hand   = gameState.getP1Hand();
+		String         elem   = card.element();
+		int            cost   = card.cost();
+		int            bankCp = gameState.getP1CpForElement(elem);
+
+		List<Integer> selectedBackups  = new ArrayList<>();
+		List<Integer> selectedDiscards = new ArrayList<>();
+
+		List<Integer> eligibleBackupSlots = new ArrayList<>();
+		for (int i = 0; i < p1BackupCards.length; i++) {
+			if (p1BackupCards[i] != null && p1BackupStates[i] == BACKUP_NORMAL
+					&& elem.equalsIgnoreCase(p1BackupCards[i].element()))
+				eligibleBackupSlots.add(i);
+		}
+
+		JLabel cpLabel = new JLabel();
+		cpLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		cpLabel.setHorizontalAlignment(SwingConstants.CENTER);
+
+		JButton confirmBtn = new JButton("Confirm");
+		confirmBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+
+		List<JLabel>  backupLbls  = new ArrayList<>();
+		List<Integer> backupSlots = new ArrayList<>();
+		List<JLabel>  discardLbls  = new ArrayList<>();
+		List<Integer> discardIdxs  = new ArrayList<>();
+
+		Runnable updateAll = () -> {
+			int total      = bankCp + selectedBackups.size() + selectedDiscards.size() * 2;
+			boolean canAdd = total < cost;
+			cpLabel.setText("CP: " + total + " / " + cost + "  (" + elem + ")");
+			confirmBtn.setEnabled(total >= cost);
+			for (int i = 0; i < backupLbls.size(); i++) {
+				JLabel  lbl      = backupLbls.get(i);
+				boolean selected = selectedBackups.contains(backupSlots.get(i));
+				lbl.setBorder(BorderFactory.createLineBorder(
+						selected ? Color.YELLOW : (canAdd ? Color.GRAY : new Color(80, 80, 80)),
+						selected ? 3 : 1));
+				lbl.setBackground(selected || canAdd ? Color.DARK_GRAY : new Color(50, 50, 50));
+				lbl.setCursor(selected || canAdd
+						? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+			}
+			for (int i = 0; i < discardLbls.size(); i++) {
+				JLabel  lbl      = discardLbls.get(i);
+				boolean selected = selectedDiscards.contains(discardIdxs.get(i));
+				lbl.setBorder(BorderFactory.createLineBorder(
+						selected ? Color.YELLOW : (canAdd ? Color.GRAY : new Color(80, 80, 80)),
+						selected ? 3 : 1));
+				lbl.setBackground(selected || canAdd ? Color.DARK_GRAY : new Color(50, 50, 50));
+				lbl.setCursor(selected || canAdd
+						? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+			}
+		};
+		updateAll.run();
+
+		JPanel centerPanel = new JPanel();
+		centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+
+		if (!eligibleBackupSlots.isEmpty()) {
+			JLabel backupHeader = new JLabel("Backups — dull for 1 CP each:");
+			backupHeader.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			backupHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
+			JPanel backupCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+			backupCardsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+			for (int slot : eligibleBackupSlots) {
+				JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+				lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
+				lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+				lbl.setOpaque(true);
+				lbl.setBackground(Color.DARK_GRAY);
+				lbl.setForeground(Color.WHITE);
+				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+				lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
+				lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+				final String url = p1BackupUrls[slot];
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mousePressed(MouseEvent e) {
+						int total = bankCp + selectedBackups.size() + selectedDiscards.size() * 2;
+						if (selectedBackups.remove(Integer.valueOf(slot))) {
+							// deselect always allowed
+						} else if (total < cost) {
+							selectedBackups.add(slot);
+						}
+						updateAll.run();
+					}
+					@Override public void mouseEntered(MouseEvent e) {
+						if (lbl.getIcon() != null) showZoomAt(url, lbl);
+					}
+					@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+				});
+				new SwingWorker<ImageIcon, Void>() {
+					@Override protected ImageIcon doInBackground() throws Exception {
+						Image img = ImageCache.load(url);
+						return img == null ? null
+								: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+					}
+					@Override protected void done() {
+						try {
+							ImageIcon icon = get();
+							if (icon != null) { lbl.setIcon(icon); lbl.setText(null); }
+						} catch (InterruptedException | ExecutionException ignored) {}
+					}
+				}.execute();
+				backupLbls.add(lbl);
+				backupSlots.add(slot);
+				backupCardsPanel.add(lbl);
+			}
+			centerPanel.add(backupHeader);
+			centerPanel.add(backupCardsPanel);
+		}
+
+		JLabel discardHeader = new JLabel("Hand — discard for 2 CP each:");
+		discardHeader.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+		discardHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
+		JPanel discardCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+		discardCardsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+		for (int i = 0; i < hand.size(); i++) {
+			final int hi  = i;
+			CardData  hc  = hand.get(i);
+			boolean payable = !hc.isLightOrDark() && elem.equalsIgnoreCase(hc.element());
+
+			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
+			lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+			lbl.setOpaque(true);
+			lbl.setBackground(payable ? Color.DARK_GRAY : new Color(50, 50, 50));
+			lbl.setForeground(Color.WHITE);
+			lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+			lbl.setBorder(BorderFactory.createLineBorder(payable ? Color.GRAY : new Color(80, 80, 80), 1));
+			lbl.setCursor(payable
+					? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+
+			final String  imgUrl = hc.imageUrl();
+			final boolean grey   = !payable;
+			if (payable) {
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mousePressed(MouseEvent e) {
+						int total = bankCp + selectedBackups.size() + selectedDiscards.size() * 2;
+						if (selectedDiscards.remove(Integer.valueOf(hi))) {
+							// deselect always allowed
+						} else if (total < cost) {
+							selectedDiscards.add(hi);
+						}
+						updateAll.run();
+					}
+					@Override public void mouseEntered(MouseEvent e) {
+						if (lbl.getIcon() != null) showZoomAt(imgUrl, lbl);
+					}
+					@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+				});
+				discardLbls.add(lbl);
+				discardIdxs.add(hi);
+			} else {
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mouseEntered(MouseEvent e) {
+						if (lbl.getIcon() != null) showZoomAt(imgUrl, lbl);
+					}
+					@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+				});
+			}
+
+			new SwingWorker<ImageIcon, Void>() {
+				@Override protected ImageIcon doInBackground() throws Exception {
+					Image img = ImageCache.load(imgUrl);
+					if (img == null) return null;
+					BufferedImage buf = new BufferedImage(CARD_W, CARD_H, BufferedImage.TYPE_INT_ARGB);
+					Graphics2D g2 = buf.createGraphics();
+					g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+					g2.drawImage(img, 0, 0, CARD_W, CARD_H, null);
+					g2.dispose();
+					if (grey) {
+						return new ImageIcon(
+								new ColorConvertOp(ColorSpace.getInstance(ColorSpace.CS_GRAY), null)
+										.filter(buf, null));
+					}
+					return new ImageIcon(buf);
+				}
+				@Override protected void done() {
+					try {
+						ImageIcon icon = get();
+						if (icon != null) { lbl.setIcon(icon); lbl.setText(null); }
+					} catch (InterruptedException | ExecutionException ignored) {}
+				}
+			}.execute();
+			discardCardsPanel.add(lbl);
+		}
+		centerPanel.add(discardHeader);
+		centerPanel.add(discardCardsPanel);
+
+		JLabel hint = new JLabel(
+				"<html><center>Backups: dull for 1 CP. Hand cards (" + elem
+				+ ", non-Light/Dark): discard for 2 CP.</center></html>",
+				SwingConstants.CENTER);
+		hint.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+
+		JButton cancelBtn = new JButton("Cancel");
+		cancelBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		cancelBtn.addActionListener(e -> { hideZoom(); dlg.dispose(); });
+
+		confirmBtn.addActionListener(e -> {
+			spentLbIndices.add(lbCastIdx);
+			spentLbIndices.addAll(pendingLbPayment);
+			logEntry("Cast LB \"" + card.name() + "\"");
+			dlg.dispose();
+			executeLbPlay(card, new ArrayList<>(selectedDiscards), new ArrayList<>(selectedBackups));
+		});
+
+		JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
+		buttonPanel.add(confirmBtn);
+		buttonPanel.add(cancelBtn);
+
+		JLabel titleLabel = new JLabel(
+				"Pay for LB: " + card.name() + "  (Cost " + cost + " " + elem + " CP)",
+				SwingConstants.CENTER);
+		titleLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+
+		JPanel topPanel = new JPanel(new BorderLayout(0, 4));
+		topPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
+		topPanel.add(titleLabel, BorderLayout.NORTH);
+		topPanel.add(cpLabel,    BorderLayout.CENTER);
+		topPanel.add(hint,       BorderLayout.SOUTH);
+
+		JPanel mainPanel = new JPanel(new BorderLayout(0, 4));
+		mainPanel.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 8));
+		mainPanel.add(new JScrollPane(centerPanel), BorderLayout.CENTER);
+		mainPanel.add(buttonPanel,                  BorderLayout.SOUTH);
+
+		dlg.getContentPane().setLayout(new BorderLayout());
+		dlg.getContentPane().add(topPanel,  BorderLayout.NORTH);
+		dlg.getContentPane().add(mainPanel, BorderLayout.CENTER);
+
+		dlg.pack();
+		dlg.setLocationRelativeTo(frame);
+		dlg.setVisible(true);
+	}
+
+	/**
+	 * Executes an LB cast: dulls selected backups, discards payment hand cards,
+	 * spends CP, and places the card — without removing it from hand.
+	 */
+	private void executeLbPlay(CardData card, List<Integer> discardIndices,
+			List<Integer> backupDullIndices) {
+		for (int bi : backupDullIndices) {
+			p1BackupStates[bi] = BACKUP_DULLED;
+			refreshP1BackupSlot(bi);
+			gameState.addP1Cp(card.element(), 1);
+		}
+		discardIndices.sort(Collections.reverseOrder());
+		for (int di : discardIndices) {
+			gameState.addP1Cp(card.element(), 2);
+			gameState.discardFromHand(di);
+		}
+		gameState.spendP1Cp(card.element(), card.cost());
+		gameState.clearP1Cp(card.element());
+		if (card.isBackup()) {
+			placeCardInFirstBackupSlot(card);
+		} else if (card.isForward()) {
+			placeCardInForwardZone(card);
+		}
+		refreshP1HandLabel();
+		refreshP1BreakLabel();
+		refreshP1LimitLabel();
+	}
+
 	/** Places a card into the first empty P1 backup slot and renders it. */
 	private void placeCardInFirstBackupSlot(CardData card) {
 		if (p1BackupLabels == null) return;
@@ -2032,7 +2406,9 @@ public class MainWindow {
 		for (int i = 0; i < ElementColor.values().length; i++)
 			items[i + 1] = ElementColor.values()[i].name().charAt(0)
 					+ ElementColor.values()[i].name().substring(1).toLowerCase();
-		return new JComboBox<>(items);
+		JComboBox<String> box = new JComboBox<>(items);
+		box.setFocusable(false);
+		return box;
 	}
 
 	private void applyElementColor(String selection, JPanel... panels) {
