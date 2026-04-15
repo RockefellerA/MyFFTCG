@@ -203,11 +203,14 @@ public class MainWindow {
 		break1_1.setPreferredSize(cardSize);
 		break1_1.setMinimumSize(cardSize);
 
-		JLabel deck_1 = new JLabel();
-		deck_1.setIcon(scaledCardback(cardSize));
+		JLabel deck_1 = new JLabel("DECK");
+		deck_1.setFont(new Font("Pixel NES", Font.PLAIN, 18));
 		deck_1.setToolTipText("Player 2 Deck");
 		deck_1.setHorizontalAlignment(SwingConstants.CENTER);
-		deck_1.setBorder(new BevelBorder(BevelBorder.RAISED, new Color(0, 0, 0), null, null, null));
+		deck_1.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
+		deck_1.setBackground(Color.DARK_GRAY);
+		deck_1.setForeground(Color.WHITE);
+		deck_1.setOpaque(true);
 
 		JPanel p2CornerPanel = new JPanel(new GridLayout(2, 2));
 		p2CornerPanel.add(lblRemove_1);
@@ -253,11 +256,14 @@ public class MainWindow {
 		JPanel p1DamagePanel = buildDamageZonePanel("P1", p1ColorBox);
 
 		// P1 deck label — interactive
-		p1DeckLabel = new JLabel();
-		p1DeckLabel.setIcon(scaledCardback(cardSize));
+		p1DeckLabel = new JLabel("DECK");
+		p1DeckLabel.setFont(new Font("Pixel NES", Font.PLAIN, 18));
 		p1DeckLabel.setToolTipText("Player 1 Deck");
 		p1DeckLabel.setHorizontalAlignment(SwingConstants.CENTER);
-		p1DeckLabel.setBorder(new BevelBorder(BevelBorder.RAISED, new Color(0, 0, 0), null, null, null));
+		p1DeckLabel.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
+		p1DeckLabel.setBackground(Color.DARK_GRAY);
+		p1DeckLabel.setForeground(Color.WHITE);
+		p1DeckLabel.setOpaque(true);
 		p1DeckLabel.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mousePressed(MouseEvent e) {
@@ -727,8 +733,14 @@ public class MainWindow {
 	}
 
 	private void refreshP1DeckLabel() {
-		p1DeckLabel.setIcon(gameState.getP1MainDeck().isEmpty() ? null : scaledCardback(new Dimension(CARD_W, CARD_H)));
-		p1DeckLabel.setText(gameState.getP1MainDeck().isEmpty() ? "EMPTY" : null);
+		int count = gameState.getP1MainDeck().size();
+		if (count == 0) {
+			p1DeckLabel.setIcon(null);
+			p1DeckLabel.setText("DECK");
+		} else {
+			p1DeckLabel.setIcon(scaledCardbackWithCount(new Dimension(CARD_W, CARD_H), count));
+			p1DeckLabel.setText(null);
+		}
 	}
 
 	/** Resets all interactive UI zones to their empty state for a new game. */
@@ -1640,19 +1652,23 @@ public class MainWindow {
 		forwardTag.setForeground(Color.DARK_GRAY);
 		forwardTag.setOpaque(true);
 
+		int tagW = forwardTag.getPreferredSize().width;
+		JPanel tagWrapper = new JPanel(new BorderLayout());
+		tagWrapper.setBackground(Color.LIGHT_GRAY);
+		tagWrapper.setPreferredSize(new Dimension(tagW, CARD_H));
+		tagWrapper.add(forwardTag, BorderLayout.NORTH);
+
 		JPanel inner = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0)) {
 			@Override
 			public Dimension getPreferredSize() {
 				int cardSlots = Math.max(getComponentCount() - 1, 0);
-				int tagW  = forwardTag.getPreferredSize().width;
-				int slotW = CARD_H;
 				int gap   = 4;
-				int width = gap + tagW + gap + (slotW + gap) * cardSlots;
+				int width = gap + tagW + gap + (CARD_H + gap) * cardSlots;
 				return new Dimension(Math.max(width, tagW + gap * 2), CARD_H);
 			}
 		};
 		inner.setBackground(Color.LIGHT_GRAY);
-		inner.add(forwardTag);
+		inner.add(tagWrapper);
 
 		if (isP1) {
 			p1ForwardPanel = inner;
@@ -1800,9 +1816,25 @@ public class MainWindow {
 		return panel;
 	}
 
-	private ImageIcon scaledCardback(Dimension size) {
-		return new ImageIcon(new ImageIcon(getClass().getResource("/resources/cardback.jpg"))
-				.getImage().getScaledInstance(size.width, size.height, Image.SCALE_SMOOTH));
+	private ImageIcon scaledCardbackWithCount(Dimension size, int count) {
+		Image base = new ImageIcon(getClass().getResource("/resources/cardback.jpg")).getImage();
+		BufferedImage buf = new BufferedImage(size.width, size.height, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = buf.createGraphics();
+		g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+		g.drawImage(base, 0, 0, size.width, size.height, null);
+		String text = String.valueOf(count);
+		g.setFont(new Font("Pixel NES", Font.PLAIN, 12));
+		int textW = g.getFontMetrics().stringWidth(text);
+		int textH = g.getFontMetrics().getAscent();
+		int x = size.width - textW - 4;
+		int y = textH + 4;
+		g.setColor(Color.BLACK);
+		g.drawString(text, x + 1, y + 1);
+		g.setColor(Color.WHITE);
+		g.drawString(text, x, y);
+		g.dispose();
+		return new ImageIcon(buf);
 	}
 
 	private JComboBox<String> buildColorDropdown() {
