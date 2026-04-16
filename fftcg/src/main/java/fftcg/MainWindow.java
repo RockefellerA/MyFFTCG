@@ -8,6 +8,7 @@ import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.FontMetrics;
 import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
@@ -2362,13 +2363,61 @@ public class MainWindow {
 		JPanel slotsPanel = new JPanel(new GridLayout(7, 1, 2, 2));
 		slotsPanel.setBackground(Color.DARK_GRAY);
 		for (String letter : letters) {
-			JLabel slot = new JLabel(letter, SwingConstants.CENTER);
-			slot.setFont(new Font("Pixel NES", Font.PLAIN, 14));
-			slot.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
-			slot.setBackground(Color.DARK_GRAY);
-			slot.setForeground(Color.WHITE);
-			slot.setOpaque(true);
-			slotsPanel.add(slot);
+			if ("D".equals(letter)) {
+				JPanel dSlot = new JPanel() {
+					@Override public void setBackground(Color c) { /* paintComponent owns the background */ }
+					@Override protected void paintComponent(Graphics g) {
+						boolean ex = getClientProperty("ex") == Boolean.TRUE;
+						Graphics2D g2 = (Graphics2D) g.create();
+						g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+						g2.setColor(ex ? Color.RED : Color.DARK_GRAY);
+						g2.fillRect(0, 0, getWidth(), getHeight());
+						g2.setFont(new Font("Pixel NES", Font.PLAIN, 14));
+						g2.setColor(Color.WHITE);
+						FontMetrics fm = g2.getFontMetrics();
+						int tx = (getWidth() - fm.stringWidth("D")) / 2;
+						int ty = (getHeight() + fm.getAscent() - fm.getDescent()) / 2;
+						g2.drawString("D", tx, ty);
+						if (ex) {
+							g2.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+							fm = g2.getFontMetrics();
+							int exW = fm.stringWidth("EX");
+							int exX = getWidth() - exW - 3;
+							int exY = fm.getAscent() + 2;
+							g2.setColor(Color.BLACK);
+							g2.drawString("EX", exX + 1, exY + 1);
+							g2.setColor(Color.YELLOW);
+							g2.drawString("EX", exX, exY);
+						}
+						g2.dispose();
+					}
+				};
+				dSlot.setOpaque(true);
+				dSlot.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
+				dSlot.addMouseListener(new MouseAdapter() {
+					@Override public void mousePressed(MouseEvent e) {
+						if (!AppSettings.isDebugMode()) return;
+						boolean ex = dSlot.getClientProperty("ex") == Boolean.TRUE;
+						JPopupMenu menu = new JPopupMenu();
+						JMenuItem exItem = new JMenuItem(ex ? "Debug: Remove EX" : "Debug: EX Damage");
+						exItem.addActionListener(ae -> {
+							dSlot.putClientProperty("ex", !ex);
+							dSlot.repaint();
+						});
+						menu.add(exItem);
+						menu.show(dSlot, e.getX(), e.getY());
+					}
+				});
+				slotsPanel.add(dSlot);
+			} else {
+				JLabel slot = new JLabel(letter, SwingConstants.CENTER);
+				slot.setFont(new Font("Pixel NES", Font.PLAIN, 14));
+				slot.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
+				slot.setBackground(Color.DARK_GRAY);
+				slot.setForeground(Color.WHITE);
+				slot.setOpaque(true);
+				slotsPanel.add(slot);
+			}
 		}
 
 		// Match the original fixed size: one card wide, two cards tall
