@@ -1979,6 +1979,58 @@ public class MainWindow {
 		}
 	}
 
+	private void animateDullBackup(int idx, boolean dulling) {
+		String url  = p1BackupUrls[idx];
+		JLabel slot = p1BackupLabels[idx];
+		if (url == null || slot == null) return;
+
+		new SwingWorker<BufferedImage, Void>() {
+			@Override protected BufferedImage doInBackground() throws Exception {
+				Image raw = ImageCache.load(url);
+				return raw == null ? null : toARGB(raw, CARD_W, CARD_H);
+			}
+			@Override protected void done() {
+				try {
+					BufferedImage card = get();
+					if (card == null) { refreshP1BackupSlot(idx); return; }
+
+					int   totalFrames = 12;
+					int[] frame       = { 0 };
+					javax.swing.Timer timer = new javax.swing.Timer(16, null);
+					timer.addActionListener(ae -> {
+						frame[0]++;
+						double progress = Math.min(1.0, (double) frame[0] / totalFrames);
+						// ease in-out
+						double t = progress < 0.5
+								? 2 * progress * progress
+								: 1 - Math.pow(-2 * progress + 2, 2) / 2;
+						double angle = dulling ? (Math.PI / 2 * t) : (Math.PI / 2 * (1 - t));
+						slot.setIcon(new ImageIcon(renderBackupCardAtAngle(card, angle)));
+						slot.setText(null);
+						if (frame[0] >= totalFrames) {
+							timer.stop();
+							refreshP1BackupSlot(idx);
+						}
+					});
+					timer.start();
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+	}
+
+	private static BufferedImage renderBackupCardAtAngle(BufferedImage card, double angle) {
+		BufferedImage canvas = new BufferedImage(CARD_H, CARD_H, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = canvas.createGraphics();
+		g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+		g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+		g.translate(CARD_H / 2.0, CARD_H / 2.0);
+		g.rotate(angle);
+		g.translate(-CARD_W / 2.0, -CARD_H / 2.0);
+		g.drawImage(card, 0, 0, null);
+		g.dispose();
+		return canvas;
+	}
+
 	/** Reloads and re-renders a single P1 backup slot using its stored URL and state. */
 	private void refreshP1BackupSlot(int idx) {
 		String url  = p1BackupUrls[idx];
@@ -2078,8 +2130,9 @@ public class MainWindow {
 
 		JMenuItem dullItem = new JMenuItem("Debug: Dull");
 		dullItem.addActionListener(ae -> {
-			p1BackupStates[idx] = (p1BackupStates[idx] == BACKUP_DULLED) ? BACKUP_NORMAL : BACKUP_DULLED;
-			refreshP1BackupSlot(idx);
+			boolean dulling = p1BackupStates[idx] != BACKUP_DULLED;
+			p1BackupStates[idx] = dulling ? BACKUP_DULLED : BACKUP_NORMAL;
+			animateDullBackup(idx, dulling);
 		});
 		menu.add(dullItem);
 
