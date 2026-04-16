@@ -111,6 +111,11 @@ public class MainWindow {
 	private int             p1LbIndex   = 0;
 	private final Set<Integer> spentLbIndices = new HashSet<>();
 
+	// Next-phase button and its glow animation
+	private JButton              nextPhaseButton;
+	private javax.swing.Timer    glowTimer;
+	private final float[]        glowAngle = { 0f };
+
 	public static void main(String[] args) {
 		Runtime.getRuntime().addShutdownHook(new Thread(ImageCache::shutdown));
 		EventQueue.invokeLater(new Runnable() {
@@ -364,9 +369,36 @@ public class MainWindow {
 		p1HandGbc.weighty = 1.0;
 		p1HandAligned.add(p1HandLabel, p1HandGbc);
 
+		// --- Next Phase Button ---
+		nextPhaseButton = new JButton("<html><center>NEXT<br>&#9658;</center></html>");
+		nextPhaseButton.setFont(new Font("Pixel NES", Font.PLAIN, 14));
+		nextPhaseButton.setEnabled(false);
+		nextPhaseButton.setFocusPainted(false);
+		nextPhaseButton.addActionListener(e -> onNextPhase());
+
+		// Pulsing glow border — runs continuously, only paints when enabled
+		glowTimer = new javax.swing.Timer(40, e -> {
+			if (nextPhaseButton == null || !nextPhaseButton.isEnabled()) return;
+			glowAngle[0] += 0.09f;
+			float t = (float)(0.5 + 0.5 * Math.sin(glowAngle[0]));
+			int r = (int)(180 + t * 75);   // 180–255
+			int g = (int)(110 + t * 80);   // 110–190
+			nextPhaseButton.setBorder(BorderFactory.createLineBorder(
+					new Color(Math.min(r, 255), Math.min(g, 255), 20), 3, true));
+		});
+		glowTimer.start();
+
+		JPanel nextBtnWrapper = new JPanel(new GridBagLayout());
+		nextBtnWrapper.setOpaque(false);
+		nextBtnWrapper.setPreferredSize(new Dimension(CARD_W, CARD_H));
+		GridBagConstraints nextGbc = new GridBagConstraints();
+		nextGbc.anchor = GridBagConstraints.CENTER;
+		nextBtnWrapper.add(nextPhaseButton, nextGbc);
+
 		JPanel p1BottomRow = new JPanel(new BorderLayout());
 		p1BottomRow.add(p1HandAligned,   BorderLayout.WEST);
 		p1BottomRow.add(p1BackupWrapper, BorderLayout.CENTER);
+		p1BottomRow.add(nextBtnWrapper,  BorderLayout.EAST);
 
 		JPanel p1MainArea = new JPanel(new BorderLayout(0, 4));
 		p1MainArea.add(p1ForwardZone,  BorderLayout.NORTH);
@@ -453,6 +485,7 @@ public class MainWindow {
 		gameState.reset();
 		p1LbIndex = 0;
 		clearUIZones();
+		if (nextPhaseButton != null) nextPhaseButton.setEnabled(false);
 		if (gameLog != null) gameLog.setText("");
 		logEntry("Game Start");
 		refreshP1HandLabel();
@@ -657,12 +690,10 @@ public class MainWindow {
 			openingHandPopup = null;
 			logEntry("Kept opening hand");
 			gameState.keepHand(handOrder);
-			// Player 1 goes first: draw 1 card at the start of their first Active phase
-			// (subsequent turns draw 2; Player 2 also draws 2 on their first turn)
-			gameState.drawToHand(1);
-			logEntry("Drew 1 card");
+			gameState.startFirstTurn();
+			logEntry("Turn 1 — Active Phase");
+			if (nextPhaseButton != null) nextPhaseButton.setEnabled(true);
 			refreshP1HandLabel();
-			refreshP1DeckLabel();
 		});
 
 		JButton mulliganBtn = new JButton("Mulligan");
@@ -746,6 +777,104 @@ public class MainWindow {
 		} else {
 			p1DeckLabel.setIcon(scaledCardbackWithCount(new Dimension(CARD_W, CARD_H), count));
 			p1DeckLabel.setText(null);
+		}
+	}
+
+	// -------------------------------------------------------------------------
+	// Phase management
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Called when the player clicks the "Next" button.
+	 * Executes any automatic actions for the phase being left, advances the
+	 * phase in GameState, and logs the transition to the game log.
+	 *
+	 * <ul>
+	 *   <li>ACTIVE  → DRAW   : activate dull cards, draw 1 (turn 1) or 2 cards</li>
+	 *   <li>DRAW    → MAIN_1 : nothing automatic</li>
+	 *   <li>MAIN_1  → ATTACK : nothing automatic</li>
+	 *   <li>ATTACK  → MAIN_2 : nothing automatic</li>
+	 *   <li>MAIN_2  → END    : nothing automatic</li>
+	 *   <li>END     → ACTIVE : increment turn, immediately activate cards</li>
+	 * </ul>
+	 */
+	private void onNextPhase() {
+		GameState.GamePhase current = gameState.getCurrentPhase();
+		if (current == null) return;
+
+		switch (current) {
+
+			case ACTIVE: {
+				// Advance first so getTurnNumber() still reflects the current turn
+				gameState.advancePhase();   // ACTIVE → DRAW
+				int drawCount = gameState.getTurnNumber() == 1 ? 1 : 2;
+				List<CardData> drawn = gameState.drawToHand(drawCount);
+				refreshP1HandLabel();
+				refreshP1DeckLabel();
+				logEntry("Draw Phase — Drew " + drawn.size()
+						+ " card" + (drawn.size() != 1 ? "s" : ""));
+				break;
+			}
+
+			case DRAW:
+				gameState.advancePhase();   // DRAW → MAIN_1
+				logEntry("Main Phase 1");
+				break;
+
+			case MAIN_1:
+				gameState.advancePhase();   // MAIN_1 → ATTACK
+				logEntry("Attack Phase");
+				break;
+
+			case ATTACK:
+				gameState.advancePhase();   // ATTACK → MAIN_2
+				logEntry("Main Phase 2");
+				break;
+
+			case MAIN_2:
+				gameState.advancePhase();   // MAIN_2 → END
+				logEntry("End Phase");
+				break;
+
+			case END: {
+				// Advance (turn number increments inside advancePhase)
+				gameState.advancePhase();   // END → ACTIVE
+
+				// Execute Active Phase: dull → normal, frozen → dull
+				int activated = 0, thawed = 0;
+				for (int i = 0; i < p1BackupStates.length; i++) {
+					if (p1BackupStates[i] == BACKUP_FROZEN) {
+						p1BackupStates[i] = BACKUP_DULLED;
+						refreshP1BackupSlot(i);
+						thawed++;
+					} else if (p1BackupStates[i] == BACKUP_DULLED) {
+						p1BackupStates[i] = BACKUP_NORMAL;
+						refreshP1BackupSlot(i);
+						activated++;
+					}
+				}
+				for (int i = 0; i < p1ForwardStates.size(); i++) {
+					if (p1ForwardStates.get(i) == BACKUP_FROZEN) {
+						p1ForwardStates.set(i, BACKUP_DULLED);
+						refreshP1ForwardSlot(i);
+						thawed++;
+					} else if (p1ForwardStates.get(i) == BACKUP_DULLED) {
+						p1ForwardStates.set(i, BACKUP_NORMAL);
+						refreshP1ForwardSlot(i);
+						activated++;
+					}
+				}
+
+				StringBuilder msg = new StringBuilder(
+						"Turn " + gameState.getTurnNumber() + " — Active Phase");
+				if (activated > 0)
+					msg.append(" (").append(activated).append(" activated");
+				if (thawed > 0)
+					msg.append(activated > 0 ? ", " : " (").append(thawed).append(" thawed");
+				if (activated > 0 || thawed > 0) msg.append(")");
+				logEntry(msg.toString());
+				break;
+			}
 		}
 	}
 

@@ -36,6 +36,8 @@ public class GameState {
         p1CpByElement.clear();
         p1OpeningHandPending = false;
         p1MulliganUsed       = false;
+        currentPhase         = null;
+        turnNumber           = 0;
     }
 
     /**
@@ -196,4 +198,60 @@ public class GameState {
     public List<CardData>  getP1BreakZone()         { return p1BreakZone; }
     public boolean         isP1OpeningHandPending() { return p1OpeningHandPending; }
     public boolean         isP1MulliganUsed()       { return p1MulliganUsed; }
+
+    // -------------------------------------------------------------------------
+    // Phase / turn tracking
+    // -------------------------------------------------------------------------
+
+    /**
+     * The six phases of a FFTCG turn, in order.
+     * Calling {@link #next()} wraps END back to ACTIVE.
+     */
+    public enum GamePhase {
+        ACTIVE ("Active Phase"),
+        DRAW   ("Draw Phase"),
+        MAIN_1 ("Main Phase 1"),
+        ATTACK ("Attack Phase"),
+        MAIN_2 ("Main Phase 2"),
+        END    ("End Phase");
+
+        public final String displayName;
+        GamePhase(String displayName) { this.displayName = displayName; }
+
+        /** Returns the phase that follows this one in turn order. */
+        public GamePhase next() {
+            GamePhase[] vals = values();
+            return vals[(ordinal() + 1) % vals.length];
+        }
+    }
+
+    private GamePhase currentPhase = null;  // null ⇒ game not yet started
+    private int       turnNumber   = 0;
+
+    /** Begins the very first turn: sets phase to Active and turn number to 1. */
+    public void startFirstTurn() {
+        currentPhase = GamePhase.ACTIVE;
+        turnNumber   = 1;
+    }
+
+    /**
+     * Advances to the next phase in turn order.
+     * When {@link GamePhase#END} wraps back to {@link GamePhase#ACTIVE}
+     * the turn number is incremented.
+     *
+     * @return the newly entered phase
+     */
+    public GamePhase advancePhase() {
+        if (currentPhase == null) {
+            currentPhase = GamePhase.ACTIVE;
+            turnNumber   = 1;
+        } else {
+            if (currentPhase == GamePhase.END) turnNumber++;
+            currentPhase = currentPhase.next();
+        }
+        return currentPhase;
+    }
+
+    public GamePhase getCurrentPhase() { return currentPhase; }
+    public int       getTurnNumber()   { return turnNumber; }
 }
