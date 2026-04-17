@@ -1,8 +1,8 @@
 package fftcg;
 
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.Frame;
 import java.awt.Toolkit;
 
@@ -10,6 +10,7 @@ import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
@@ -44,8 +45,10 @@ public class PreferencesDialog extends JDialog {
 
 		JCheckBox dynamicBgCheckBox = new JCheckBox("Enable Dynamic Background Colors");
 		dynamicBgCheckBox.setEnabled(false);
+		dynamicBgCheckBox.setAlignmentX(Component.LEFT_ALIGNMENT);
 		generalPanel.add(dynamicBgCheckBox);
 
+		generalPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		contentPanel.add(generalPanel);
 		contentPanel.add(javax.swing.Box.createVerticalStrut(8));
 
@@ -58,6 +61,7 @@ public class PreferencesDialog extends JDialog {
 
 		JCheckBox debugCheckBox = new JCheckBox("Enable Debug Mode");
 		debugCheckBox.setSelected(AppSettings.isDebugMode());
+		debugCheckBox.setAlignmentX(Component.LEFT_ALIGNMENT);
 		debugCheckBox.addActionListener(e -> {
 			AppSettings.setDebugMode(debugCheckBox.isSelected());
 			AppSettings.save();
@@ -67,8 +71,10 @@ public class PreferencesDialog extends JDialog {
 		JLabel debugHint = new JLabel(
 				"<html><font color='gray' size='2'>Enables debug actions (e.g. adding test cards to zones).</font></html>");
 		debugHint.setBorder(new EmptyBorder(2, 20, 4, 4));
+		debugHint.setAlignmentX(Component.LEFT_ALIGNMENT);
 		devPanel.add(debugHint);
 
+		devPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		contentPanel.add(devPanel);
 		contentPanel.add(javax.swing.Box.createVerticalStrut(8));
 
@@ -79,15 +85,20 @@ public class PreferencesDialog extends JDialog {
 				BorderFactory.createEtchedBorder(), "Layout",
 				TitledBorder.LEFT, TitledBorder.TOP));
 
-		JCheckBox sidePanelRightBox = new JCheckBox("Side Panel on Right");
-		sidePanelRightBox.setSelected("right".equals(AppSettings.getSidePanelSide()));
-		sidePanelRightBox.addActionListener(e -> {
-			AppSettings.setSidePanelSide(sidePanelRightBox.isSelected() ? "right" : "left");
+		JPanel sidePanelRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+		sidePanelRow.add(new JLabel("Side Panel:"));
+		JComboBox<String> sidePanelCombo = new JComboBox<>(new String[]{"Left", "Right"});
+		sidePanelCombo.setSelectedItem("right".equals(AppSettings.getSidePanelSide()) ? "Right" : "Left");
+		sidePanelCombo.addActionListener(e -> {
+			AppSettings.setSidePanelSide("Right".equals(sidePanelCombo.getSelectedItem()) ? "right" : "left");
 			AppSettings.save();
 			if (onLayoutChanged != null) onLayoutChanged.run();
 		});
-		layoutPanel.add(sidePanelRightBox);
+		sidePanelRow.add(sidePanelCombo);
+		sidePanelRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+		layoutPanel.add(sidePanelRow);
 
+		layoutPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		contentPanel.add(layoutPanel);
 
 		// ── Buttons ──────────────────────────────────────────────────────────

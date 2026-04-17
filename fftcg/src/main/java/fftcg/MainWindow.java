@@ -478,7 +478,7 @@ public class MainWindow {
 		gameLog.setEditable(false);
 		gameLog.setLineWrap(true);
 		gameLog.setWrapStyleWord(true);
-		gameLog.setFont(new Font("Trebuchet MS", Font.PLAIN, 12));
+		gameLog.setFont(loadLatinia(12));
 		gameLog.setBackground(Color.WHITE);
 		gameLog.setForeground(Color.BLACK);
 		gameLog.setMargin(new Insets(4, 4, 4, 4));
@@ -822,6 +822,20 @@ public class MainWindow {
 		handPanel.add(lbl);
 		handPanel.revalidate();
 		handPanel.repaint();
+	}
+
+	private static Font loadLatinia(float size) {
+		try (java.io.InputStream is = MainWindow.class.getResourceAsStream("/resources/Latinia.ttf")) {
+			if (is != null) {
+				Font font = Font.createFont(Font.TRUETYPE_FONT, is).deriveFont(size);
+				java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().registerFont(font);
+				return font;
+			}
+			System.err.println("[Font] Latinia.ttf not found in resources — falling back to Serif");
+		} catch (Exception e) {
+			System.err.println("[Font] Failed to load Latinia.ttf: " + e.getMessage());
+		}
+		return new Font("Serif", Font.PLAIN, (int) size);
 	}
 
 	private void refreshP1DeckLabel() {
@@ -1503,7 +1517,9 @@ public class MainWindow {
 		JPopupMenu menu = new JPopupMenu();
 
 		JMenuItem playItem = new JMenuItem("Play");
-		playItem.setEnabled(canAffordCard(card, handIdx) && (!card.isBackup() || hasAvailableBackupSlot()));
+		GameState.GamePhase phase = gameState.getCurrentPhase();
+		boolean isMainPhase = phase == GameState.GamePhase.MAIN_1 || phase == GameState.GamePhase.MAIN_2;
+		playItem.setEnabled(isMainPhase && canAffordCard(card, handIdx) && (!card.isBackup() || hasAvailableBackupSlot()));
 		playItem.addActionListener(ae -> {
 			hideZoom();
 			if (handPopup != null) { handPopup.dispose(); handPopup = null; }
