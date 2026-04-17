@@ -814,7 +814,7 @@ public class MainWindow {
 		if (handPanel == null) return;
 		handPanel.removeAll();
 		int n = gameState.getP1Hand().size();
-		String text = n == 0 ? "HAND" : "HAND (" + n + ")";
+		String text = n == 0 ? "HAND" : "HAND -" + n + "-";
 		JLabel lbl = new JLabel(text, SwingConstants.CENTER);
 		lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
 		lbl.setForeground(Color.LIGHT_GRAY);
@@ -2227,6 +2227,88 @@ public class MainWindow {
 		}.execute();
 	}
 
+	private void animateFreezeBackup(int idx, boolean freezing, int prevState) {
+		String url  = p1BackupUrls[idx];
+		JLabel slot = p1BackupLabels[idx];
+		if (url == null || slot == null) return;
+
+		new SwingWorker<BufferedImage, Void>() {
+			@Override protected BufferedImage doInBackground() throws Exception {
+				Image raw = ImageCache.load(url);
+				return raw == null ? null : toARGB(raw, CARD_W, CARD_H);
+			}
+			@Override protected void done() {
+				try {
+					BufferedImage card = get();
+					if (card == null) { refreshP1BackupSlot(idx); return; }
+
+					double startAngle = freezing ? (prevState == BACKUP_DULLED ? Math.PI / 2 : 0.0) : Math.PI;
+					double endAngle   = freezing ? Math.PI : 0.0;
+
+					int   totalFrames = 12;
+					int[] frame       = { 0 };
+					javax.swing.Timer timer = new javax.swing.Timer(16, null);
+					timer.addActionListener(ae -> {
+						frame[0]++;
+						double progress = Math.min(1.0, (double) frame[0] / totalFrames);
+						double t = progress < 0.5
+								? 2 * progress * progress
+								: 1 - Math.pow(-2 * progress + 2, 2) / 2;
+						double angle = startAngle + (endAngle - startAngle) * t;
+						slot.setIcon(new ImageIcon(renderBackupCardAtAngle(card, angle)));
+						slot.setText(null);
+						if (frame[0] >= totalFrames) {
+							timer.stop();
+							refreshP1BackupSlot(idx);
+						}
+					});
+					timer.start();
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+	}
+
+	private void animateFreezeForward(int idx, boolean freezing, int prevState) {
+		String url  = p1ForwardUrls.get(idx);
+		JLabel slot = p1ForwardLabels.get(idx);
+		if (url == null || slot == null) return;
+
+		new SwingWorker<BufferedImage, Void>() {
+			@Override protected BufferedImage doInBackground() throws Exception {
+				Image raw = ImageCache.load(url);
+				return raw == null ? null : toARGB(raw, CARD_W, CARD_H);
+			}
+			@Override protected void done() {
+				try {
+					BufferedImage card = get();
+					if (card == null) { refreshP1ForwardSlot(idx); return; }
+
+					double startAngle = freezing ? (prevState == BACKUP_DULLED ? Math.PI / 2 : 0.0) : Math.PI;
+					double endAngle   = freezing ? Math.PI : 0.0;
+
+					int   totalFrames = 12;
+					int[] frame       = { 0 };
+					javax.swing.Timer timer = new javax.swing.Timer(16, null);
+					timer.addActionListener(ae -> {
+						frame[0]++;
+						double progress = Math.min(1.0, (double) frame[0] / totalFrames);
+						double t = progress < 0.5
+								? 2 * progress * progress
+								: 1 - Math.pow(-2 * progress + 2, 2) / 2;
+						double angle = startAngle + (endAngle - startAngle) * t;
+						slot.setIcon(new ImageIcon(renderBackupCardAtAngle(card, angle)));
+						slot.setText(null);
+						if (frame[0] >= totalFrames) {
+							timer.stop();
+							refreshP1ForwardSlot(idx);
+						}
+					});
+					timer.start();
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+	}
+
 	private static BufferedImage renderBackupCardAtAngle(BufferedImage card, double angle) {
 		BufferedImage canvas = new BufferedImage(CARD_H, CARD_H, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = canvas.createGraphics();
@@ -2347,8 +2429,10 @@ public class MainWindow {
 
 		JMenuItem freezeItem = new JMenuItem("Debug: Freeze");
 		freezeItem.addActionListener(ae -> {
-			p1BackupStates[idx] = (p1BackupStates[idx] == BACKUP_FROZEN) ? BACKUP_NORMAL : BACKUP_FROZEN;
-			refreshP1BackupSlot(idx);
+			boolean freezing = p1BackupStates[idx] != BACKUP_FROZEN;
+			int prevState = p1BackupStates[idx];
+			p1BackupStates[idx] = freezing ? BACKUP_FROZEN : BACKUP_NORMAL;
+			animateFreezeBackup(idx, freezing, prevState);
 		});
 		menu.add(freezeItem);
 
@@ -2572,9 +2656,10 @@ public class MainWindow {
 
 		JMenuItem freezeItem = new JMenuItem("Debug: Freeze");
 		freezeItem.addActionListener(ae -> {
-			p1ForwardStates.set(idx,
-					p1ForwardStates.get(idx) == BACKUP_FROZEN ? BACKUP_NORMAL : BACKUP_FROZEN);
-			refreshP1ForwardSlot(idx);
+			boolean freezing = p1ForwardStates.get(idx) != BACKUP_FROZEN;
+			int prevState = p1ForwardStates.get(idx);
+			p1ForwardStates.set(idx, freezing ? BACKUP_FROZEN : BACKUP_NORMAL);
+			animateFreezeForward(idx, freezing, prevState);
 		});
 		menu.add(freezeItem);
 
