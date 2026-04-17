@@ -754,13 +754,13 @@ public class MainWindow {
 		instructions.setFont(new Font("Pixel NES", Font.PLAIN, 10));
 
 		// ── Buttons ──────────────────────────────────────────────────────────
-		JButton keepBtn = new JButton("Keep Hand");
+		JButton keepBtn = new JButton(mulliganAvailable ? "Keep Hand" : "Take Hand");
 		keepBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
 		keepBtn.addActionListener(e -> {
 			hideZoom();
 			openingHandPopup.dispose();
 			openingHandPopup = null;
-			logEntry("Kept opening hand");
+			if (mulliganAvailable) logEntry("Kept opening hand");
 			gameState.keepHand(handOrder);
 			gameState.startFirstTurn();
 			logEntry("Turn 1 — Active Phase");
