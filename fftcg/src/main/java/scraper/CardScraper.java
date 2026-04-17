@@ -259,8 +259,11 @@ public class CardScraper {
             c.element = sb.toString();
         }
 
-        // ex_burst and multicard arrive as "0" / "1" strings
-        c.exBurst   = "1".equals(j.optString("ex_burst",  "0"));
+        // ex_burst and multicard arrive as "0" / "1" strings.
+        // Fall back to checking the ability text for the [[ex]] markup because the API
+        // occasionally returns ex_burst=0 for genuine EX Burst cards.
+        c.exBurst   = "1".equals(j.optString("ex_burst",  "0"))
+                   || c.textEn.contains("[[ex]]");
         c.multicard = "1".equals(j.optString("multicard", "0"));
 
         // cost and power arrive as strings
@@ -296,9 +299,8 @@ public class CardScraper {
             List<ScrapedCard> total = scraper.scrapeOnePage("1");
             db.saveCards(total);
         } catch (SQLException e) {
-            System.err.println("FAIL – database error:");
+            System.err.println("FAIL - database error:");
             e.printStackTrace();
-            return;
         } catch (Exception e) {
             e.printStackTrace();
         }

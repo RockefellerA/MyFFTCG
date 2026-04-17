@@ -126,6 +126,10 @@ public class MainWindow {
 	private int             p1LbIndex   = 0;
 	private final Set<Integer> spentLbIndices = new HashSet<>();
 
+	// Damage zone UI
+	private JPanel   p1DamageSlotPanel;
+	private JPanel[] p1DamageSlots = new JPanel[7];
+
 	// Next-phase button and its glow animation
 	private JButton              nextPhaseButton;
 	private javax.swing.Timer    glowTimer;
@@ -308,7 +312,7 @@ public class MainWindow {
 				GameState.GamePhase phase = gameState.getCurrentPhase();
 				boolean isMainPhase = phase == GameState.GamePhase.MAIN_1
 						|| phase == GameState.GamePhase.MAIN_2;
-				if (!gameState.getP1LbDeck().isEmpty() && isMainPhase) showLbDialog();
+				if (!gameState.getP1LbDeck().isEmpty() && isMainPhase && !gameState.isP1GameOver()) showLbDialog();
 			}
 		});
 
@@ -582,7 +586,7 @@ public class MainWindow {
 				List<CardData> lb   = new ArrayList<>();
 				for (DeckCardDetail card : cards) {
 					CardData cd = new CardData(card.imageUrl(), card.name(), card.element(),
-							card.cost(), card.type(), card.isLb(), card.lbCost());
+							card.cost(), card.type(), card.isLb(), card.lbCost(), card.exBurst());
 					if (card.isLb()) lb.add(cd);
 					else             main.add(cd);
 				}
@@ -598,6 +602,7 @@ public class MainWindow {
 	// -------------------------------------------------------------------------
 
 	private void onP1DeckClicked() {
+		if (gameState.isP1GameOver()) return;
 		if (gameState.getP1MainDeck().isEmpty()) return;
 
 		if (gameState.isP1OpeningHandPending()) {
@@ -871,6 +876,7 @@ public class MainWindow {
 	 * </ul>
 	 */
 	private void onNextPhase() {
+		if (gameState.isP1GameOver()) return;
 		GameState.GamePhase current = gameState.getCurrentPhase();
 		if (current == null) return;
 
@@ -994,6 +1000,19 @@ public class MainWindow {
 		p1ForwardStates.clear();
 		spentLbIndices.clear();
 
+		// Damage zone
+		if (p1DamageSlotPanel != null) {
+			p1DamageSlotPanel.putClientProperty("exBurst", Boolean.FALSE);
+			p1DamageSlotPanel.repaint();
+		}
+		for (JPanel slot : p1DamageSlots) {
+			if (slot != null) {
+				slot.putClientProperty("cardImg", null);
+				slot.putClientProperty("isExBurst", null);
+				slot.repaint();
+			}
+		}
+
 		// Break zone label
 		refreshP1BreakLabel();
 
@@ -1097,6 +1116,135 @@ public class MainWindow {
 
 			JLabel nameLabel = new JLabel(cd.name(), SwingConstants.CENTER);
 			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
+
+			cardWrapper.add(lbl,       BorderLayout.CENTER);
+			cardWrapper.add(nameLabel, BorderLayout.SOUTH);
+			cardsPanel.add(cardWrapper);
+		}
+
+		JScrollPane scrollPane = new JScrollPane(cardsPanel,
+				JScrollPane.VERTICAL_SCROLLBAR_NEVER,
+				JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+		scrollPane.setPreferredSize(new Dimension(
+				Math.min(zone.size() * (CARD_W + 16) + 16, 900),
+				CARD_H + 60));
+
+		JButton closeBtn = new JButton("Close");
+		closeBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		closeBtn.addActionListener(ae -> { hideZoom(); dlg.dispose(); });
+
+		JPanel south = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
+		south.add(closeBtn);
+		south.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 8));
+
+		dlg.getContentPane().setLayout(new BorderLayout(0, 4));
+		dlg.getContentPane().add(scrollPane, BorderLayout.CENTER);
+		dlg.getContentPane().add(south,      BorderLayout.SOUTH);
+		dlg.pack();
+		dlg.setLocationRelativeTo(frame);
+		dlg.setVisible(true);
+	}
+
+	private void triggerGameOver(String reason) {
+		gameState.setP1GameOver(true);
+		logEntry(reason);
+		if (nextPhaseButton != null) nextPhaseButton.setEnabled(false);
+	}
+
+	private void p1TakeDamage() {
+		if (gameState.isP1GameOver()) return;
+		CardData drawn = gameState.drawToDamageZone();
+		if (drawn == null) {
+			triggerGameOver("P1 milled out — You Lose!");
+			return;
+		}
+		int idx = gameState.getP1DamageZone().size() - 1;
+		boolean isEx = drawn.exBurst();
+
+		refreshP1DeckLabel();
+		logEntry("P1 takes 1 damage — " + drawn.name() + (isEx ? " [EX BURST!]" : ""));
+
+		if (gameState.getP1DamageZone().size() >= 7) {
+			triggerGameOver("7 Damage Taken - You Lose!");
+		}
+
+		if (p1DamageSlotPanel != null) {
+			p1DamageSlotPanel.putClientProperty("exBurst", isEx ? Boolean.TRUE : Boolean.FALSE);
+			for (JPanel s : p1DamageSlots) { if (s != null) s.repaint(); }
+			p1DamageSlotPanel.repaint();
+		}
+
+		if (idx < 7 && p1DamageSlots[idx] != null) {
+			JPanel slot = p1DamageSlots[idx];
+			slot.putClientProperty("isExBurst", isEx ? Boolean.TRUE : Boolean.FALSE);
+			slot.repaint();
+			String url = drawn.imageUrl();
+			new SwingWorker<Image, Void>() {
+				@Override protected Image doInBackground() throws Exception {
+					return ImageCache.load(url);
+				}
+				@Override protected void done() {
+					try {
+						Image img = get();
+						if (img != null) { slot.putClientProperty("cardImg", img); slot.repaint(); }
+					} catch (InterruptedException | ExecutionException ignored) {}
+				}
+			}.execute();
+		}
+	}
+
+	private void showDamageZoneDialog() {
+		List<CardData> zone = gameState.getP1DamageZone();
+		if (zone.isEmpty()) return;
+
+		JDialog dlg = new JDialog(frame, "Damage Zone (" + zone.size() + " cards)", true);
+		dlg.setResizable(false);
+		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+		JPanel cardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+
+		for (CardData cd : zone) {
+			JPanel cardWrapper = new JPanel(new BorderLayout(0, 4));
+			cardWrapper.setBackground(cardsPanel.getBackground());
+
+			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
+			lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+			lbl.setOpaque(true);
+			lbl.setBackground(Color.DARK_GRAY);
+			lbl.setBorder(BorderFactory.createLineBorder(
+					cd.exBurst() ? Color.YELLOW : Color.LIGHT_GRAY, cd.exBurst() ? 2 : 1));
+
+			lbl.addMouseListener(new MouseAdapter() {
+				@Override public void mouseEntered(MouseEvent e) {
+					if (lbl.getIcon() != null) showZoomAt(cd.imageUrl(), lbl);
+				}
+				@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+			});
+
+			new SwingWorker<ImageIcon, Void>() {
+				@Override protected ImageIcon doInBackground() throws Exception {
+					Image img = ImageCache.load(cd.imageUrl());
+					if (img == null) return null;
+					BufferedImage buf = new BufferedImage(CARD_W, CARD_H, BufferedImage.TYPE_INT_ARGB);
+					Graphics2D g2 = buf.createGraphics();
+					g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+					g2.drawImage(img, 0, 0, CARD_W, CARD_H, null);
+					g2.dispose();
+					return new ImageIcon(buf);
+				}
+				@Override protected void done() {
+					try {
+						ImageIcon icon = get();
+						if (icon != null) { lbl.setIcon(icon); lbl.setText(null); }
+					} catch (InterruptedException | ExecutionException ignored) {}
+				}
+			}.execute();
+
+			JLabel nameLabel = new JLabel(cd.name() + (cd.exBurst() ? " ★EX" : ""), SwingConstants.CENTER);
+			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			nameLabel.setForeground(cd.exBurst() ? Color.YELLOW : null);
 			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
 
 			cardWrapper.add(lbl,       BorderLayout.CENTER);
@@ -1640,6 +1788,7 @@ public class MainWindow {
 	}
 
 	private void onHandPopupCardClicked(int handIdx, CardData card, JLabel cardLabel, MouseEvent e) {
+		if (gameState.isP1GameOver()) return;
 		cancelHandPopupHide();
 		handCardMenuOpen = true;
 
@@ -2814,32 +2963,57 @@ public class MainWindow {
 	}
 
 	private JPanel buildDamageZonePanel(String playerLabel, JComboBox<String> colorBox) {
-		String[] letters = { "D", "A", "M", "A", "G", "E", playerLabel };
+		boolean isP1 = "P1".equals(playerLabel);
 
-		JPanel slotsPanel = new JPanel(new GridLayout(7, 1, 2, 2));
-		slotsPanel.setBackground(Color.DARK_GRAY);
-		for (String letter : letters) {
-			if ("D".equals(letter)) {
-				JPanel dSlot = new JPanel() {
-					@Override public void setBackground(Color c) { /* paintComponent owns the background */ }
+		// Inner panel: 7 mini-card slots stacked vertically.
+		// For P1: shows card thumbnails and handles EX burst overlay.
+		// For P2: shows plain letters (D-A-M-A-G-E-P2), same as before.
+		JPanel slotsPanel;
+
+		if (isP1) {
+			slotsPanel = new JPanel(new GridLayout(7, 1, 2, 2)) {
+				@Override public void setBackground(Color c) { /* paintComponent owns background */ }
+				@Override protected void paintComponent(Graphics g) {
+					g.setColor(Color.DARK_GRAY);
+					g.fillRect(0, 0, getWidth(), getHeight());
+				}
+			};
+			slotsPanel.setOpaque(true);
+
+			String[] slotLetters = { "D", "A", "M", "A", "G", "E", "P1" };
+			for (int i = 0; i < 7; i++) {
+				final String letter = slotLetters[i];
+				JPanel slot = new JPanel() {
+					@Override public void setBackground(Color c) { /* paintComponent owns background */ }
 					@Override protected void paintComponent(Graphics g) {
-						boolean ex = getClientProperty("ex") == Boolean.TRUE;
+						Image img = (Image) getClientProperty("cardImg");
 						Graphics2D g2 = (Graphics2D) g.create();
+						g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 						g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-						g2.setColor(ex ? Color.RED : Color.DARK_GRAY);
+						g2.setColor(img != null ? Color.RED : Color.DARK_GRAY);
 						g2.fillRect(0, 0, getWidth(), getHeight());
+						if (img != null) {
+							int iw = img.getWidth(null), ih = img.getHeight(null);
+							if (iw > 0 && ih > 0) {
+								int cardAreaW = getWidth() / 2;
+								double scale = Math.min((double) cardAreaW / iw, (double) getHeight() / ih);
+								int dw = (int)(iw * scale), dh = (int)(ih * scale);
+								int dy = (getHeight() - dh) / 2;
+								g2.drawImage(img, 0, dy, dw, dy + dh, 0, 0, iw, ih, null);
+							}
+						}
 						g2.setFont(new Font("Pixel NES", Font.PLAIN, 14));
 						g2.setColor(Color.WHITE);
 						FontMetrics fm = g2.getFontMetrics();
-						int tx = (getWidth() - fm.stringWidth("D")) / 2;
+						int tx = (getWidth() - fm.stringWidth(letter)) / 2;
 						int ty = (getHeight() + fm.getAscent() - fm.getDescent()) / 2;
-						g2.drawString("D", tx, ty);
-						if (ex) {
+						g2.drawString(letter, tx, ty);
+						if (getClientProperty("isExBurst") == Boolean.TRUE) {
 							g2.setFont(new Font("Pixel NES", Font.PLAIN, 9));
-							fm = g2.getFontMetrics();
-							int exW = fm.stringWidth("EX");
+							FontMetrics exFm = g2.getFontMetrics();
+							int exW = exFm.stringWidth("EX");
 							int exX = getWidth() - exW - 3;
-							int exY = fm.getAscent() + 2;
+							int exY = exFm.getAscent() + 2;
 							g2.setColor(Color.BLACK);
 							g2.drawString("EX", exX + 1, exY + 1);
 							g2.setColor(Color.YELLOW);
@@ -2848,24 +3022,55 @@ public class MainWindow {
 						g2.dispose();
 					}
 				};
-				dSlot.setOpaque(true);
-				dSlot.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
-				dSlot.addMouseListener(new MouseAdapter() {
-					@Override public void mousePressed(MouseEvent e) {
-						if (!AppSettings.isDebugMode()) return;
-						boolean ex = dSlot.getClientProperty("ex") == Boolean.TRUE;
+				slot.setOpaque(true);
+				slot.setBorder(BorderFactory.createLineBorder(new Color(80, 80, 80), 1));
+				slotsPanel.add(slot);
+				p1DamageSlots[i] = slot;
+			}
+
+			slotsPanel.addMouseListener(new MouseAdapter() {
+				@Override public void mousePressed(MouseEvent e) {
+					if (javax.swing.SwingUtilities.isRightMouseButton(e)) {
 						JPopupMenu menu = new JPopupMenu();
-						JMenuItem exItem = new JMenuItem(ex ? "Debug: Remove EX" : "Debug: EX Damage");
-						exItem.addActionListener(ae -> {
-							dSlot.putClientProperty("ex", !ex);
-							dSlot.repaint();
-						});
-						menu.add(exItem);
-						menu.show(dSlot, e.getX(), e.getY());
+						boolean gameActive = gameState.getCurrentPhase() != null;
+						if (gameActive && !gameState.getP1MainDeck().isEmpty()) {
+							JMenuItem dmgItem = new JMenuItem("Take 1 Damage");
+							dmgItem.addActionListener(ae -> p1TakeDamage());
+							menu.add(dmgItem);
+						}
+						boolean ex = slotsPanel.getClientProperty("exBurst") == Boolean.TRUE;
+						if (ex) {
+							JMenuItem clearEx = new JMenuItem("Dismiss EX");
+							clearEx.addActionListener(ae -> {
+								slotsPanel.putClientProperty("exBurst", Boolean.FALSE);
+								for (JPanel s : p1DamageSlots) { if (s != null) s.repaint(); }
+								slotsPanel.repaint();
+							});
+							menu.add(clearEx);
+						}
+						if (AppSettings.isDebugMode() && !ex) {
+							JMenuItem dbgEx = new JMenuItem("Debug: EX Damage");
+							dbgEx.addActionListener(ae -> {
+								slotsPanel.putClientProperty("exBurst", Boolean.TRUE);
+								slotsPanel.repaint();
+							});
+							menu.add(dbgEx);
+						}
+						if (menu.getComponentCount() > 0) menu.show(slotsPanel, e.getX(), e.getY());
+					} else {
+						if (!gameState.getP1DamageZone().isEmpty()) showDamageZoneDialog();
 					}
-				});
-				slotsPanel.add(dSlot);
-			} else {
+				}
+			});
+
+			p1DamageSlotPanel = slotsPanel;
+
+		} else {
+			// P2: plain letter display
+			String[] letters = { "D", "A", "M", "A", "G", "E", playerLabel };
+			slotsPanel = new JPanel(new GridLayout(7, 1, 2, 2));
+			slotsPanel.setBackground(Color.DARK_GRAY);
+			for (String letter : letters) {
 				JLabel slot = new JLabel(letter, SwingConstants.CENTER);
 				slot.setFont(new Font("Pixel NES", Font.PLAIN, 14));
 				slot.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
@@ -2876,7 +3081,6 @@ public class MainWindow {
 			}
 		}
 
-		// Match the original fixed size: one card wide, two cards tall
 		JPanel panel = new JPanel(new BorderLayout(0, 4));
 		panel.setPreferredSize(new Dimension(CARD_W, CARD_H * 2));
 		panel.add(slotsPanel, BorderLayout.CENTER);

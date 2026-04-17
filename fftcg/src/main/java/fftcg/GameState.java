@@ -15,13 +15,15 @@ import java.util.Map;
 public class GameState {
 
     // --- P1 ---
-    private final Deque<CardData>          p1MainDeck  = new ArrayDeque<>();
-    private final List<CardData>           p1LbDeck    = new ArrayList<>();
-    private final List<CardData>           p1Hand      = new ArrayList<>();
-    private final List<CardData>           p1BreakZone = new ArrayList<>();
+    private final Deque<CardData>          p1MainDeck   = new ArrayDeque<>();
+    private final List<CardData>           p1LbDeck     = new ArrayList<>();
+    private final List<CardData>           p1Hand       = new ArrayList<>();
+    private final List<CardData>           p1BreakZone  = new ArrayList<>();
+    private final List<CardData>           p1DamageZone = new ArrayList<>();
     private final Map<String, Integer>     p1CpByElement = new HashMap<>();
     private boolean p1OpeningHandPending  = false;
     private boolean p1MulliganUsed        = false;
+    private boolean p1GameOver            = false;
 
     // -------------------------------------------------------------------------
     // Lifecycle
@@ -33,9 +35,11 @@ public class GameState {
         p1LbDeck.clear();
         p1Hand.clear();
         p1BreakZone.clear();
+        p1DamageZone.clear();
         p1CpByElement.clear();
         p1OpeningHandPending = false;
         p1MulliganUsed       = false;
+        p1GameOver           = false;
         currentPhase         = null;
         turnNumber           = 0;
     }
@@ -113,6 +117,22 @@ public class GameState {
             drawn.add(card);
         }
         return drawn;
+    }
+
+    // -------------------------------------------------------------------------
+    // Damage zone
+    // -------------------------------------------------------------------------
+
+    /**
+     * Draws the top card of the main deck into the damage zone.
+     *
+     * @return the card placed in the damage zone, or {@code null} if the deck is empty
+     */
+    public CardData drawToDamageZone() {
+        if (p1MainDeck.isEmpty()) return null;
+        CardData card = p1MainDeck.poll();
+        p1DamageZone.add(card);
+        return card;
     }
 
     // -------------------------------------------------------------------------
@@ -196,8 +216,11 @@ public class GameState {
     public List<CardData>  getP1LbDeck()            { return p1LbDeck; }
     public List<CardData>  getP1Hand()              { return p1Hand; }
     public List<CardData>  getP1BreakZone()         { return p1BreakZone; }
+    public List<CardData>  getP1DamageZone()        { return p1DamageZone; }
     public boolean         isP1OpeningHandPending() { return p1OpeningHandPending; }
     public boolean         isP1MulliganUsed()       { return p1MulliganUsed; }
+    public boolean         isP1GameOver()           { return p1GameOver; }
+    public void            setP1GameOver(boolean v) { p1GameOver = v; }
 
     // -------------------------------------------------------------------------
     // Phase / turn tracking
