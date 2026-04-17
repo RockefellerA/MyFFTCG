@@ -16,6 +16,10 @@ import javax.swing.KeyStroke;
 class FileMenu extends JMenu {
 
     FileMenu(JFrame owner, IntConsumer startGame) {
+        this(owner, startGame, null);
+    }
+
+    FileMenu(JFrame owner, IntConsumer startGame, Runnable onLayoutChanged) {
         super("File");
 
         JMenuItem newGame = new JMenuItem("New Game");
@@ -44,7 +48,7 @@ class FileMenu extends JMenu {
         JMenuItem preferences = new JMenuItem("Preferences");
         add(preferences);
         preferences.addActionListener((ActionEvent e) -> {
-            PreferencesDialog dialog = new PreferencesDialog(owner);
+            PreferencesDialog dialog = new PreferencesDialog(owner, onLayoutChanged);
             dialog.setVisible(true);
         });
 

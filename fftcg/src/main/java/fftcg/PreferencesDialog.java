@@ -22,6 +22,10 @@ import javax.swing.border.TitledBorder;
 public class PreferencesDialog extends JDialog {
 
 	public PreferencesDialog(Frame owner) {
+		this(owner, null);
+	}
+
+	public PreferencesDialog(Frame owner, Runnable onLayoutChanged) {
 		super(owner, "Preferences", true);
 		setIconImage(Toolkit.getDefaultToolkit().getImage(PreferencesDialog.class.getResource("/resources/MyFF20.png")));
 		setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
@@ -66,6 +70,25 @@ public class PreferencesDialog extends JDialog {
 		devPanel.add(debugHint);
 
 		contentPanel.add(devPanel);
+		contentPanel.add(javax.swing.Box.createVerticalStrut(8));
+
+		// ── Layout ───────────────────────────────────────────────────────────
+		JPanel layoutPanel = new JPanel();
+		layoutPanel.setLayout(new BoxLayout(layoutPanel, BoxLayout.Y_AXIS));
+		layoutPanel.setBorder(BorderFactory.createTitledBorder(
+				BorderFactory.createEtchedBorder(), "Layout",
+				TitledBorder.LEFT, TitledBorder.TOP));
+
+		JCheckBox sidePanelRightBox = new JCheckBox("Side Panel on Right");
+		sidePanelRightBox.setSelected("right".equals(AppSettings.getSidePanelSide()));
+		sidePanelRightBox.addActionListener(e -> {
+			AppSettings.setSidePanelSide(sidePanelRightBox.isSelected() ? "right" : "left");
+			AppSettings.save();
+			if (onLayoutChanged != null) onLayoutChanged.run();
+		});
+		layoutPanel.add(sidePanelRightBox);
+
+		contentPanel.add(layoutPanel);
 
 		// ── Buttons ──────────────────────────────────────────────────────────
 		JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));

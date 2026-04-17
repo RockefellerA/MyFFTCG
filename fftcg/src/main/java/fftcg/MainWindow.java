@@ -1,5 +1,6 @@
 package fftcg;
 
+import java.awt.AlphaComposite;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -69,17 +70,31 @@ public class MainWindow {
 	private static final int CARD_W = 140;
 	private static final int CARD_H = 205;
 
+	// Side info panel dimensions.
+	// The panel is sized to the native card-image width on the first hover;
+	// these are just the fallback values used before any image loads.
+	private static final int SIDE_MARGIN   = 4;                   // px between card and panel edge
+	private static final double PREVIEW_SCALE = 0.8;
+	private int sidePanelW = (int)(3 * CARD_W * PREVIEW_SCALE);   // updated on first image load
+	private int previewH   =
+			(int)(sidePanelW * (double) CARD_H / CARD_W);         // updated on first image load
+	private boolean previewSized = false;
+
 	// P1 zone labels that change during gameplay
 	private JLabel p1DeckLabel;
 	private JLabel p1LimitLabel;
-	private JLabel p1HandLabel;
+	private JPanel handPanel;
 	private JLabel p1BreakLabel;
 	private GrayscaleLabel p1RemoveLabel;
 	private GrayscaleLabel p2RemoveLabel;
 	// Game event log
 	private JTextArea gameLog;
-	// Zoom popup for LB card hover
-	private JWindow zoomPopup;
+	// Side info panel (card preview + Next button + game log)
+	private JPanel        sidePanel;
+	private JPanel        cardPreviewPanel;   // custom-painted card preview
+	private BufferedImage previewImage;       // current card to draw (null = empty)
+	private float         previewAlpha  = 0f; // 0 = transparent, 1 = fully opaque
+	private javax.swing.Timer fadeTimer;      // drives fade-in / fade-out animation
 	// Opening hand confirmation popup
 	private JWindow openingHandPopup;
 	// Removed from Play confirmation popup
@@ -150,7 +165,8 @@ public class MainWindow {
 		// --- Menu Bar ---
 		JMenuBar menuBar = new JMenuBar();
 		frame.setJMenuBar(menuBar);
-		menuBar.add(new FileMenu(frame, this::startGame));
+		menuBar.add(new FileMenu(frame, this::startGame,
+				() -> applySidePanelSide(AppSettings.getSidePanelSide())));
 		menuBar.add(new HelpMenu(frame));
 
 		Dimension cardSize = new Dimension(CARD_W, CARD_H);
@@ -218,21 +234,12 @@ public class MainWindow {
 		GridBagConstraints p2BackupGbc = new GridBagConstraints();
 		p2BackupGbc.anchor = GridBagConstraints.NORTH;
 		p2BackupGbc.weighty = 1.0;
-		p2BackupGbc.insets = new Insets(0, CARD_W - 8, 0, 0);
 		p2BackupWrapper.add(p2BackupSlots, p2BackupGbc);
 
 		JScrollPane p2ForwardZone = buildForwardZonePanel(false);
 
-		JPanel p2HandAligned = new JPanel(new GridBagLayout());
-		p2HandAligned.setPreferredSize(new Dimension(2 * CARD_W, CARD_H));
-		GridBagConstraints p2HandGbc = new GridBagConstraints();
-		p2HandGbc.anchor = GridBagConstraints.NORTHWEST;
-		p2HandGbc.weighty = 1.0;
-		p2HandAligned.add(buildHandSlot(), p2HandGbc);
-
 		JPanel p2TopRow = new JPanel(new BorderLayout());
 		p2TopRow.add(p2BackupWrapper, BorderLayout.CENTER);
-		p2TopRow.add(p2HandAligned,   BorderLayout.EAST);
 
 		JPanel p2MainArea = new JPanel(new BorderLayout(0, 4));
 		p2MainArea.add(p2TopRow,      BorderLayout.NORTH);
@@ -345,29 +352,9 @@ public class MainWindow {
 		GridBagConstraints p1BackupGbc = new GridBagConstraints();
 		p1BackupGbc.anchor = GridBagConstraints.SOUTH;
 		p1BackupGbc.weighty = 1.0;
-		p1BackupGbc.insets = new Insets(0, 0, 0, CARD_W - 8);
 		p1BackupWrapper.add(p1BackupSlots, p1BackupGbc);
 
 		JScrollPane p1ForwardZone = buildForwardZonePanel(true);
-
-		p1HandLabel = buildHandSlot();
-		p1HandLabel.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mouseEntered(MouseEvent e) {
-				if (!gameState.getP1Hand().isEmpty()) showHandPopup();
-			}
-			@Override
-			public void mouseExited(MouseEvent e) {
-				scheduleHandPopupHide();
-			}
-		});
-
-		JPanel p1HandAligned = new JPanel(new GridBagLayout());
-		p1HandAligned.setPreferredSize(new Dimension(2 * CARD_W, CARD_H));
-		GridBagConstraints p1HandGbc = new GridBagConstraints();
-		p1HandGbc.anchor = GridBagConstraints.SOUTHEAST;
-		p1HandGbc.weighty = 1.0;
-		p1HandAligned.add(p1HandLabel, p1HandGbc);
 
 		// --- Next Phase Button ---
 		nextPhaseButton = new JButton("<html><center>NEXT<br>&#9658;</center></html>");
@@ -388,24 +375,23 @@ public class MainWindow {
 		});
 		glowTimer.start();
 
-		JPanel nextBtnWrapper = new JPanel(new GridBagLayout());
-		nextBtnWrapper.setOpaque(false);
-		nextBtnWrapper.setPreferredSize(new Dimension(CARD_W, CARD_H));
-		GridBagConstraints nextGbc = new GridBagConstraints();
-		nextGbc.anchor = GridBagConstraints.CENTER;
-		nextBtnWrapper.add(nextPhaseButton, nextGbc);
-
 		JPanel p1BottomRow = new JPanel(new BorderLayout());
-		p1BottomRow.add(p1HandAligned,   BorderLayout.WEST);
 		p1BottomRow.add(p1BackupWrapper, BorderLayout.CENTER);
-		p1BottomRow.add(nextBtnWrapper,  BorderLayout.EAST);
 
 		JPanel p1MainArea = new JPanel(new BorderLayout(0, 4));
 		p1MainArea.add(p1ForwardZone,  BorderLayout.NORTH);
 		p1MainArea.add(p1BottomRow,    BorderLayout.SOUTH);
 
+		// Damage panel on the left, hand slot flush against its right edge at the bottom
+		JPanel p1LeftGroup = new JPanel(new GridBagLayout());
+		GridBagConstraints lgbc = new GridBagConstraints();
+		lgbc.gridx = 0; lgbc.gridy = 0;
+		lgbc.fill = GridBagConstraints.BOTH;
+		lgbc.weighty = 1.0;
+		p1LeftGroup.add(p1DamagePanel, lgbc);
+
 		JPanel p1ZonesPanel = new JPanel(new BorderLayout());
-		p1ZonesPanel.add(p1DamagePanel,  BorderLayout.WEST);
+		p1ZonesPanel.add(p1LeftGroup,    BorderLayout.WEST);
 		p1ZonesPanel.add(p1MainArea,     BorderLayout.CENTER);
 		p1ZonesPanel.add(p1CornerPanel,  BorderLayout.EAST);
 
@@ -452,7 +438,42 @@ public class MainWindow {
 		p2ColorBox.setSelectedItem(AppSettings.getP2BoardColor());
 		p1ColorBox.setSelectedItem(AppSettings.getP1BoardColor());
 
-		// --- Game Log ---
+		// --- Side Panel (card preview + Next button + Game Log) ---
+
+		// Card preview — custom-painted panel that draws previewImage at native size
+		cardPreviewPanel = new JPanel() {
+			@Override
+			protected void paintComponent(Graphics g) {
+				super.paintComponent(g);
+				if (previewImage != null && previewAlpha > 0f) {
+					Graphics2D g2 = (Graphics2D) g;
+					g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+							RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+					g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, previewAlpha));
+					int m = SIDE_MARGIN / 2;
+					g2.drawImage(previewImage,
+							m, m, getWidth() - m, getHeight() - m,
+							0, 0, previewImage.getWidth(), previewImage.getHeight(), null);
+					g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1f));
+				}
+			}
+		};
+		cardPreviewPanel.setPreferredSize(new Dimension(sidePanelW, previewH));
+		cardPreviewPanel.setMinimumSize (new Dimension(sidePanelW, previewH));
+		cardPreviewPanel.setMaximumSize (new Dimension(sidePanelW, previewH));
+		cardPreviewPanel.setBackground(Color.DARK_GRAY);
+		cardPreviewPanel.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Color.GRAY));
+
+		// Next-phase button, centred below the preview
+		JPanel nextBtnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 8));
+		nextBtnPanel.add(nextPhaseButton);
+
+		JPanel sideNorth = new JPanel();
+		sideNorth.setLayout(new BoxLayout(sideNorth, BoxLayout.Y_AXIS));
+		sideNorth.add(cardPreviewPanel);
+		sideNorth.add(nextBtnPanel);
+
+		// Game log (scrollable, fills the rest of the side panel)
 		gameLog = new JTextArea();
 		gameLog.setEditable(false);
 		gameLog.setLineWrap(true);
@@ -467,14 +488,57 @@ public class MainWindow {
 		JScrollPane logScrollPane = new JScrollPane(gameLog,
 				JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
 				JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-		logScrollPane.setPreferredSize(new Dimension(200, 0));
-		logScrollPane.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Color.LIGHT_GRAY));
+
+		handPanel = new JPanel(null);
+		handPanel.setBackground(Color.DARK_GRAY);
+		handPanel.setPreferredSize(new Dimension(sidePanelW, CARD_H));
+		handPanel.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Color.GRAY));
+		handPanel.addMouseListener(new MouseAdapter() {
+			@Override public void mouseEntered(MouseEvent e) {
+				if (!gameState.getP1Hand().isEmpty()) showHandPopup();
+			}
+			@Override public void mouseExited(MouseEvent e) { scheduleHandPopupHide(); }
+		});
+		refreshHandPanel();
+
+		sidePanel = new JPanel(new BorderLayout());
+		sidePanel.setPreferredSize(new Dimension(sidePanelW, 0));
+		sidePanel.add(sideNorth,     BorderLayout.NORTH);
+		sidePanel.add(logScrollPane, BorderLayout.CENTER);
+		sidePanel.add(handPanel,     BorderLayout.SOUTH);
+
+		// --- Main game area (wraps both player zones + board so the side panel
+		//     spans the full frame height rather than just the centre strip) ---
+		JPanel mainArea = new JPanel(new BorderLayout());
+		mainArea.add(p2ZonesPanel, BorderLayout.NORTH);
+		mainArea.add(southPanel,   BorderLayout.SOUTH);
+		mainArea.add(gameBoard,    BorderLayout.CENTER);
 
 		// --- Assemble ---
-		frame.getContentPane().add(p2ZonesPanel,  BorderLayout.NORTH);
-		frame.getContentPane().add(southPanel,     BorderLayout.SOUTH);
-		frame.getContentPane().add(gameBoard,      BorderLayout.CENTER);
-		frame.getContentPane().add(logScrollPane,  BorderLayout.WEST);
+		frame.getContentPane().add(mainArea, BorderLayout.CENTER);
+		applySidePanelSide(AppSettings.getSidePanelSide());
+	}
+
+	// -------------------------------------------------------------------------
+	// Side panel docking
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Docks the side info panel to the left or right of the frame.
+	 * Safe to call at any time after {@code initialize()} — removes the panel
+	 * from its current position, flips its separator border, then re-adds it.
+	 *
+	 * @param side {@code "left"} or {@code "right"}
+	 */
+	private void applySidePanelSide(String side) {
+		if (sidePanel == null) return;
+		frame.getContentPane().remove(sidePanel);
+		boolean right = "right".equals(side);
+		sidePanel.setBorder(BorderFactory.createMatteBorder(
+				0, right ? 1 : 0, 0, right ? 0 : 1, Color.LIGHT_GRAY));
+		frame.getContentPane().add(sidePanel, right ? BorderLayout.EAST : BorderLayout.WEST);
+		frame.revalidate();
+		frame.repaint();
 	}
 
 	// -------------------------------------------------------------------------
@@ -743,30 +807,21 @@ public class MainWindow {
 	}
 
 	private void refreshP1HandLabel() {
-		if (gameState.getP1Hand().isEmpty()) {
-			p1HandLabel.setIcon(null);
-			p1HandLabel.setText("HAND");
-			return;
-		}
-		loadHandLabelAsync(gameState.getP1Hand().get(0).imageUrl());
+		refreshHandPanel();
 	}
 
-	private void loadHandLabelAsync(String imageUrl) {
-		new SwingWorker<ImageIcon, Void>() {
-			@Override
-			protected ImageIcon doInBackground() throws Exception {
-				Image img = ImageCache.load(imageUrl);
-				return img == null ? null : new ImageIcon(
-						img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
-			}
-			@Override
-			protected void done() {
-				try {
-					ImageIcon icon = get();
-					if (icon != null) { p1HandLabel.setIcon(icon); p1HandLabel.setText(null); }
-				} catch (InterruptedException | ExecutionException ignored) {}
-			}
-		}.execute();
+	private void refreshHandPanel() {
+		if (handPanel == null) return;
+		handPanel.removeAll();
+		int n = gameState.getP1Hand().size();
+		String text = n == 0 ? "HAND" : "HAND (" + n + ")";
+		JLabel lbl = new JLabel(text, SwingConstants.CENTER);
+		lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		lbl.setForeground(Color.LIGHT_GRAY);
+		lbl.setBounds(0, 0, handPanel.getWidth() > 0 ? handPanel.getWidth() : sidePanelW, CARD_H);
+		handPanel.add(lbl);
+		handPanel.revalidate();
+		handPanel.repaint();
 	}
 
 	private void refreshP1DeckLabel() {
@@ -1254,56 +1309,93 @@ public class MainWindow {
 	// Async image loading helpers
 	// -------------------------------------------------------------------------
 
-	private void ensureZoomPopup() {
-		if (zoomPopup == null) {
-			zoomPopup = new JWindow(frame);
-			zoomPopup.setAlwaysOnTop(true);
-		}
-	}
-
+	/**
+	 * Loads the card image for {@code url} at its native resolution and
+	 * displays it in the side-panel preview.  The first time this is called
+	 * the side panel is resized to exactly fit the card plus {@link #SIDE_MARGIN}.
+	 * The {@code anchor} parameter is kept for call-site compatibility.
+	 */
 	private void showZoomAt(String url, JLabel anchor) {
-		if (url == null) return;
-
-		ensureZoomPopup();
-
-		new SwingWorker<ImageIcon, Void>() {
+		if (url == null || cardPreviewPanel == null) return;
+		new SwingWorker<BufferedImage, Void>() {
 			@Override
-			protected ImageIcon doInBackground() throws Exception {
+			protected BufferedImage doInBackground() throws Exception {
 				Image img = ImageCache.load(url);
-				return img == null ? null : new ImageIcon(img);
+				if (img == null) return null;
+				int w = img.getWidth(null);
+				int h = img.getHeight(null);
+				BufferedImage buf = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+				buf.getGraphics().drawImage(img, 0, 0, null);
+				return buf;
 			}
 			@Override
 			protected void done() {
 				try {
-					ImageIcon icon = get();
-					if (icon == null) return;
-
-					JLabel zl = new JLabel(icon);
-					zl.setBorder(BorderFactory.createRaisedBevelBorder());
-					zoomPopup.getContentPane().removeAll();
-					zoomPopup.getContentPane().add(zl);
-					zoomPopup.pack();
-
-					int w = icon.getIconWidth();
-					int h = icon.getIconHeight();
-					Point loc = anchor.getLocationOnScreen();
-					int x = loc.x - w - 6;
-					int y = loc.y + (anchor.getHeight() - h) / 2;
-					int screenH = Toolkit.getDefaultToolkit().getScreenSize().height;
-					y = Math.max(0, Math.min(y, screenH - h));
-					zoomPopup.setLocation(x, y);
-					zoomPopup.setVisible(true);
+					BufferedImage img = get();
+					if (img == null) return;
+					sizePreviewPanel(img.getWidth(), img.getHeight());
+					previewImage = img;
+					startFadeIn();
 				} catch (InterruptedException | ExecutionException ignored) {}
 			}
 		}.execute();
 	}
 
+	/** Clears the side-panel card preview with a fade-out. */
 	private void hideZoom() {
-		if (zoomPopup != null) zoomPopup.setVisible(false);
+		startFadeOut();
+	}
+
+	/** Fades the preview in from transparent to opaque (~120 ms). */
+	private void startFadeIn() {
+		if (fadeTimer != null) fadeTimer.stop();
+		previewAlpha = 0f;
+		cardPreviewPanel.repaint();
+		fadeTimer = new javax.swing.Timer(16, e -> {
+			previewAlpha = Math.min(1f, previewAlpha + 0.15f);
+			cardPreviewPanel.repaint();
+			if (previewAlpha >= 1f) ((javax.swing.Timer) e.getSource()).stop();
+		});
+		fadeTimer.start();
+	}
+
+	/** Fades the preview out to transparent (~120 ms), then clears the image. */
+	private void startFadeOut() {
+		if (fadeTimer != null) fadeTimer.stop();
+		if (cardPreviewPanel == null) { previewImage = null; return; }
+		fadeTimer = new javax.swing.Timer(16, e -> {
+			previewAlpha = Math.max(0f, previewAlpha - 0.15f);
+			cardPreviewPanel.repaint();
+			if (previewAlpha <= 0f) {
+				((javax.swing.Timer) e.getSource()).stop();
+				previewImage = null;
+				cardPreviewPanel.repaint();
+			}
+		});
+		fadeTimer.start();
+	}
+
+	/**
+	 * On the first call, resizes the side panel and preview panel so the panel
+	 * is exactly {@code imgW + SIDE_MARGIN} pixels wide and {@code imgH} pixels tall.
+	 * Subsequent calls are no-ops.
+	 */
+	private void sizePreviewPanel(int imgW, int imgH) {
+		if (previewSized) return;
+		previewSized = true;
+		sidePanelW = (int)(imgW * PREVIEW_SCALE) + SIDE_MARGIN;
+		previewH   = (int)(imgH * PREVIEW_SCALE);
+		cardPreviewPanel.setPreferredSize(new Dimension(sidePanelW, previewH));
+		cardPreviewPanel.setMinimumSize  (new Dimension(sidePanelW, previewH));
+		cardPreviewPanel.setMaximumSize  (new Dimension(sidePanelW, previewH));
+		sidePanel.setPreferredSize(new Dimension(sidePanelW, 0));
+		handPanel.setPreferredSize(new Dimension(sidePanelW, CARD_H));
+		refreshHandPanel();
+		frame.revalidate();
 	}
 
 	// -------------------------------------------------------------------------
-	// Hand hover popover (shown when mousing over the deck zone)
+	// Hand card zoom / popup helpers
 	// -------------------------------------------------------------------------
 
 	private void showHandPopup() {
@@ -1374,11 +1466,14 @@ public class MainWindow {
 		handPopup.getContentPane().add(cardsPanel);
 		handPopup.pack();
 
-		// Position above the hand label, left-aligned to its left edge
-		Point loc = p1HandLabel.getLocationOnScreen();
-		int x = loc.x;
-		int y = loc.y - handPopup.getHeight() - 4;
+		// Position above the hand panel: extend right for left sidebar, left for right sidebar
+		Point loc = handPanel.getLocationOnScreen();
 		Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+		boolean sidebarOnRight = "right".equals(AppSettings.getSidePanelSide());
+		int x = sidebarOnRight
+				? loc.x + handPanel.getWidth() - handPopup.getWidth()
+				: loc.x;
+		int y = loc.y - handPopup.getHeight() - 4;
 		x = Math.max(0, Math.min(x, screen.width  - handPopup.getWidth()));
 		y = Math.max(0, Math.min(y, screen.height - handPopup.getHeight()));
 		handPopup.setLocation(x, y);
@@ -1430,40 +1525,9 @@ public class MainWindow {
 		menu.show(cardLabel, e.getX(), e.getY());
 	}
 
-	/** Shows a full-resolution preview of a hand card to the left of the hand popover. */
+	/** Shows a preview of a hand card in the side panel. */
 	private void showHandCardZoom(String url, JLabel anchor) {
-		if (url == null) return;
-		ensureZoomPopup();
-
-		new SwingWorker<ImageIcon, Void>() {
-			@Override protected ImageIcon doInBackground() throws Exception {
-				Image img = ImageCache.load(url);
-				return img == null ? null : new ImageIcon(img);
-			}
-			@Override protected void done() {
-				try {
-					ImageIcon icon = get();
-					if (icon == null) return;
-					JLabel zl = new JLabel(icon);
-					zl.setBorder(BorderFactory.createRaisedBevelBorder());
-					zoomPopup.getContentPane().removeAll();
-					zoomPopup.getContentPane().add(zl);
-					zoomPopup.pack();
-
-					// Position to the left of the hand popover window
-					Point base = (handPopup != null && handPopup.isVisible())
-							? handPopup.getLocationOnScreen()
-							: anchor.getLocationOnScreen();
-					int x = base.x - icon.getIconWidth() - 6;
-					int y = base.y;
-					Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
-					x = Math.max(0, x);
-					y = Math.max(0, Math.min(y, screen.height - icon.getIconHeight()));
-					zoomPopup.setLocation(x, y);
-					zoomPopup.setVisible(true);
-				} catch (InterruptedException | ExecutionException ignored) {}
-			}
-		}.execute();
+		showZoomAt(url, anchor);
 	}
 
 	private void refreshP1BreakLabel() {
@@ -2334,39 +2398,31 @@ public class MainWindow {
 		}.execute();
 	}
 
+	/** Shows a grayscale preview of a "Removed from Play" card in the side panel. */
 	private void showGrayscaleZoom(GrayscaleLabel label) {
 		String url = label.getUrl();
-		if (url == null) return;
-
-		ensureZoomPopup();
-
-		new SwingWorker<ImageIcon, Void>() {
+		if (url == null || cardPreviewPanel == null) return;
+		new SwingWorker<BufferedImage, Void>() {
 			@Override
-			protected ImageIcon doInBackground() throws Exception {
+			protected BufferedImage doInBackground() throws Exception {
 				Image img = ImageCache.load(url);
 				if (img == null) return null;
-				BufferedImage buf = new BufferedImage(img.getWidth(null), img.getHeight(null), BufferedImage.TYPE_INT_ARGB);
+				int nativeW = img.getWidth(null);
+				int nativeH = img.getHeight(null);
+				BufferedImage buf = new BufferedImage(nativeW, nativeH, BufferedImage.TYPE_INT_ARGB);
 				buf.getGraphics().drawImage(img, 0, 0, null);
-				BufferedImage gray = new ColorConvertOp(ColorSpace.getInstance(ColorSpace.CS_GRAY), null).filter(buf, null);
-				return new ImageIcon(gray);
+				return new ColorConvertOp(
+						ColorSpace.getInstance(ColorSpace.CS_GRAY), null).filter(buf, null);
 			}
 			@Override
 			protected void done() {
 				try {
-					ImageIcon icon = get();
-					if (icon == null) return;
-					JLabel zl = new JLabel(icon);
-					zl.setBorder(BorderFactory.createRaisedBevelBorder());
-					zoomPopup.getContentPane().removeAll();
-					zoomPopup.getContentPane().add(zl);
-					zoomPopup.pack();
-					Point loc = label.getLocationOnScreen();
-					int x = loc.x - icon.getIconWidth() - 6;
-					int y = loc.y + (label.getHeight() - icon.getIconHeight()) / 2;
-					int screenH = Toolkit.getDefaultToolkit().getScreenSize().height;
-					y = Math.max(0, Math.min(y, screenH - icon.getIconHeight()));
-					zoomPopup.setLocation(x, y);
-					zoomPopup.setVisible(true);
+					BufferedImage img = get();
+					if (img != null) {
+						sizePreviewPanel(img.getWidth(), img.getHeight());
+						previewImage = img;
+						startFadeIn();
+					}
 				} catch (InterruptedException | ExecutionException ignored) {}
 			}
 		}.execute();
@@ -2525,18 +2581,6 @@ public class MainWindow {
 			slotsPanel.add(slot);
 		}
 		return slotsPanel;
-	}
-
-	private JLabel buildHandSlot() {
-		JLabel slot = new JLabel("HAND", SwingConstants.CENTER);
-		slot.setFont(new Font("Pixel NES", Font.PLAIN, 11));
-		slot.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
-		slot.setBackground(Color.LIGHT_GRAY);
-		slot.setForeground(Color.DARK_GRAY);
-		slot.setOpaque(true);
-		slot.setPreferredSize(new Dimension(CARD_W, CARD_H));
-		slot.setMinimumSize(new Dimension(CARD_W, CARD_H));
-		return slot;
 	}
 
 	private JPanel buildDamageZonePanel(String playerLabel, JComboBox<String> colorBox) {

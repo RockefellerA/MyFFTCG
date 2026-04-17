@@ -80,4 +80,17 @@ public final class AppSettings {
     public static void setP2BoardColor(String color) {
         props.setProperty("p2.board.color", color);
     }
+
+    /**
+     * Returns which side the info panel is docked to: {@code "left"} or {@code "right"}.
+     * Defaults to {@code "left"} if unset (matching the former log position).
+     */
+    public static String getSidePanelSide() {
+        return props.getProperty("side.panel.side", "left");
+    }
+
+    /** Saves the side panel docking side (call {@link #save()} to persist). */
+    public static void setSidePanelSide(String side) {
+        props.setProperty("side.panel.side", side);
+    }
 }
