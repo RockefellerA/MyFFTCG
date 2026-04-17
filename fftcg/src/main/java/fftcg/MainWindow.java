@@ -305,7 +305,10 @@ public class MainWindow {
 		p1LimitLabel.addMouseListener(new MouseAdapter() {
 			@Override
 			public void mousePressed(MouseEvent e) {
-				if (!gameState.getP1LbDeck().isEmpty()) showLbDialog();
+				GameState.GamePhase phase = gameState.getCurrentPhase();
+				boolean isMainPhase = phase == GameState.GamePhase.MAIN_1
+						|| phase == GameState.GamePhase.MAIN_2;
+				if (!gameState.getP1LbDeck().isEmpty() && isMainPhase) showLbDialog();
 			}
 		});
 
@@ -882,6 +885,13 @@ public class MainWindow {
 				refreshP1DeckLabel();
 				logEntry("Draw Phase — Drew " + drawn.size()
 						+ " card" + (drawn.size() != 1 ? "s" : ""));
+				if (drawn.size() < drawCount) {
+					logEntry("Milled Out - You Lose!");
+					nextPhaseButton.setEnabled(false);
+					return;
+				}
+				// No choices to make during Draw phase — advance automatically
+				onNextPhase();
 				break;
 			}
 
@@ -903,6 +913,7 @@ public class MainWindow {
 			case MAIN_2:
 				gameState.advancePhase();   // MAIN_2 → END
 				logEntry("End Phase");
+				showEndPhaseDiscardDialog();
 				break;
 
 			case END: {
@@ -1309,6 +1320,124 @@ public class MainWindow {
 		JPanel south = new JPanel(new BorderLayout());
 		south.add(statusBar,  BorderLayout.CENTER);
 		south.add(closeBtn,   BorderLayout.EAST);
+		south.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 8));
+
+		dlg.getContentPane().setLayout(new BorderLayout(0, 4));
+		dlg.getContentPane().add(scrollPane, BorderLayout.CENTER);
+		dlg.getContentPane().add(south,      BorderLayout.SOUTH);
+		dlg.pack();
+		dlg.setLocationRelativeTo(frame);
+		dlg.setVisible(true);
+	}
+
+	private void showEndPhaseDiscardDialog() {
+		List<CardData> hand = gameState.getP1Hand();
+		if (hand.size() <= 5) return;
+
+		JDialog dlg = new JDialog(frame, "End Phase — Discard to 5", true);
+		dlg.setResizable(false);
+		dlg.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+
+		Set<Integer> selected = new java.util.HashSet<>();
+		int mustDiscard = hand.size() - 5;
+
+		JLabel statusLabel = new JLabel("Select " + mustDiscard + " card(s) to discard.", SwingConstants.CENTER);
+		statusLabel.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+
+		List<JLabel> cardLabels = new ArrayList<>();
+		JPanel cardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+
+		JButton confirmBtn = new JButton("Confirm");
+		confirmBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		confirmBtn.setEnabled(false);
+
+		Runnable refresh = () -> {
+			int remaining = mustDiscard - selected.size();
+			statusLabel.setText(remaining > 0
+					? "Select " + remaining + " more card(s) to discard."
+					: "Ready — click Confirm to discard.");
+			confirmBtn.setEnabled(selected.size() == mustDiscard);
+			for (int i = 0; i < cardLabels.size(); i++) {
+				cardLabels.get(i).setBorder(BorderFactory.createLineBorder(
+						selected.contains(i) ? Color.RED : Color.LIGHT_GRAY, selected.contains(i) ? 3 : 1));
+			}
+		};
+
+		for (int i = 0; i < hand.size(); i++) {
+			final int idx = i;
+			CardData cd = hand.get(i);
+
+			JPanel wrapper = new JPanel(new BorderLayout(0, 4));
+			wrapper.setBackground(cardsPanel.getBackground());
+
+			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
+			lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+			lbl.setOpaque(true);
+			lbl.setBackground(Color.DARK_GRAY);
+			lbl.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1));
+			lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+			cardLabels.add(lbl);
+
+			lbl.addMouseListener(new MouseAdapter() {
+				@Override public void mouseEntered(MouseEvent e) { if (lbl.getIcon() != null) showZoomAt(cd.imageUrl(), lbl); }
+				@Override public void mouseExited(MouseEvent e)  { hideZoom(); }
+				@Override public void mousePressed(MouseEvent e) {
+					if (selected.contains(idx)) selected.remove(idx);
+					else if (selected.size() < mustDiscard)  selected.add(idx);
+					refresh.run();
+				}
+			});
+
+			new SwingWorker<ImageIcon, Void>() {
+				@Override protected ImageIcon doInBackground() throws Exception {
+					Image img = ImageCache.load(cd.imageUrl());
+					if (img == null) return null;
+					BufferedImage buf = new BufferedImage(CARD_W, CARD_H, BufferedImage.TYPE_INT_ARGB);
+					Graphics2D g2 = buf.createGraphics();
+					g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+					g2.drawImage(img, 0, 0, CARD_W, CARD_H, null);
+					g2.dispose();
+					return new ImageIcon(buf);
+				}
+				@Override protected void done() {
+					try { ImageIcon icon = get(); if (icon != null) { lbl.setIcon(icon); lbl.setText(null); } }
+					catch (InterruptedException | ExecutionException ignored) {}
+				}
+			}.execute();
+
+			JLabel nameLabel = new JLabel(cd.name(), SwingConstants.CENTER);
+			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
+
+			wrapper.add(lbl,       BorderLayout.CENTER);
+			wrapper.add(nameLabel, BorderLayout.SOUTH);
+			cardsPanel.add(wrapper);
+		}
+
+		confirmBtn.addActionListener(ae -> {
+			hideZoom();
+			dlg.dispose();
+			List<Integer> toDiscard = new ArrayList<>(selected);
+			toDiscard.sort(Collections.reverseOrder());
+			for (int di : toDiscard) {
+				gameState.discardFromHand(di);
+			}
+			logEntry("Discarded " + toDiscard.size() + " card(s) — hand reduced to 5");
+			refreshP1HandLabel();
+			refreshP1BreakLabel();
+		});
+
+		JScrollPane scrollPane = new JScrollPane(cardsPanel,
+				JScrollPane.VERTICAL_SCROLLBAR_NEVER,
+				JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+		scrollPane.setPreferredSize(new Dimension(
+				Math.min(hand.size() * (CARD_W + 16) + 16, 900),
+				CARD_H + 60));
+
+		JPanel south = new JPanel(new BorderLayout());
+		south.add(statusLabel,  BorderLayout.CENTER);
+		south.add(confirmBtn,   BorderLayout.EAST);
 		south.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 8));
 
 		dlg.getContentPane().setLayout(new BorderLayout(0, 4));
