@@ -3048,14 +3048,6 @@ public class MainWindow {
 							});
 							menu.add(clearEx);
 						}
-						if (AppSettings.isDebugMode() && !ex) {
-							JMenuItem dbgEx = new JMenuItem("Debug: EX Damage");
-							dbgEx.addActionListener(ae -> {
-								slotsPanel.putClientProperty("exBurst", Boolean.TRUE);
-								slotsPanel.repaint();
-							});
-							menu.add(dbgEx);
-						}
 						if (menu.getComponentCount() > 0) menu.show(slotsPanel, e.getX(), e.getY());
 					} else {
 						if (!gameState.getP1DamageZone().isEmpty()) showDamageZoneDialog();
