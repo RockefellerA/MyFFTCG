@@ -25,6 +25,10 @@ public class GameState {
     private boolean p1MulliganUsed        = false;
     private boolean p1GameOver            = false;
 
+    // --- P2 ---
+    private final Deque<CardData>          p2MainDeck   = new ArrayDeque<>();
+    private final List<CardData>           p2DamageZone = new ArrayList<>();
+
     // -------------------------------------------------------------------------
     // Lifecycle
     // -------------------------------------------------------------------------
@@ -40,6 +44,8 @@ public class GameState {
         p1OpeningHandPending = false;
         p1MulliganUsed       = false;
         p1GameOver           = false;
+        p2MainDeck.clear();
+        p2DamageZone.clear();
         currentPhase         = null;
         turnNumber           = 0;
     }
@@ -135,6 +141,21 @@ public class GameState {
         return card;
     }
 
+    /** Draws the top card of P2's deck into P2's damage zone. */
+    public CardData drawToP2DamageZone() {
+        if (p2MainDeck.isEmpty()) return null;
+        CardData card = p2MainDeck.poll();
+        p2DamageZone.add(card);
+        return card;
+    }
+
+    /** Shuffles {@code mainCards} and loads them as P2's main deck. */
+    public void initializeP2Deck(List<CardData> mainCards) {
+        List<CardData> shuffled = new ArrayList<>(mainCards);
+        Collections.shuffle(shuffled);
+        p2MainDeck.addAll(shuffled);
+    }
+
     // -------------------------------------------------------------------------
     // Hand actions
     // -------------------------------------------------------------------------
@@ -168,6 +189,21 @@ public class GameState {
     public CardData removeFromHand(int idx) {
         if (idx < 0 || idx >= p1Hand.size()) return null;
         return p1Hand.remove(idx);
+    }
+
+    /**
+     * Sends a card from the player's hand to the Break Zone without granting CP.
+     * Used for payment discards (CP is credited separately via addP1Cp with the
+     * correct contributing element) and for mandatory end-phase discards.
+     *
+     * @param idx index into p1Hand
+     * @return the discarded CardData, or {@code null} if idx is invalid
+     */
+    public CardData breakFromHand(int idx) {
+        if (idx < 0 || idx >= p1Hand.size()) return null;
+        CardData card = p1Hand.remove(idx);
+        p1BreakZone.add(card);
+        return card;
     }
 
     // -------------------------------------------------------------------------
@@ -221,6 +257,8 @@ public class GameState {
     public boolean         isP1MulliganUsed()       { return p1MulliganUsed; }
     public boolean         isP1GameOver()           { return p1GameOver; }
     public void            setP1GameOver(boolean v) { p1GameOver = v; }
+    public Deque<CardData> getP2MainDeck()          { return p2MainDeck; }
+    public List<CardData>  getP2DamageZone()        { return p2DamageZone; }
 
     // -------------------------------------------------------------------------
     // Phase / turn tracking
