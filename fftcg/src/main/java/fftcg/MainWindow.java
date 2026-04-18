@@ -766,6 +766,7 @@ public class MainWindow {
 			logEntry("Turn 1 — Active Phase");
 			if (nextPhaseButton != null) nextPhaseButton.setEnabled(true);
 			refreshP1HandLabel();
+			onNextPhase();
 		});
 
 		JButton mulliganBtn = new JButton("Mulligan");
@@ -959,6 +960,8 @@ public class MainWindow {
 					msg.append(activated > 0 ? ", " : " (").append(thawed).append(" thawed");
 				if (activated > 0 || thawed > 0) msg.append(")");
 				logEntry(msg.toString());
+				// No choices during Active Phase — advance automatically
+				onNextPhase();
 				break;
 			}
 		}
@@ -2460,7 +2463,7 @@ public class MainWindow {
 			if (p1BackupLabels[i] == null || p1BackupLabels[i].getIcon() != null) continue;
 			p1BackupUrls[i]   = card.imageUrl();
 			p1BackupCards[i]  = card;
-			p1BackupStates[i] = BACKUP_NORMAL;
+			p1BackupStates[i] = BACKUP_DULLED;
 			refreshP1BackupSlot(i);
 			break;
 		}
