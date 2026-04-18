@@ -30,7 +30,9 @@ import java.awt.image.RescaleOp;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
@@ -1245,9 +1247,23 @@ public class MainWindow {
 				}
 			}.execute();
 
-			JLabel nameLabel = new JLabel(cd.name() + (cd.exBurst() ? " ★EX" : ""), SwingConstants.CENTER);
+			String labelText = cd.name() + (cd.exBurst() ? " EX" : "");
+			JLabel nameLabel = cd.exBurst() ? new JLabel(labelText, SwingConstants.CENTER) {
+				@Override protected void paintComponent(Graphics g) {
+					Graphics2D g2 = (Graphics2D) g.create();
+					g2.setFont(getFont());
+					FontMetrics fm = g2.getFontMetrics();
+					int x = (getWidth() - fm.stringWidth(labelText)) / 2;
+					int y = fm.getAscent() + (getHeight() - fm.getHeight()) / 2;
+					g2.setColor(new Color(0, 0, 0, 180));
+					g2.drawString(labelText, x + 1, y + 1);
+					g2.setColor(Color.YELLOW);
+					g2.drawString(labelText, x, y);
+					g2.dispose();
+				}
+			} : new JLabel(labelText, SwingConstants.CENTER);
 			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
-			nameLabel.setForeground(cd.exBurst() ? Color.YELLOW : null);
+			if (!cd.exBurst()) nameLabel.setForeground(null);
 			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
 
 			cardWrapper.add(lbl,       BorderLayout.CENTER);
@@ -1861,22 +1877,56 @@ public class MainWindow {
 	 * {@code excludeHandIdx} is the index of the card being played (not available
 	 * for discard).
 	 */
+	/** Returns the first element of {@code source} that matches one of {@code playedElems}. */
+	private String contributingElement(CardData source, String[] playedElems) {
+		for (String pe : playedElems)
+			if (source.containsElement(pe)) return pe;
+		return playedElems[0];
+	}
+
+	/** Returns true if {@code source} contains any element from {@code playedElems}. */
+	private boolean matchesAnyElement(CardData source, String[] playedElems) {
+		for (String pe : playedElems)
+			if (source.containsElement(pe)) return true;
+		return false;
+	}
+
 	private boolean canAffordCard(CardData card, int excludeHandIdx) {
-		int existing = gameState.getP1CpForElement(card.element());
-		int canGenerate = 0;
-		List<CardData> hand = gameState.getP1Hand();
+		String[]       elems = card.elements();
+		List<CardData> hand  = gameState.getP1Hand();
+		boolean[]      hasElemSource = new boolean[elems.length];
+		int totalExisting = 0;
+		for (int ei = 0; ei < elems.length; ei++) {
+			int ex = gameState.getP1CpForElement(elems[ei]);
+			totalExisting += ex;
+			if (ex > 0) hasElemSource[ei] = true;
+		}
+		int totalGenerate = 0;
 		for (int i = 0; i < hand.size(); i++) {
 			if (i == excludeHandIdx) continue;
 			CardData h = hand.get(i);
-			if (!h.isLightOrDark() && card.element().equalsIgnoreCase(h.element()))
-				canGenerate += 2;
+			if (h.isLightOrDark()) continue;
+			for (int ei = 0; ei < elems.length; ei++) {
+				if (h.containsElement(elems[ei])) {
+					totalGenerate += 2;
+					hasElemSource[ei] = true;
+					break;
+				}
+			}
 		}
 		for (int i = 0; i < p1BackupCards.length; i++) {
-			if (p1BackupCards[i] != null && p1BackupStates[i] == BACKUP_NORMAL
-					&& card.element().equalsIgnoreCase(p1BackupCards[i].element()))
-				canGenerate += 1;
+			if (p1BackupCards[i] != null && p1BackupStates[i] == BACKUP_NORMAL) {
+				for (int ei = 0; ei < elems.length; ei++) {
+					if (p1BackupCards[i].containsElement(elems[ei])) {
+						totalGenerate += 1;
+						hasElemSource[ei] = true;
+						break;
+					}
+				}
+			}
 		}
-		return existing + canGenerate >= card.cost();
+		for (boolean hs : hasElemSource) if (!hs) return false;
+		return totalExisting + totalGenerate >= card.cost();
 	}
 
 	/** Returns true if at least one P1 backup slot is currently empty. */
@@ -1894,8 +1944,7 @@ public class MainWindow {
 	 *
 	 * Constraints enforced:
 	 *   - Backups may not cause total CP to exceed the cost (no overpay via backups).
-	 *   - Discards may cause total CP to exceed cost by at most 1 (unavoidable with 2-CP increments).
-	 *   - Both gates reduce to: an item can only be added when current total is still below cost.
+	 *   - Discards may overpay by 1 per element (total <= cost + elems.length - 1 after adding).
 	 */
 	private void showPaymentDialog(CardData card, int handIdx) {
 		JDialog dlg = new JDialog(frame, "Play " + card.name(), true);
@@ -1904,8 +1953,10 @@ public class MainWindow {
 
 		List<CardData> hand   = gameState.getP1Hand();
 		String         elem   = card.element();
+		String[]       elems  = card.elements();
 		int            cost   = card.cost();
-		int            bankCp = gameState.getP1CpForElement(elem);
+		Map<String, Integer> bankCpByElem = new LinkedHashMap<>();
+		for (String e : elems) bankCpByElem.put(e, gameState.getP1CpForElement(e));
 
 		List<Integer> selectedBackups  = new ArrayList<>();
 		List<Integer> selectedDiscards = new ArrayList<>();
@@ -1914,7 +1965,7 @@ public class MainWindow {
 		List<Integer> eligibleBackupSlots = new ArrayList<>();
 		for (int i = 0; i < p1BackupCards.length; i++) {
 			if (p1BackupCards[i] != null && p1BackupStates[i] == BACKUP_NORMAL
-					&& elem.equalsIgnoreCase(p1BackupCards[i].element()))
+					&& matchesAnyElement(p1BackupCards[i], elems))
 				eligibleBackupSlots.add(i);
 		}
 
@@ -1932,31 +1983,55 @@ public class MainWindow {
 		List<Integer>  discardIdxs  = new ArrayList<>();
 
 		// Refreshes CP counter, Confirm state, and the clickable appearance of every card label.
-		// An unselected item is active (hand cursor, bright border) only when total < cost,
-		// ensuring backups never overpay and discards overpay by at most 1.
+		// Backups can only be added when total < cost (no overpay).
+		// Discards can be added when total < cost + elems.length - 1, allowing overpay of 1 per element.
+		// For multi-element cards, Confirm also requires at least 1 CP from each element.
 		Runnable updateAll = () -> {
-			int total      = bankCp + selectedBackups.size() + selectedDiscards.size() * 2;
-			boolean canAdd = total < cost;
-			cpLabel.setText("CP: " + total + " / " + cost + "  (" + elem + ")");
-			confirmBtn.setEnabled(total >= cost);
+			Map<String, Integer> cpByElem = new LinkedHashMap<>(bankCpByElem);
+			for (int slot : selectedBackups) {
+				String ce = contributingElement(p1BackupCards[slot], elems);
+				cpByElem.merge(ce, 1, Integer::sum);
+			}
+			for (int idx : selectedDiscards) {
+				String ce = contributingElement(hand.get(idx), elems);
+				cpByElem.merge(ce, 2, Integer::sum);
+			}
+			int total = cpByElem.values().stream().mapToInt(Integer::intValue).sum();
+			boolean canAddBackup  = total < cost;
+			boolean canAddDiscard = total < cost + elems.length - 1;
+			boolean allElemsPresent = cpByElem.values().stream().allMatch(v -> v >= 1);
+			confirmBtn.setEnabled(total >= cost && allElemsPresent);
+			if (elems.length == 1) {
+				cpLabel.setText("CP: " + total + " / " + cost + "  (" + elem + ")");
+			} else {
+				StringBuilder sb = new StringBuilder("CP: " + total + " / " + cost + "  (");
+				boolean first = true;
+				for (Map.Entry<String, Integer> e : cpByElem.entrySet()) {
+					if (!first) sb.append(", ");
+					sb.append(e.getKey()).append(": ").append(e.getValue());
+					first = false;
+				}
+				sb.append(")");
+				cpLabel.setText(sb.toString());
+			}
 			for (int i = 0; i < backupLbls.size(); i++) {
 				JLabel  lbl      = backupLbls.get(i);
 				boolean selected = selectedBackups.contains(backupSlots.get(i));
 				lbl.setBorder(BorderFactory.createLineBorder(
-						selected ? Color.YELLOW : (canAdd ? Color.GRAY : new Color(80, 80, 80)),
+						selected ? Color.YELLOW : (canAddBackup ? Color.GRAY : new Color(80, 80, 80)),
 						selected ? 3 : 1));
-				lbl.setBackground(selected || canAdd ? Color.DARK_GRAY : new Color(50, 50, 50));
-				lbl.setCursor(selected || canAdd
+				lbl.setBackground(selected || canAddBackup ? Color.DARK_GRAY : new Color(50, 50, 50));
+				lbl.setCursor(selected || canAddBackup
 						? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
 			}
 			for (int i = 0; i < discardLbls.size(); i++) {
 				JLabel  lbl      = discardLbls.get(i);
 				boolean selected = selectedDiscards.contains(discardIdxs.get(i));
 				lbl.setBorder(BorderFactory.createLineBorder(
-						selected ? Color.YELLOW : (canAdd ? Color.GRAY : new Color(80, 80, 80)),
+						selected ? Color.YELLOW : (canAddDiscard ? Color.GRAY : new Color(80, 80, 80)),
 						selected ? 3 : 1));
-				lbl.setBackground(selected || canAdd ? Color.DARK_GRAY : new Color(50, 50, 50));
-				lbl.setCursor(selected || canAdd
+				lbl.setBackground(selected || canAddDiscard ? Color.DARK_GRAY : new Color(50, 50, 50));
+				lbl.setCursor(selected || canAddDiscard
 						? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
 			}
 		};
@@ -1986,7 +2061,7 @@ public class MainWindow {
 				final String url = p1BackupUrls[slot];
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mousePressed(MouseEvent e) {
-						int total = bankCp + selectedBackups.size() + selectedDiscards.size() * 2;
+						int total = bankCpByElem.values().stream().mapToInt(Integer::intValue).sum() + selectedBackups.size() + selectedDiscards.size() * 2;
 						if (selectedBackups.remove(Integer.valueOf(slot))) {
 							// deselect always allowed
 						} else if (total < cost) {
@@ -2031,7 +2106,7 @@ public class MainWindow {
 			if (i == handIdx) continue;
 			final int hi   = i;
 			CardData  hc   = hand.get(i);
-			boolean payable = !hc.isLightOrDark() && elem.equalsIgnoreCase(hc.element());
+			boolean payable = !hc.isLightOrDark() && matchesAnyElement(hc, elems);
 
 			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
 			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
@@ -2049,10 +2124,10 @@ public class MainWindow {
 			if (payable) {
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mousePressed(MouseEvent e) {
-						int total = bankCp + selectedBackups.size() + selectedDiscards.size() * 2;
+						int total = bankCpByElem.values().stream().mapToInt(Integer::intValue).sum() + selectedBackups.size() + selectedDiscards.size() * 2;
 						if (selectedDiscards.remove(Integer.valueOf(hi))) {
 							// deselect always allowed
-						} else if (total < cost) {
+						} else if (total < cost + elems.length - 1) {
 							selectedDiscards.add(hi);
 						}
 						updateAll.run();
@@ -2155,19 +2230,22 @@ public class MainWindow {
 	 */
 	private void executePlay(CardData card, int cardHandIdx,
 			List<Integer> discardIndices, List<Integer> backupDullIndices) {
+		String[] elems = card.elements();
 		for (int bi : backupDullIndices) {
 			p1BackupStates[bi] = BACKUP_DULLED;
 			refreshP1BackupSlot(bi);
-			gameState.addP1Cp(card.element(), 1);
+			gameState.addP1Cp(contributingElement(p1BackupCards[bi], elems), 1);
 		}
 		discardIndices.sort(Collections.reverseOrder());
 		for (int di : discardIndices) {
-			gameState.addP1Cp(card.element(), 2);
+			gameState.addP1Cp(contributingElement(gameState.getP1Hand().get(di), elems), 2);
 			gameState.discardFromHand(di);
 			if (di < cardHandIdx) cardHandIdx--;
 		}
-		gameState.spendP1Cp(card.element(), card.cost());
-		gameState.clearP1Cp(card.element());
+		for (String e : elems) {
+			gameState.spendP1Cp(e, gameState.getP1CpForElement(e));
+			gameState.clearP1Cp(e);
+		}
 		gameState.removeFromHand(cardHandIdx);
 		logEntry("Played \"" + card.name() + "\"");
 
@@ -2192,8 +2270,10 @@ public class MainWindow {
 
 		List<CardData> hand   = gameState.getP1Hand();
 		String         elem   = card.element();
+		String[]       elems  = card.elements();
 		int            cost   = card.cost();
-		int            bankCp = gameState.getP1CpForElement(elem);
+		Map<String, Integer> bankCpByElem = new LinkedHashMap<>();
+		for (String e : elems) bankCpByElem.put(e, gameState.getP1CpForElement(e));
 
 		List<Integer> selectedBackups  = new ArrayList<>();
 		List<Integer> selectedDiscards = new ArrayList<>();
@@ -2201,7 +2281,7 @@ public class MainWindow {
 		List<Integer> eligibleBackupSlots = new ArrayList<>();
 		for (int i = 0; i < p1BackupCards.length; i++) {
 			if (p1BackupCards[i] != null && p1BackupStates[i] == BACKUP_NORMAL
-					&& elem.equalsIgnoreCase(p1BackupCards[i].element()))
+					&& matchesAnyElement(p1BackupCards[i], elems))
 				eligibleBackupSlots.add(i);
 		}
 
@@ -2218,28 +2298,51 @@ public class MainWindow {
 		List<Integer> discardIdxs  = new ArrayList<>();
 
 		Runnable updateAll = () -> {
-			int total      = bankCp + selectedBackups.size() + selectedDiscards.size() * 2;
-			boolean canAdd = total < cost;
-			cpLabel.setText("CP: " + total + " / " + cost + "  (" + elem + ")");
-			confirmBtn.setEnabled(total >= cost);
+			Map<String, Integer> cpByElem = new LinkedHashMap<>(bankCpByElem);
+			for (int slot : selectedBackups) {
+				String ce = contributingElement(p1BackupCards[slot], elems);
+				cpByElem.merge(ce, 1, Integer::sum);
+			}
+			for (int idx : selectedDiscards) {
+				String ce = contributingElement(hand.get(idx), elems);
+				cpByElem.merge(ce, 2, Integer::sum);
+			}
+			int total = cpByElem.values().stream().mapToInt(Integer::intValue).sum();
+			boolean canAddBackup  = total < cost;
+			boolean canAddDiscard = total < cost + elems.length - 1;
+			boolean allElemsPresent = cpByElem.values().stream().allMatch(v -> v >= 1);
+			confirmBtn.setEnabled(total >= cost && allElemsPresent);
+			if (elems.length == 1) {
+				cpLabel.setText("CP: " + total + " / " + cost + "  (" + elem + ")");
+			} else {
+				StringBuilder sb = new StringBuilder("CP: " + total + " / " + cost + "  (");
+				boolean first = true;
+				for (Map.Entry<String, Integer> e : cpByElem.entrySet()) {
+					if (!first) sb.append(", ");
+					sb.append(e.getKey()).append(": ").append(e.getValue());
+					first = false;
+				}
+				sb.append(")");
+				cpLabel.setText(sb.toString());
+			}
 			for (int i = 0; i < backupLbls.size(); i++) {
 				JLabel  lbl      = backupLbls.get(i);
 				boolean selected = selectedBackups.contains(backupSlots.get(i));
 				lbl.setBorder(BorderFactory.createLineBorder(
-						selected ? Color.YELLOW : (canAdd ? Color.GRAY : new Color(80, 80, 80)),
+						selected ? Color.YELLOW : (canAddBackup ? Color.GRAY : new Color(80, 80, 80)),
 						selected ? 3 : 1));
-				lbl.setBackground(selected || canAdd ? Color.DARK_GRAY : new Color(50, 50, 50));
-				lbl.setCursor(selected || canAdd
+				lbl.setBackground(selected || canAddBackup ? Color.DARK_GRAY : new Color(50, 50, 50));
+				lbl.setCursor(selected || canAddBackup
 						? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
 			}
 			for (int i = 0; i < discardLbls.size(); i++) {
 				JLabel  lbl      = discardLbls.get(i);
 				boolean selected = selectedDiscards.contains(discardIdxs.get(i));
 				lbl.setBorder(BorderFactory.createLineBorder(
-						selected ? Color.YELLOW : (canAdd ? Color.GRAY : new Color(80, 80, 80)),
+						selected ? Color.YELLOW : (canAddDiscard ? Color.GRAY : new Color(80, 80, 80)),
 						selected ? 3 : 1));
-				lbl.setBackground(selected || canAdd ? Color.DARK_GRAY : new Color(50, 50, 50));
-				lbl.setCursor(selected || canAdd
+				lbl.setBackground(selected || canAddDiscard ? Color.DARK_GRAY : new Color(50, 50, 50));
+				lbl.setCursor(selected || canAddDiscard
 						? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
 			}
 		};
@@ -2268,7 +2371,7 @@ public class MainWindow {
 				final String url = p1BackupUrls[slot];
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mousePressed(MouseEvent e) {
-						int total = bankCp + selectedBackups.size() + selectedDiscards.size() * 2;
+						int total = bankCpByElem.values().stream().mapToInt(Integer::intValue).sum() + selectedBackups.size() + selectedDiscards.size() * 2;
 						if (selectedBackups.remove(Integer.valueOf(slot))) {
 							// deselect always allowed
 						} else if (total < cost) {
@@ -2311,7 +2414,7 @@ public class MainWindow {
 		for (int i = 0; i < hand.size(); i++) {
 			final int hi  = i;
 			CardData  hc  = hand.get(i);
-			boolean payable = !hc.isLightOrDark() && elem.equalsIgnoreCase(hc.element());
+			boolean payable = !hc.isLightOrDark() && matchesAnyElement(hc, elems);
 
 			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
 			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
@@ -2329,10 +2432,10 @@ public class MainWindow {
 			if (payable) {
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mousePressed(MouseEvent e) {
-						int total = bankCp + selectedBackups.size() + selectedDiscards.size() * 2;
+						int total = bankCpByElem.values().stream().mapToInt(Integer::intValue).sum() + selectedBackups.size() + selectedDiscards.size() * 2;
 						if (selectedDiscards.remove(Integer.valueOf(hi))) {
 							// deselect always allowed
-						} else if (total < cost) {
+						} else if (total < cost + elems.length - 1) {
 							selectedDiscards.add(hi);
 						}
 						updateAll.run();
@@ -2434,18 +2537,21 @@ public class MainWindow {
 	 */
 	private void executeLbPlay(CardData card, List<Integer> discardIndices,
 			List<Integer> backupDullIndices) {
+		String[] elems = card.elements();
 		for (int bi : backupDullIndices) {
 			p1BackupStates[bi] = BACKUP_DULLED;
 			refreshP1BackupSlot(bi);
-			gameState.addP1Cp(card.element(), 1);
+			gameState.addP1Cp(contributingElement(p1BackupCards[bi], elems), 1);
 		}
 		discardIndices.sort(Collections.reverseOrder());
 		for (int di : discardIndices) {
-			gameState.addP1Cp(card.element(), 2);
+			gameState.addP1Cp(contributingElement(gameState.getP1Hand().get(di), elems), 2);
 			gameState.discardFromHand(di);
 		}
-		gameState.spendP1Cp(card.element(), card.cost());
-		gameState.clearP1Cp(card.element());
+		for (String e : elems) {
+			gameState.spendP1Cp(e, gameState.getP1CpForElement(e));
+			gameState.clearP1Cp(e);
+		}
 		if (card.isBackup()) {
 			placeCardInFirstBackupSlot(card);
 		} else if (card.isForward()) {
