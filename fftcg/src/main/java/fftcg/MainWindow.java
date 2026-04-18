@@ -136,6 +136,7 @@ public class MainWindow {
 	// Damage zone UI
 	private JPanel   p1DamageSlotPanel;
 	private JPanel[] p1DamageSlots = new JPanel[7];
+	private JPanel   p2DamageSlotPanel;
 
 	// Next-phase button and its glow animation
 	private JButton              nextPhaseButton;
@@ -613,6 +614,7 @@ public class MainWindow {
 				gameState.initializeDeck(main, lb);
 				refreshP1DeckLabel();
 				refreshP1LimitLabel();
+				drawOpeningHand();
 
 				if (p2Cards != null) {
 					List<CardData> p2Main = new ArrayList<>();
@@ -955,6 +957,10 @@ public class MainWindow {
 			case MAIN_1:
 				gameState.advancePhase();   // MAIN_1 → ATTACK
 				logEntry("Attack Phase");
+				if (!hasAttackableForward()) {
+					logEntry("No attackers available — skipping to Main Phase 2");
+					onNextPhase();
+				}
 				break;
 
 			case ATTACK:
@@ -966,6 +972,7 @@ public class MainWindow {
 				gameState.advancePhase();   // MAIN_2 → END
 				logEntry("End Phase");
 				showEndPhaseDiscardDialog();
+				onNextPhase();             // END → ACTIVE (auto-advance)
 				break;
 
 			case END: {
@@ -1285,6 +1292,101 @@ public class MainWindow {
 		if (p2DamageCount >= 7) {
 			triggerGameOver("Player 2 Defeated - You Win!");
 		}
+	}
+
+	private void showP2DamageZoneDialog() {
+		List<CardData> zone = gameState.getP2DamageZone();
+		if (zone.isEmpty()) return;
+
+		JDialog dlg = new JDialog(frame, "P2 Damage Zone (" + zone.size() + " cards)", true);
+		dlg.setResizable(false);
+		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+		JPanel cardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+
+		for (CardData cd : zone) {
+			JPanel cardWrapper = new JPanel(new BorderLayout(0, 4));
+			cardWrapper.setBackground(cardsPanel.getBackground());
+
+			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
+			lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+			lbl.setOpaque(true);
+			lbl.setBackground(Color.DARK_GRAY);
+			lbl.setBorder(BorderFactory.createLineBorder(
+					cd.exBurst() ? Color.YELLOW : Color.LIGHT_GRAY, cd.exBurst() ? 2 : 1));
+
+			lbl.addMouseListener(new MouseAdapter() {
+				@Override public void mouseEntered(MouseEvent e) {
+					if (lbl.getIcon() != null) showZoomAt(cd.imageUrl(), lbl);
+				}
+				@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+			});
+
+			new SwingWorker<ImageIcon, Void>() {
+				@Override protected ImageIcon doInBackground() throws Exception {
+					Image img = ImageCache.load(cd.imageUrl());
+					if (img == null) return null;
+					BufferedImage buf = new BufferedImage(CARD_W, CARD_H, BufferedImage.TYPE_INT_ARGB);
+					Graphics2D g2 = buf.createGraphics();
+					g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+					g2.drawImage(img, 0, 0, CARD_W, CARD_H, null);
+					g2.dispose();
+					return new ImageIcon(buf);
+				}
+				@Override protected void done() {
+					try {
+						ImageIcon icon = get();
+						if (icon != null) { lbl.setIcon(icon); lbl.setText(null); }
+					} catch (InterruptedException | ExecutionException ignored) {}
+				}
+			}.execute();
+
+			String labelText = cd.name() + (cd.exBurst() ? " EX" : "");
+			JLabel nameLabel = cd.exBurst() ? new JLabel(labelText, SwingConstants.CENTER) {
+				@Override protected void paintComponent(Graphics g) {
+					Graphics2D g2 = (Graphics2D) g.create();
+					g2.setFont(getFont());
+					FontMetrics fm = g2.getFontMetrics();
+					int x = (getWidth() - fm.stringWidth(labelText)) / 2;
+					int y = fm.getAscent() + (getHeight() - fm.getHeight()) / 2;
+					g2.setColor(new Color(0, 0, 0, 180));
+					g2.drawString(labelText, x + 1, y + 1);
+					g2.setColor(Color.YELLOW);
+					g2.drawString(labelText, x, y);
+					g2.dispose();
+				}
+			} : new JLabel(labelText, SwingConstants.CENTER);
+			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			if (!cd.exBurst()) nameLabel.setForeground(null);
+			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
+
+			cardWrapper.add(lbl,       BorderLayout.CENTER);
+			cardWrapper.add(nameLabel, BorderLayout.SOUTH);
+			cardsPanel.add(cardWrapper);
+		}
+
+		JScrollPane scrollPane = new JScrollPane(cardsPanel,
+				JScrollPane.VERTICAL_SCROLLBAR_NEVER,
+				JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+		scrollPane.setPreferredSize(new Dimension(
+				Math.min(zone.size() * (CARD_W + 16) + 16, 900),
+				CARD_H + 60));
+
+		JButton closeBtn = new JButton("Close");
+		closeBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		closeBtn.addActionListener(ae -> { hideZoom(); dlg.dispose(); });
+
+		JPanel south = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
+		south.add(closeBtn);
+		south.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 8));
+
+		dlg.getContentPane().setLayout(new BorderLayout(0, 4));
+		dlg.getContentPane().add(scrollPane, BorderLayout.CENTER);
+		dlg.getContentPane().add(south,      BorderLayout.SOUTH);
+		dlg.pack();
+		dlg.setLocationRelativeTo(frame);
+		dlg.setVisible(true);
 	}
 
 	private void showDamageZoneDialog() {
@@ -3117,6 +3219,15 @@ public class MainWindow {
 		}.execute();
 	}
 
+	private boolean hasAttackableForward() {
+		int turn = gameState.getTurnNumber();
+		for (int i = 0; i < p1ForwardStates.size(); i++) {
+			if (p1ForwardStates.get(i) == BACKUP_NORMAL && p1ForwardPlayedOnTurn.get(i) != turn)
+				return true;
+		}
+		return false;
+	}
+
 	/** Shows a context menu for a P1 forward slot. */
 	private void showForwardContextMenu(int idx, JLabel slot, MouseEvent e) {
 		JPopupMenu menu = new JPopupMenu();
@@ -3327,6 +3438,12 @@ public class MainWindow {
 				slotsPanel.add(slot);
 				p2DamageSlots[i] = slot;
 			}
+			slotsPanel.addMouseListener(new MouseAdapter() {
+				@Override public void mousePressed(MouseEvent e) {
+					if (!gameState.getP2DamageZone().isEmpty()) showP2DamageZoneDialog();
+				}
+			});
+			p2DamageSlotPanel = slotsPanel;
 		}
 
 		JPanel panel = new JPanel(new BorderLayout(0, 4));
