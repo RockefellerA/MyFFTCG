@@ -3139,13 +3139,12 @@ public class MainWindow {
 		JLabel forwardTag = new JLabel("FORWARDS", SwingConstants.CENTER);
 		forwardTag.setFont(new Font("Pixel NES", Font.PLAIN, 11));
 		forwardTag.setBorder(BorderFactory.createEmptyBorder());
-		forwardTag.setBackground(Color.LIGHT_GRAY);
 		forwardTag.setForeground(Color.DARK_GRAY);
-		forwardTag.setOpaque(true);
+		forwardTag.setOpaque(false);
 
 		int tagW = forwardTag.getPreferredSize().width;
 		JPanel tagWrapper = new JPanel(new BorderLayout());
-		tagWrapper.setBackground(Color.LIGHT_GRAY);
+		tagWrapper.setOpaque(false);
 		tagWrapper.setPreferredSize(new Dimension(tagW, CARD_H));
 		tagWrapper.add(forwardTag, BorderLayout.NORTH);
 
@@ -3158,7 +3157,7 @@ public class MainWindow {
 				return new Dimension(Math.max(width, tagW + gap * 2), CARD_H);
 			}
 		};
-		inner.setBackground(Color.LIGHT_GRAY);
+		inner.setOpaque(false);
 		inner.add(tagWrapper);
 
 		if (isP1) {
@@ -3169,6 +3168,8 @@ public class MainWindow {
 				JScrollPane.VERTICAL_SCROLLBAR_NEVER,
 				JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
 		scroll.setBorder(BorderFactory.createEmptyBorder());
+		scroll.setOpaque(false);
+		scroll.getViewport().setOpaque(false);
 		scroll.setPreferredSize(new Dimension(0, CARD_H));
 		return scroll;
 	}
@@ -3181,8 +3182,7 @@ public class MainWindow {
 		JLabel lbl = new JLabel("", SwingConstants.CENTER);
 		lbl.setPreferredSize(new Dimension(CARD_H, CARD_H));
 		lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
-		lbl.setOpaque(true);
-		lbl.setBackground(Color.LIGHT_GRAY);
+		lbl.setOpaque(false);
 		lbl.setForeground(Color.DARK_GRAY);
 		lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
 		lbl.setBorder(BorderFactory.createEmptyBorder());
