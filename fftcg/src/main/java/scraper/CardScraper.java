@@ -244,7 +244,10 @@ public class CardScraper {
         int middot = cat1.indexOf("&middot;");
         c.category1 = (middot >= 0 ? cat1.substring(0, middot) : cat1).trim();
         c.category2 = j.optString("category_2", "");
-        c.textEn    = j.optString("text_en",    "");
+        String rawTextEn = j.optString("text_en", "");
+        for (Map.Entry<String, String> entry : ELEMENT_TRANSLATIONS.entrySet())
+            rawTextEn = rawTextEn.replace(entry.getKey(), entry.getValue());
+        c.textEn = rawTextEn;
         c.setNumber = setNumber;
 
         // element is an array, e.g. ["Fire"] or ["火", "水"] for dual-element cards.
