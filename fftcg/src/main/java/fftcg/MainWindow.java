@@ -1,6 +1,7 @@
 package fftcg;
 
 import java.awt.AlphaComposite;
+import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -957,6 +958,7 @@ public class MainWindow {
 			case MAIN_1:
 				gameState.advancePhase();   // MAIN_1 → ATTACK
 				logEntry("Attack Phase");
+				refreshAllForwardSlots();
 				if (!hasAttackableForward()) {
 					logEntry("No attackers available — skipping to Main Phase 2");
 					onNextPhase();
@@ -965,6 +967,7 @@ public class MainWindow {
 
 			case ATTACK:
 				gameState.advancePhase();   // ATTACK → MAIN_2
+				refreshAllForwardSlots();
 				logEntry("Main Phase 2");
 				break;
 
@@ -2930,6 +2933,10 @@ public class MainWindow {
 	 * </ul>
 	 */
 	private static BufferedImage renderBackupCard(BufferedImage card, int state) {
+		return renderBackupCard(card, state, false);
+	}
+
+	private static BufferedImage renderBackupCard(BufferedImage card, int state, boolean highlight) {
 		BufferedImage canvas = new BufferedImage(CARD_H, CARD_H, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = canvas.createGraphics();
 		switch (state) {
@@ -2942,6 +2949,11 @@ public class MainWindow {
 				g.drawImage(applyBlueTint(flipped), 0, 0, null);  // pinned to top-left
 			}
 			default -> g.drawImage(card, 0, 0, null);             // pinned to top-left
+		}
+		if (highlight) {
+			g.setColor(new Color(0, 220, 0));
+			g.setStroke(new BasicStroke(3f));
+			g.drawRect(1, 1, CARD_W - 3, CARD_H - 3);
 		}
 		g.dispose();
 		return canvas;
@@ -3173,7 +3185,7 @@ public class MainWindow {
 		lbl.setBackground(Color.LIGHT_GRAY);
 		lbl.setForeground(Color.DARK_GRAY);
 		lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
-		lbl.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
+		lbl.setBorder(BorderFactory.createEmptyBorder());
 		lbl.addMouseListener(new MouseAdapter() {
 			@Override public void mousePressed(MouseEvent e) {
 				if (lbl.getIcon() != null) showForwardContextMenu(idx, lbl, e);
@@ -3203,12 +3215,15 @@ public class MainWindow {
 		int    state = p1ForwardStates.get(idx);
 		JLabel slot  = p1ForwardLabels.get(idx);
 		if (url == null) return;
+		boolean canAttack = gameState.getCurrentPhase() == GameState.GamePhase.ATTACK
+				&& state == BACKUP_NORMAL
+				&& p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber();
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
 				if (raw == null) return null;
 				BufferedImage card = toARGB(raw, CARD_W, CARD_H);
-				return new ImageIcon(renderBackupCard(card, state));
+				return new ImageIcon(renderBackupCard(card, state, canAttack));
 			}
 			@Override protected void done() {
 				try {
@@ -3217,6 +3232,10 @@ public class MainWindow {
 				} catch (InterruptedException | ExecutionException ignored) {}
 			}
 		}.execute();
+	}
+
+	private void refreshAllForwardSlots() {
+		for (int i = 0; i < p1ForwardLabels.size(); i++) refreshP1ForwardSlot(i);
 	}
 
 	private boolean hasAttackableForward() {
