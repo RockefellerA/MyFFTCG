@@ -258,10 +258,15 @@ public class MainWindow {
 		p2MainArea.add(p2TopRow,      BorderLayout.NORTH);
 		p2MainArea.add(p2ForwardZone, BorderLayout.SOUTH);
 
-		JPanel p2ZonesPanel = new JPanel(new BorderLayout());
-		p2ZonesPanel.add(p2CornerPanel,  BorderLayout.WEST);
-		p2ZonesPanel.add(p2MainArea,     BorderLayout.CENTER);
-		p2ZonesPanel.add(p2DamagePanel,  BorderLayout.EAST);
+		JPanel p2ZonesPanel = new JPanel(new GridBagLayout());
+		{
+			GridBagConstraints z = new GridBagConstraints();
+			z.gridy = 0; z.fill = GridBagConstraints.NONE; z.anchor = GridBagConstraints.NORTH; z.weightx = 0;
+			z.gridx = 0; p2ZonesPanel.add(p2CornerPanel, z);
+			z.gridx = 2; p2ZonesPanel.add(p2DamagePanel, z);
+			z.gridx = 1; z.fill = GridBagConstraints.BOTH; z.weightx = 1.0; z.weighty = 1.0;
+			p2ZonesPanel.add(p2MainArea, z);
+		}
 
 		// --- P1 Zones (bottom of screen) ---
 		JComboBox<String> p1ColorBox = buildColorDropdown();
@@ -406,10 +411,15 @@ public class MainWindow {
 		lgbc.weighty = 1.0;
 		p1LeftGroup.add(p1DamagePanel, lgbc);
 
-		JPanel p1ZonesPanel = new JPanel(new BorderLayout());
-		p1ZonesPanel.add(p1LeftGroup,    BorderLayout.WEST);
-		p1ZonesPanel.add(p1MainArea,     BorderLayout.CENTER);
-		p1ZonesPanel.add(p1CornerPanel,  BorderLayout.EAST);
+		JPanel p1ZonesPanel = new JPanel(new GridBagLayout());
+		{
+			GridBagConstraints z = new GridBagConstraints();
+			z.gridy = 0; z.fill = GridBagConstraints.NONE; z.anchor = GridBagConstraints.SOUTH; z.weightx = 0;
+			z.gridx = 0; p1ZonesPanel.add(p1LeftGroup,   z);
+			z.gridx = 2; p1ZonesPanel.add(p1CornerPanel, z);
+			z.gridx = 1; z.fill = GridBagConstraints.BOTH; z.weightx = 1.0; z.weighty = 1.0;
+			p1ZonesPanel.add(p1MainArea, z);
+		}
 
 		JPanel southPanel = new JPanel(new BorderLayout());
 		southPanel.add(p1ZonesPanel, BorderLayout.CENTER);
@@ -3135,6 +3145,8 @@ public class MainWindow {
 	 * Builds the Forward zone: a horizontally-scrollable row of card slots.
 	 * Pass {@code true} for P1 to store a reference for dynamic card placement.
 	 */
+	private static final int FORWARD_ZONE_H = CARD_H * 5 / 4;
+
 	private JScrollPane buildForwardZonePanel(boolean isP1) {
 		JPanel inner = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0)) {
 			@Override
@@ -3142,7 +3154,7 @@ public class MainWindow {
 				int gap   = 4;
 				int slots = getComponentCount();
 				int width = gap + (CARD_H + gap) * slots;
-				return new Dimension(Math.max(width, gap * 2), CARD_H);
+				return new Dimension(Math.max(width, gap * 2), FORWARD_ZONE_H);
 			}
 		};
 		inner.setOpaque(false);
@@ -3157,7 +3169,7 @@ public class MainWindow {
 		scroll.setBorder(BorderFactory.createEmptyBorder());
 		scroll.setOpaque(false);
 		scroll.getViewport().setOpaque(false);
-		scroll.setPreferredSize(new Dimension(0, CARD_H));
+		scroll.setPreferredSize(new Dimension(0, FORWARD_ZONE_H));
 		return scroll;
 	}
 
