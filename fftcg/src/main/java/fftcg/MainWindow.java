@@ -2213,15 +2213,20 @@ public class MainWindow {
 		boolean[] canAddDiscard = {false};
 		Runnable updateAll = () -> {
 			Map<String, Integer> cpByElem = new LinkedHashMap<>(bankCpByElem);
+			int extraCp = 0;
 			for (int slot : selectedBackups) {
-				String ce = contributingElement(p1BackupCards[slot], elems);
-				cpByElem.merge(ce, 1, Integer::sum);
+				if (matchesAnyElement(p1BackupCards[slot], elems))
+					cpByElem.merge(contributingElement(p1BackupCards[slot], elems), 1, Integer::sum);
+				else
+					extraCp += 1;
 			}
 			for (int idx : selectedDiscards) {
-				String ce = contributingElement(hand.get(idx), elems);
-				cpByElem.merge(ce, 2, Integer::sum);
+				if (matchesAnyElement(hand.get(idx), elems))
+					cpByElem.merge(contributingElement(hand.get(idx), elems), 2, Integer::sum);
+				else
+					extraCp += 2;
 			}
-			int total = cpByElem.values().stream().mapToInt(Integer::intValue).sum();
+			int total = cpByElem.values().stream().mapToInt(Integer::intValue).sum() + extraCp;
 			int unsatisfiedElems = (int) cpByElem.values().stream().filter(v -> v < 1).count();
 			boolean canAddBackup  = total < cost;
 			canAddDiscard[0] = total < cost + unsatisfiedElems;
@@ -2527,15 +2532,20 @@ public class MainWindow {
 		boolean[] canAddDiscard = {false};
 		Runnable updateAll = () -> {
 			Map<String, Integer> cpByElem = new LinkedHashMap<>(bankCpByElem);
+			int extraCp = 0;
 			for (int slot : selectedBackups) {
-				String ce = contributingElement(p1BackupCards[slot], elems);
-				cpByElem.merge(ce, 1, Integer::sum);
+				if (matchesAnyElement(p1BackupCards[slot], elems))
+					cpByElem.merge(contributingElement(p1BackupCards[slot], elems), 1, Integer::sum);
+				else
+					extraCp += 1;
 			}
 			for (int idx : selectedDiscards) {
-				String ce = contributingElement(hand.get(idx), elems);
-				cpByElem.merge(ce, 2, Integer::sum);
+				if (matchesAnyElement(hand.get(idx), elems))
+					cpByElem.merge(contributingElement(hand.get(idx), elems), 2, Integer::sum);
+				else
+					extraCp += 2;
 			}
-			int total = cpByElem.values().stream().mapToInt(Integer::intValue).sum();
+			int total = cpByElem.values().stream().mapToInt(Integer::intValue).sum() + extraCp;
 			int unsatisfiedElems = (int) cpByElem.values().stream().filter(v -> v < 1).count();
 			boolean canAddBackup  = total < cost;
 			canAddDiscard[0] = total < cost + unsatisfiedElems;
