@@ -109,9 +109,10 @@ public class MainWindow {
 	private boolean handCardMenuOpen = false;
 
 	// Backup card state constants
-	private static final int BACKUP_NORMAL = 0;
-	private static final int BACKUP_DULLED = 1;
-	private static final int BACKUP_FROZEN = 2;
+	private static final int STATE_NORMAL        = 0;
+	private static final int STATE_DULLED        = 1;
+	private static final int STATE_FROZEN        = 2;
+	private static final int STATE_BRAVE_ATTACKED = 3; // Brave forward: attacked this turn but stays active
 
 	// --- Game state ---
 	private final GameState gameState   = new GameState();
@@ -997,23 +998,24 @@ public class MainWindow {
 				// Execute Active Phase: dull → normal, frozen → dull
 				int activated = 0, thawed = 0;
 				for (int i = 0; i < p1BackupStates.length; i++) {
-					if (p1BackupStates[i] == BACKUP_FROZEN) {
-						p1BackupStates[i] = BACKUP_DULLED;
+					if (p1BackupStates[i] == STATE_FROZEN) {
+						p1BackupStates[i] = STATE_DULLED;
 						refreshP1BackupSlot(i);
 						thawed++;
-					} else if (p1BackupStates[i] == BACKUP_DULLED) {
-						p1BackupStates[i] = BACKUP_NORMAL;
+					} else if (p1BackupStates[i] == STATE_DULLED) {
+						p1BackupStates[i] = STATE_NORMAL;
 						refreshP1BackupSlot(i);
 						activated++;
 					}
 				}
 				for (int i = 0; i < p1ForwardStates.size(); i++) {
-					if (p1ForwardStates.get(i) == BACKUP_FROZEN) {
-						p1ForwardStates.set(i, BACKUP_DULLED);
+					int fs = p1ForwardStates.get(i);
+					if (fs == STATE_FROZEN) {
+						p1ForwardStates.set(i, STATE_DULLED);
 						refreshP1ForwardSlot(i);
 						thawed++;
-					} else if (p1ForwardStates.get(i) == BACKUP_DULLED) {
-						p1ForwardStates.set(i, BACKUP_NORMAL);
+					} else if (fs == STATE_DULLED || fs == STATE_BRAVE_ATTACKED) {
+						p1ForwardStates.set(i, STATE_NORMAL);
 						refreshP1ForwardSlot(i);
 						activated++;
 					}
@@ -2120,7 +2122,7 @@ public class MainWindow {
 			}
 		}
 		for (int i = 0; i < p1BackupCards.length; i++) {
-			if (p1BackupCards[i] != null && p1BackupStates[i] == BACKUP_NORMAL) {
+			if (p1BackupCards[i] != null && p1BackupStates[i] == STATE_NORMAL) {
 				for (int ei = 0; ei < elems.length; ei++) {
 					if (p1BackupCards[i].containsElement(elems[ei])) {
 						totalGenerate += 1;
@@ -2169,7 +2171,7 @@ public class MainWindow {
 		// Collect eligible (undulled, matching-element) backup slot indices
 		List<Integer> eligibleBackupSlots = new ArrayList<>();
 		for (int i = 0; i < p1BackupCards.length; i++) {
-			if (p1BackupCards[i] != null && p1BackupStates[i] == BACKUP_NORMAL
+			if (p1BackupCards[i] != null && p1BackupStates[i] == STATE_NORMAL
 					&& matchesAnyElement(p1BackupCards[i], elems))
 				eligibleBackupSlots.add(i);
 		}
@@ -2437,7 +2439,7 @@ public class MainWindow {
 			List<Integer> discardIndices, List<Integer> backupDullIndices) {
 		String[] elems = card.elements();
 		for (int bi : backupDullIndices) {
-			p1BackupStates[bi] = BACKUP_DULLED;
+			p1BackupStates[bi] = STATE_DULLED;
 			refreshP1BackupSlot(bi);
 			gameState.addP1Cp(contributingElement(p1BackupCards[bi], elems), 1);
 		}
@@ -2485,7 +2487,7 @@ public class MainWindow {
 
 		List<Integer> eligibleBackupSlots = new ArrayList<>();
 		for (int i = 0; i < p1BackupCards.length; i++) {
-			if (p1BackupCards[i] != null && p1BackupStates[i] == BACKUP_NORMAL
+			if (p1BackupCards[i] != null && p1BackupStates[i] == STATE_NORMAL
 					&& matchesAnyElement(p1BackupCards[i], elems))
 				eligibleBackupSlots.add(i);
 		}
@@ -2744,7 +2746,7 @@ public class MainWindow {
 			List<Integer> backupDullIndices) {
 		String[] elems = card.elements();
 		for (int bi : backupDullIndices) {
-			p1BackupStates[bi] = BACKUP_DULLED;
+			p1BackupStates[bi] = STATE_DULLED;
 			refreshP1BackupSlot(bi);
 			gameState.addP1Cp(contributingElement(p1BackupCards[bi], elems), 1);
 		}
@@ -2774,7 +2776,7 @@ public class MainWindow {
 			if (p1BackupLabels[i] == null || p1BackupLabels[i].getIcon() != null) continue;
 			p1BackupUrls[i]   = card.imageUrl();
 			p1BackupCards[i]  = card;
-			p1BackupStates[i] = BACKUP_DULLED;
+			p1BackupStates[i] = STATE_DULLED;
 			refreshP1BackupSlot(i);
 			break;
 		}
@@ -2834,7 +2836,7 @@ public class MainWindow {
 					BufferedImage card = get();
 					if (card == null) { refreshP1BackupSlot(idx); return; }
 
-					double startAngle = freezing ? (prevState == BACKUP_DULLED ? Math.PI / 2 : 0.0) : Math.PI;
+					double startAngle = freezing ? (prevState == STATE_DULLED ? Math.PI / 2 : 0.0) : Math.PI;
 					double endAngle   = freezing ? Math.PI : 0.0;
 
 					int   totalFrames = 12;
@@ -2875,7 +2877,7 @@ public class MainWindow {
 					BufferedImage card = get();
 					if (card == null) { refreshP1ForwardSlot(idx); return; }
 
-					double startAngle = freezing ? (prevState == BACKUP_DULLED ? Math.PI / 2 : 0.0) : Math.PI;
+					double startAngle = freezing ? (prevState == STATE_DULLED ? Math.PI / 2 : 0.0) : Math.PI;
 					double endAngle   = freezing ? Math.PI : 0.0;
 
 					int   totalFrames = 12;
@@ -2994,11 +2996,11 @@ public class MainWindow {
 		BufferedImage canvas = new BufferedImage(CARD_H, CARD_H, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = canvas.createGraphics();
 		switch (state) {
-			case BACKUP_DULLED -> {
+			case STATE_DULLED -> {
 				BufferedImage rotated = rotateCW90(card);          // now CARD_H × CARD_W
 				g.drawImage(rotated, 0, CARD_H - CARD_W, null);   // pinned to bottom-left
 			}
-			case BACKUP_FROZEN -> {
+			case STATE_FROZEN -> {
 				BufferedImage flipped = rotate180(card);
 				g.drawImage(applyBlueTint(flipped), 0, 0, null);  // pinned to top-left
 			}
@@ -3064,17 +3066,17 @@ public class MainWindow {
 
 		JMenuItem dullItem = new JMenuItem("Debug: Dull");
 		dullItem.addActionListener(ae -> {
-			boolean dulling = p1BackupStates[idx] != BACKUP_DULLED;
-			p1BackupStates[idx] = dulling ? BACKUP_DULLED : BACKUP_NORMAL;
+			boolean dulling = p1BackupStates[idx] != STATE_DULLED;
+			p1BackupStates[idx] = dulling ? STATE_DULLED : STATE_NORMAL;
 			animateDullBackup(idx, dulling);
 		});
 		menu.add(dullItem);
 
 		JMenuItem freezeItem = new JMenuItem("Debug: Freeze");
 		freezeItem.addActionListener(ae -> {
-			boolean freezing = p1BackupStates[idx] != BACKUP_FROZEN;
+			boolean freezing = p1BackupStates[idx] != STATE_FROZEN;
 			int prevState = p1BackupStates[idx];
-			p1BackupStates[idx] = freezing ? BACKUP_FROZEN : BACKUP_NORMAL;
+			p1BackupStates[idx] = freezing ? STATE_FROZEN : STATE_NORMAL;
 			animateFreezeBackup(idx, freezing, prevState);
 		});
 		menu.add(freezeItem);
@@ -3241,7 +3243,7 @@ public class MainWindow {
 
 		p1ForwardUrls.add(card.imageUrl());
 		p1ForwardCards.add(card);
-		p1ForwardStates.add(BACKUP_NORMAL);
+		p1ForwardStates.add(STATE_NORMAL);
 		p1ForwardPlayedOnTurn.add(gameState.getTurnNumber());
 		p1ForwardLabels.add(lbl);
 
@@ -3260,7 +3262,7 @@ public class MainWindow {
 		if (url == null) return;
 		boolean hasHaste  = p1ForwardCards.get(idx).hasTrait(CardData.Trait.HASTE);
 		boolean canAttack = gameState.getCurrentPhase() == GameState.GamePhase.ATTACK
-				&& state == BACKUP_NORMAL
+				&& state == STATE_NORMAL
 				&& (hasHaste || p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber());
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
@@ -3285,7 +3287,7 @@ public class MainWindow {
 	private boolean hasAttackableForward() {
 		int turn = gameState.getTurnNumber();
 		for (int i = 0; i < p1ForwardStates.size(); i++) {
-			if (p1ForwardStates.get(i) == BACKUP_NORMAL
+			if (p1ForwardStates.get(i) == STATE_NORMAL
 					&& (p1ForwardCards.get(i).hasTrait(CardData.Trait.HASTE)
 					    || p1ForwardPlayedOnTurn.get(i) != turn))
 				return true;
@@ -3300,14 +3302,21 @@ public class MainWindow {
 		GameState.GamePhase phase = gameState.getCurrentPhase();
 		boolean hasHaste  = p1ForwardCards.get(idx).hasTrait(CardData.Trait.HASTE);
 		boolean canAttack = phase == GameState.GamePhase.ATTACK
-				&& p1ForwardStates.get(idx) == BACKUP_NORMAL
+				&& p1ForwardStates.get(idx) == STATE_NORMAL
 				&& (hasHaste || p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber());
 		if (canAttack) {
 			JMenuItem attackItem = new JMenuItem("Attack");
 			attackItem.addActionListener(ae -> {
-				p1ForwardStates.set(idx, BACKUP_DULLED);
-				logEntry(p1ForwardCards.get(idx).name() + " attacks!");
-				animateDullForward(idx, () -> p2TakeDamage());
+				CardData attacker = p1ForwardCards.get(idx);
+				logEntry(attacker.name() + " attacks!");
+				if (attacker.hasTrait(CardData.Trait.BRAVE)) {
+					p1ForwardStates.set(idx, STATE_BRAVE_ATTACKED);
+					refreshP1ForwardSlot(idx);
+					p2TakeDamage();
+				} else {
+					p1ForwardStates.set(idx, STATE_DULLED);
+					animateDullForward(idx, () -> p2TakeDamage());
+				}
 			});
 			menu.add(attackItem);
 		}
@@ -3316,16 +3325,16 @@ public class MainWindow {
 			JMenuItem dullItem = new JMenuItem("Debug: Dull");
 			dullItem.addActionListener(ae -> {
 				p1ForwardStates.set(idx,
-						p1ForwardStates.get(idx) == BACKUP_DULLED ? BACKUP_NORMAL : BACKUP_DULLED);
+						p1ForwardStates.get(idx) == STATE_DULLED ? STATE_NORMAL : STATE_DULLED);
 				refreshP1ForwardSlot(idx);
 			});
 			menu.add(dullItem);
 
 			JMenuItem freezeItem = new JMenuItem("Debug: Freeze");
 			freezeItem.addActionListener(ae -> {
-				boolean freezing = p1ForwardStates.get(idx) != BACKUP_FROZEN;
+				boolean freezing = p1ForwardStates.get(idx) != STATE_FROZEN;
 				int prevState = p1ForwardStates.get(idx);
-				p1ForwardStates.set(idx, freezing ? BACKUP_FROZEN : BACKUP_NORMAL);
+				p1ForwardStates.set(idx, freezing ? STATE_FROZEN : STATE_NORMAL);
 				animateFreezeForward(idx, freezing, prevState);
 			});
 			menu.add(freezeItem);

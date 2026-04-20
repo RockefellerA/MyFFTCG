@@ -24,7 +24,8 @@ public record CardData(
         return traits;
     }
     public enum Trait {
-        HASTE
+        HASTE,
+        BRAVE
     }
 
     /** Defensive copy — traits is always immutable after construction. */
@@ -32,12 +33,14 @@ public record CardData(
         traits = Set.copyOf(traits);
     }
 
-    // Haste appears as a Special Trait in three forms:
-    //   1. Start of text:   Haste[[br]]         (optional whitespace before [[br]])
-    //   2. Middle of text:  [[br]]Haste[[br]]
-    //   3. Paired keyword:  Haste First Strike   (variable whitespace between words)
+    // Haste: start with [[br]] or (This descriptor, middle [[br]]…[[br]], or paired with other keywords
     private static final Pattern HASTE_PATTERN = Pattern.compile(
-        "(?i)(?:^Haste\\s*\\[\\[br\\]\\]|\\[\\[br\\]\\]Haste\\[\\[br\\]\\]|Haste\\s+First\\s+Strike)"
+        "(?i)(?:^Haste\\s*(?:\\[\\[br\\]\\]|\\(This)|\\[\\[br\\]\\]Haste\\[\\[br\\]\\]|Haste\\s+First\\s+Strike)"
+    );
+
+    // Brave: start with [[br]] or (Attacking descriptor, middle [[br]]…[[br]], or paired with other keywords
+    private static final Pattern BRAVE_PATTERN = Pattern.compile(
+        "(?i)(?:^Brave\\s*(?:\\[\\[br\\]\\]|\\(Attacking)|\\[\\[br\\]\\]Brave\\[\\[br\\]\\]|Brave\\s*\\[\\[br\\]\\]|First\\s+Strike\\s+Brave|Haste\\s+Brave)"
     );
 
     /** Parses {@code textEn} and returns the set of Special Traits present. */
@@ -45,6 +48,7 @@ public record CardData(
         if (textEn == null || textEn.isBlank()) return Set.of();
         EnumSet<Trait> found = EnumSet.noneOf(Trait.class);
         if (HASTE_PATTERN.matcher(textEn).find()) found.add(Trait.HASTE);
+        if (BRAVE_PATTERN.matcher(textEn).find()) found.add(Trait.BRAVE);
         return found;
     }
 
