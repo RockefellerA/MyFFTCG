@@ -735,6 +735,7 @@ public class MainWindow {
 			lbl.addMouseListener(new MouseAdapter() {
 				@Override
 				public void mousePressed(MouseEvent e) {
+					if (!mulliganAvailable) return;
 					if (selectedIdx[0] == -1) {
 						// Select this card
 						selectedIdx[0] = idx;
@@ -798,7 +799,7 @@ public class MainWindow {
 
 		// ── Instructions label ───────────────────────────────────────────────
 		JLabel instructions = new JLabel(
-				"Click a card to select it, then click another to swap positions.",
+				mulliganAvailable ? "Click a card to select it, then click another to swap positions." : " ",
 				SwingConstants.CENTER);
 		instructions.setFont(new Font("Pixel NES", Font.PLAIN, 10));
 
