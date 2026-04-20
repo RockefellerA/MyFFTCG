@@ -188,6 +188,7 @@ public class MainWindow {
 		frame.setJMenuBar(menuBar);
 		menuBar.add(new FileMenu(frame, this::startGame,
 				() -> applySidePanelSide(AppSettings.getSidePanelSide())));
+		menuBar.add(new MultiplayerMenu(frame, () -> logEntry("Multiplayer connection established")));
 		menuBar.add(new HelpMenu(frame));
 
 		Dimension cardSize = new Dimension(CARD_W, CARD_H);
@@ -2485,6 +2486,9 @@ public class MainWindow {
 			placeCardInMonsterZone(card);
 		} else if (card.isSummon()) {
 			gameState.pushStack(card);
+			CardData resolved = gameState.popStack();
+			gameState.getP1BreakZone().add(resolved);
+			logEntry("\"" + resolved.name() + "\" resolves → Break Zone");
 		}
 
 		refreshP1HandLabel();
