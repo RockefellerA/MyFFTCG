@@ -100,4 +100,9 @@ public record CardData(
     public boolean isMonster() {
         return "Monster".equalsIgnoreCase(type);
     }
+
+    /** Returns {@code true} if this card's type is Summon. */
+    public boolean isSummon() {
+        return "Summon".equalsIgnoreCase(type);
+    }
 }

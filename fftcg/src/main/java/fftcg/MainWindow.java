@@ -1067,10 +1067,8 @@ public class MainWindow {
 		}
 
 		// Forward zone
-		if (p1ForwardPanel != null && p1ForwardPanel.getComponentCount() > 1) {
-			while (p1ForwardPanel.getComponentCount() > 1) {
-				p1ForwardPanel.remove(p1ForwardPanel.getComponentCount() - 1);
-			}
+		if (p1ForwardPanel != null) {
+			p1ForwardPanel.removeAll();
 			p1ForwardPanel.revalidate();
 			p1ForwardPanel.repaint();
 		}
@@ -1079,6 +1077,18 @@ public class MainWindow {
 		p1ForwardCards.clear();
 		p1ForwardStates.clear();
 		p1ForwardPlayedOnTurn.clear();
+
+		// Monster zone
+		if (p1MonsterPanel != null) {
+			p1MonsterPanel.removeAll();
+			p1MonsterPanel.revalidate();
+			p1MonsterPanel.repaint();
+		}
+		p1MonsterLabels.clear();
+		p1MonsterUrls.clear();
+		p1MonsterCards.clear();
+		p1MonsterStates.clear();
+		p1MonsterPlayedOnTurn.clear();
 		spentLbIndices.clear();
 
 		// Damage zone
@@ -2122,12 +2132,9 @@ public class MainWindow {
 			if (i == excludeHandIdx) continue;
 			CardData h = hand.get(i);
 			if (h.isLightOrDark()) continue;
+			totalGenerate += 2;  // any non-Light/Dark card can be discarded for 2 CP
 			for (int ei = 0; ei < elems.length; ei++) {
-				if (h.containsElement(elems[ei])) {
-					totalGenerate += 2;
-					hasElemSource[ei] = true;
-					break;
-				}
+				if (h.containsElement(elems[ei])) hasElemSource[ei] = true;
 			}
 		}
 		for (int i = 0; i < p1BackupCards.length; i++) {
@@ -2200,8 +2207,10 @@ public class MainWindow {
 
 		// Refreshes CP counter, Confirm state, and the clickable appearance of every card label.
 		// Backups can only be added when total < cost (no overpay).
-		// Discards can be added when total < cost + elems.length - 1, allowing overpay of 1 per element.
+		// Discards can only be added if total < cost + unsatisfied elements (1 overpay per element
+		// still needing coverage — once a backup covers an element, that overpay slot is gone).
 		// For multi-element cards, Confirm also requires at least 1 CP from each element.
+		boolean[] canAddDiscard = {false};
 		Runnable updateAll = () -> {
 			Map<String, Integer> cpByElem = new LinkedHashMap<>(bankCpByElem);
 			for (int slot : selectedBackups) {
@@ -2213,8 +2222,9 @@ public class MainWindow {
 				cpByElem.merge(ce, 2, Integer::sum);
 			}
 			int total = cpByElem.values().stream().mapToInt(Integer::intValue).sum();
+			int unsatisfiedElems = (int) cpByElem.values().stream().filter(v -> v < 1).count();
 			boolean canAddBackup  = total < cost;
-			boolean canAddDiscard = total < cost + elems.length - 1;
+			canAddDiscard[0] = total < cost + unsatisfiedElems;
 			boolean allElemsPresent = cpByElem.values().stream().allMatch(v -> v >= 1);
 			confirmBtn.setEnabled(total >= cost && allElemsPresent);
 			if (elems.length == 1) {
@@ -2244,10 +2254,10 @@ public class MainWindow {
 				JLabel  lbl      = discardLbls.get(i);
 				boolean selected = selectedDiscards.contains(discardIdxs.get(i));
 				lbl.setBorder(BorderFactory.createLineBorder(
-						selected ? Color.YELLOW : (canAddDiscard ? Color.GRAY : new Color(80, 80, 80)),
+						selected ? Color.YELLOW : (canAddDiscard[0] ? Color.GRAY : new Color(80, 80, 80)),
 						selected ? 3 : 1));
-				lbl.setBackground(selected || canAddDiscard ? Color.DARK_GRAY : new Color(50, 50, 50));
-				lbl.setCursor(selected || canAddDiscard
+				lbl.setBackground(selected || canAddDiscard[0] ? Color.DARK_GRAY : new Color(50, 50, 50));
+				lbl.setCursor(selected || canAddDiscard[0]
 						? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
 			}
 		};
@@ -2322,7 +2332,7 @@ public class MainWindow {
 			if (i == handIdx) continue;
 			final int hi   = i;
 			CardData  hc   = hand.get(i);
-			boolean payable = !hc.isLightOrDark() && matchesAnyElement(hc, elems);
+			boolean payable = !hc.isLightOrDark();
 
 			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
 			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
@@ -2340,10 +2350,7 @@ public class MainWindow {
 			if (payable) {
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mousePressed(MouseEvent e) {
-						int total = bankCpByElem.values().stream().mapToInt(Integer::intValue).sum() + selectedBackups.size() + selectedDiscards.size() * 2;
-						if (selectedDiscards.remove(Integer.valueOf(hi))) {
-							// deselect always allowed
-						} else if (total < cost + elems.length - 1) {
+						if (!selectedDiscards.remove(Integer.valueOf(hi)) && canAddDiscard[0]) {
 							selectedDiscards.add(hi);
 						}
 						updateAll.run();
@@ -2471,6 +2478,8 @@ public class MainWindow {
 			placeCardInForwardZone(card);
 		} else if (card.isMonster()) {
 			placeCardInMonsterZone(card);
+		} else if (card.isSummon()) {
+			gameState.pushStack(card);
 		}
 
 		refreshP1HandLabel();
@@ -2515,6 +2524,7 @@ public class MainWindow {
 		List<JLabel>  discardLbls  = new ArrayList<>();
 		List<Integer> discardIdxs  = new ArrayList<>();
 
+		boolean[] canAddDiscard = {false};
 		Runnable updateAll = () -> {
 			Map<String, Integer> cpByElem = new LinkedHashMap<>(bankCpByElem);
 			for (int slot : selectedBackups) {
@@ -2526,8 +2536,9 @@ public class MainWindow {
 				cpByElem.merge(ce, 2, Integer::sum);
 			}
 			int total = cpByElem.values().stream().mapToInt(Integer::intValue).sum();
+			int unsatisfiedElems = (int) cpByElem.values().stream().filter(v -> v < 1).count();
 			boolean canAddBackup  = total < cost;
-			boolean canAddDiscard = total < cost + elems.length - 1;
+			canAddDiscard[0] = total < cost + unsatisfiedElems;
 			boolean allElemsPresent = cpByElem.values().stream().allMatch(v -> v >= 1);
 			confirmBtn.setEnabled(total >= cost && allElemsPresent);
 			if (elems.length == 1) {
@@ -2557,10 +2568,10 @@ public class MainWindow {
 				JLabel  lbl      = discardLbls.get(i);
 				boolean selected = selectedDiscards.contains(discardIdxs.get(i));
 				lbl.setBorder(BorderFactory.createLineBorder(
-						selected ? Color.YELLOW : (canAddDiscard ? Color.GRAY : new Color(80, 80, 80)),
+						selected ? Color.YELLOW : (canAddDiscard[0] ? Color.GRAY : new Color(80, 80, 80)),
 						selected ? 3 : 1));
-				lbl.setBackground(selected || canAddDiscard ? Color.DARK_GRAY : new Color(50, 50, 50));
-				lbl.setCursor(selected || canAddDiscard
+				lbl.setBackground(selected || canAddDiscard[0] ? Color.DARK_GRAY : new Color(50, 50, 50));
+				lbl.setCursor(selected || canAddDiscard[0]
 						? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
 			}
 		};
@@ -2632,7 +2643,7 @@ public class MainWindow {
 		for (int i = 0; i < hand.size(); i++) {
 			final int hi  = i;
 			CardData  hc  = hand.get(i);
-			boolean payable = !hc.isLightOrDark() && matchesAnyElement(hc, elems);
+			boolean payable = !hc.isLightOrDark();
 
 			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
 			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
@@ -2650,10 +2661,7 @@ public class MainWindow {
 			if (payable) {
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mousePressed(MouseEvent e) {
-						int total = bankCpByElem.values().stream().mapToInt(Integer::intValue).sum() + selectedBackups.size() + selectedDiscards.size() * 2;
-						if (selectedDiscards.remove(Integer.valueOf(hi))) {
-							// deselect always allowed
-						} else if (total < cost + elems.length - 1) {
+						if (!selectedDiscards.remove(Integer.valueOf(hi)) && canAddDiscard[0]) {
 							selectedDiscards.add(hi);
 						}
 						updateAll.run();
