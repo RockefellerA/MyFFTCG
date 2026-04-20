@@ -1,4 +1,4 @@
-package fftcg;
+package fftcg.menu;
 
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;

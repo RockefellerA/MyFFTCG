@@ -1,5 +1,9 @@
 package fftcg;
 
+import fftcg.menu.FileMenu;
+import fftcg.menu.HelpMenu;
+import fftcg.menu.MultiplayerMenu;
+
 import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;

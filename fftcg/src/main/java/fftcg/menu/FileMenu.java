@@ -1,4 +1,9 @@
-package fftcg;
+package fftcg.menu;
+
+import fftcg.CardBrowser;
+import fftcg.DeckManager;
+import fftcg.DeckSelectDialog;
+import fftcg.PreferencesDialog;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
@@ -13,13 +18,9 @@ import javax.swing.KeyStroke;
  * File menu for the main window.
  * Owns New Game, Deck Manager, Card Browser, Preferences, and Exit items.
  */
-class FileMenu extends JMenu {
+public class FileMenu extends JMenu {
 
-    FileMenu(JFrame owner, IntConsumer startGame) {
-        this(owner, startGame, null);
-    }
-
-    FileMenu(JFrame owner, IntConsumer startGame, Runnable onLayoutChanged) {
+    public FileMenu(JFrame owner, IntConsumer startGame, Runnable onLayoutChanged) {
         super("File");
 
         JMenuItem newGame = new JMenuItem("New Game");

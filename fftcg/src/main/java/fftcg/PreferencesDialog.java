@@ -36,22 +36,6 @@ public class PreferencesDialog extends JDialog {
 		contentPanel.setLayout(new BoxLayout(contentPanel, BoxLayout.Y_AXIS));
 		contentPanel.setBorder(new EmptyBorder(12, 16, 8, 16));
 
-		// ── General ──────────────────────────────────────────────────────────
-		JPanel generalPanel = new JPanel();
-		generalPanel.setLayout(new BoxLayout(generalPanel, BoxLayout.Y_AXIS));
-		generalPanel.setBorder(BorderFactory.createTitledBorder(
-				BorderFactory.createEtchedBorder(), "General",
-				TitledBorder.LEFT, TitledBorder.TOP));
-
-		JCheckBox dynamicBgCheckBox = new JCheckBox("Enable Dynamic Background Colors");
-		dynamicBgCheckBox.setEnabled(false);
-		dynamicBgCheckBox.setAlignmentX(Component.LEFT_ALIGNMENT);
-		generalPanel.add(dynamicBgCheckBox);
-
-		generalPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-		contentPanel.add(generalPanel);
-		contentPanel.add(javax.swing.Box.createVerticalStrut(8));
-
 		// ── Developer ────────────────────────────────────────────────────────
 		JPanel devPanel = new JPanel();
 		devPanel.setLayout(new BoxLayout(devPanel, BoxLayout.Y_AXIS));

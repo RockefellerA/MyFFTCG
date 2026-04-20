@@ -1,4 +1,4 @@
-package fftcg;
+package fftcg.menu;
 
 import java.awt.Desktop;
 import java.awt.event.ActionEvent;
@@ -14,9 +14,9 @@ import javax.swing.JOptionPane;
  * Help menu for the main window.
  * Owns all guide links and the About item.
  */
-class HelpMenu extends JMenu {
+public class HelpMenu extends JMenu {
 
-    HelpMenu(JFrame owner) {
+    public HelpMenu(JFrame owner) {
         super("Help");
 
         addGuideItem("How to Play (Basics)",

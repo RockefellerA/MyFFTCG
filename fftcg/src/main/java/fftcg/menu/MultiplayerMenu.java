@@ -1,4 +1,4 @@
-package fftcg;
+package fftcg.menu;
 
 import fftcg.net.GameAction;
 import fftcg.net.GameConnection;
@@ -12,12 +12,12 @@ import javax.swing.*;
  * Once connected, the active {@link GameConnection} is stored and actions
  * received from the opponent are logged until full game-sync is implemented.
  */
-class MultiplayerMenu extends JMenu {
+public class MultiplayerMenu extends JMenu {
 
     private GameConnection activeConnection;
     private final JMenuItem disconnectItem;
 
-    MultiplayerMenu(JFrame owner, Runnable onConnectionEstablished) {
+    public MultiplayerMenu(JFrame owner, Runnable onConnectionEstablished) {
         super("Multiplayer");
 
         JMenuItem hostItem = new JMenuItem("Host Game…");
