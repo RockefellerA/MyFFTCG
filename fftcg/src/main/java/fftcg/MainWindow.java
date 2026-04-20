@@ -3,6 +3,8 @@ package fftcg;
 import fftcg.menu.FileMenu;
 import fftcg.menu.HelpMenu;
 import fftcg.menu.MultiplayerMenu;
+import fftcg.net.ActionType;
+import fftcg.net.GameConnection;
 
 import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
@@ -57,9 +59,11 @@ import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JSeparator;
 import javax.swing.JTextArea;
+import javax.swing.JTextField;
 import javax.swing.JWindow;
 import javax.swing.SwingConstants;
 import javax.swing.SwingWorker;
+import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.border.BevelBorder;
 import javax.swing.border.SoftBevelBorder;
@@ -97,6 +101,11 @@ public class MainWindow {
 	private GrayscaleLabel p2RemoveLabel;
 	// Game event log
 	private JTextArea gameLog;
+	// Chat bar (enabled only when connected to multiplayer)
+	private JTextField chatInput;
+	private JButton    chatSendBtn;
+	// Multiplayer menu reference (to access active connection)
+	private MultiplayerMenu multiplayerMenu;
 	// Side info panel (card preview + Next button + game log)
 	private JPanel        sidePanel;
 	private JPanel        cardPreviewPanel;   // custom-painted card preview
@@ -192,7 +201,25 @@ public class MainWindow {
 		frame.setJMenuBar(menuBar);
 		menuBar.add(new FileMenu(frame, this::startGame,
 				() -> applySidePanelSide(AppSettings.getSidePanelSide())));
-		menuBar.add(new MultiplayerMenu(frame, () -> logEntry("Multiplayer connection established")));
+		multiplayerMenu = new MultiplayerMenu(frame,
+				() -> {
+					logEntry("Multiplayer connection established");
+					SwingUtilities.invokeLater(() -> {
+						chatInput.setEnabled(true);
+						chatSendBtn.setEnabled(true);
+					});
+				},
+				() -> SwingUtilities.invokeLater(() -> {
+					chatInput.setEnabled(false);
+					chatSendBtn.setEnabled(false);
+				}),
+				action -> {
+					if (action.type() == ActionType.CHAT) {
+						String msg = action.payload().optString("msg", "");
+						if (!msg.isEmpty()) logEntry("[Opponent] " + msg);
+					}
+				});
+		menuBar.add(multiplayerMenu);
 		menuBar.add(new HelpMenu(frame));
 
 		Dimension cardSize = new Dimension(CARD_W, CARD_H);
@@ -528,6 +555,37 @@ public class MainWindow {
 				JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
 				JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 
+		// ── Chat bar ─────────────────────────────────────────────────────────
+		chatInput = new JTextField();
+		chatInput.setFont(loadLatinia(11));
+		chatInput.setEnabled(false);
+		chatInput.setToolTipText("Connect to multiplayer to chat");
+
+		chatSendBtn = new JButton("Send");
+		chatSendBtn.setFont(loadLatinia(11));
+		chatSendBtn.setEnabled(false);
+
+		Runnable sendChat = () -> {
+			String text = chatInput.getText().trim();
+			if (text.isEmpty()) return;
+			GameConnection conn = multiplayerMenu == null ? null : multiplayerMenu.getActiveConnection();
+			if (conn == null) return;
+			conn.send(fftcg.net.GameAction.of(ActionType.CHAT, new org.json.JSONObject().put("msg", text)));
+			logEntry("[You] " + text);
+			chatInput.setText("");
+		};
+		chatInput.addActionListener(e -> sendChat.run());
+		chatSendBtn.addActionListener(e -> sendChat.run());
+
+		JPanel chatPanel = new JPanel(new BorderLayout(4, 0));
+		chatPanel.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Color.GRAY));
+		chatPanel.add(chatInput,   BorderLayout.CENTER);
+		chatPanel.add(chatSendBtn, BorderLayout.EAST);
+
+		JPanel logWithChat = new JPanel(new BorderLayout());
+		logWithChat.add(logScrollPane, BorderLayout.CENTER);
+		logWithChat.add(chatPanel,     BorderLayout.SOUTH);
+
 		handPanel = new JPanel(null);
 		handPanel.setBackground(Color.DARK_GRAY);
 		handPanel.setPreferredSize(new Dimension(sidePanelW, CARD_H));
@@ -542,9 +600,9 @@ public class MainWindow {
 
 		sidePanel = new JPanel(new BorderLayout());
 		sidePanel.setPreferredSize(new Dimension(sidePanelW, 0));
-		sidePanel.add(sideNorth,     BorderLayout.NORTH);
-		sidePanel.add(logScrollPane, BorderLayout.CENTER);
-		sidePanel.add(handPanel,     BorderLayout.SOUTH);
+		sidePanel.add(sideNorth,    BorderLayout.NORTH);
+		sidePanel.add(logWithChat,  BorderLayout.CENTER);
+		sidePanel.add(handPanel,    BorderLayout.SOUTH);
 
 		// --- Main game area (wraps both player zones + board so the side panel
 		//     spans the full frame height rather than just the centre strip) ---

@@ -2,6 +2,8 @@ package fftcg.net;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.IOException;
 import java.net.*;
 import java.util.ArrayList;
@@ -32,6 +34,9 @@ public class HostLobbyDialog extends JDialog {
         super(owner, "Host Game", true);
         setResizable(false);
         setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+        addWindowListener(new WindowAdapter() {
+            @Override public void windowClosing(WindowEvent e) { cancel(); }
+        });
 
         JPanel content = new JPanel(new BorderLayout(10, 10));
         content.setBorder(BorderFactory.createEmptyBorder(16, 20, 12, 20));

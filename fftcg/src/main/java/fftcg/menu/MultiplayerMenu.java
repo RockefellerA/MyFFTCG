@@ -6,6 +6,7 @@ import fftcg.net.HostLobbyDialog;
 import fftcg.net.JoinLobbyDialog;
 
 import javax.swing.*;
+import java.util.function.Consumer;
 
 /**
  * Multiplayer menu — lets P1 host or join a game over a direct TCP connection.
@@ -17,7 +18,8 @@ public class MultiplayerMenu extends JMenu {
     private GameConnection activeConnection;
     private final JMenuItem disconnectItem;
 
-    public MultiplayerMenu(JFrame owner, Runnable onConnectionEstablished) {
+    public MultiplayerMenu(JFrame owner, Runnable onConnected,
+                           Runnable onDisconnected, Consumer<GameAction> onActionReceived) {
         super("Multiplayer");
 
         JMenuItem hostItem = new JMenuItem("Host Game…");
@@ -29,17 +31,17 @@ public class MultiplayerMenu extends JMenu {
             HostLobbyDialog dlg = new HostLobbyDialog(owner);
             dlg.setVisible(true);
             GameConnection conn = dlg.getConnection();
-            if (conn != null) activate(conn, owner, onConnectionEstablished);
+            if (conn != null) activate(conn, owner, onConnected, onDisconnected, onActionReceived);
         });
 
         joinItem.addActionListener(e -> {
             JoinLobbyDialog dlg = new JoinLobbyDialog(owner);
             dlg.setVisible(true);
             GameConnection conn = dlg.getConnection();
-            if (conn != null) activate(conn, owner, onConnectionEstablished);
+            if (conn != null) activate(conn, owner, onConnected, onDisconnected, onActionReceived);
         });
 
-        disconnectItem.addActionListener(e -> disconnect(owner));
+        disconnectItem.addActionListener(e -> disconnect(owner, onDisconnected));
 
         add(hostItem);
         add(joinItem);
@@ -47,7 +49,9 @@ public class MultiplayerMenu extends JMenu {
         add(disconnectItem);
     }
 
-    private void activate(GameConnection conn, JFrame owner, Runnable onConnectionEstablished) {
+    private void activate(GameConnection conn, JFrame owner,
+                          Runnable onConnected, Runnable onDisconnected,
+                          Consumer<GameAction> onActionReceived) {
         if (activeConnection != null) activeConnection.close();
         activeConnection = conn;
         disconnectItem.setEnabled(true);
@@ -55,16 +59,14 @@ public class MultiplayerMenu extends JMenu {
         conn.addListener(new fftcg.net.ConnectionListener() {
             @Override
             public void onActionReceived(GameAction action) {
-                SwingUtilities.invokeLater(() ->
-                    JOptionPane.showMessageDialog(owner,
-                        "Received: " + action.type() + "\n" + action.payload(),
-                        "Opponent Action", JOptionPane.INFORMATION_MESSAGE));
+                SwingUtilities.invokeLater(() -> onActionReceived.accept(action));
             }
             @Override
             public void onDisconnected(String reason) {
                 SwingUtilities.invokeLater(() -> {
                     activeConnection = null;
                     disconnectItem.setEnabled(false);
+                    if (onDisconnected != null) onDisconnected.run();
                     JOptionPane.showMessageDialog(owner,
                         "Opponent disconnected: " + reason,
                         "Disconnected", JOptionPane.WARNING_MESSAGE);
@@ -73,10 +75,10 @@ public class MultiplayerMenu extends JMenu {
         });
 
         conn.start();
-        onConnectionEstablished.run();
+        onConnected.run();
     }
 
-    private void disconnect(JFrame owner) {
+    private void disconnect(JFrame owner, Runnable onDisconnected) {
         if (activeConnection != null) {
             activeConnection.send(GameAction.of(fftcg.net.ActionType.DISCONNECT,
                     new org.json.JSONObject().put("reason", "Player left")));
@@ -84,6 +86,7 @@ public class MultiplayerMenu extends JMenu {
             activeConnection = null;
         }
         disconnectItem.setEnabled(false);
+        if (onDisconnected != null) onDisconnected.run();
         JOptionPane.showMessageDialog(owner, "Disconnected.", "Multiplayer",
                 JOptionPane.INFORMATION_MESSAGE);
     }
