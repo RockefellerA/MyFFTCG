@@ -618,7 +618,8 @@ public class MainWindow {
 				List<CardData> lb   = new ArrayList<>();
 				for (DeckCardDetail card : p1Cards) {
 					CardData cd = new CardData(card.imageUrl(), card.name(), card.element(),
-							card.cost(), card.type(), card.isLb(), card.lbCost(), card.exBurst());
+							card.cost(), card.type(), card.isLb(), card.lbCost(), card.exBurst(),
+							CardData.parseTraits(card.textEn()));
 					if (card.isLb()) lb.add(cd);
 					else             main.add(cd);
 				}
@@ -632,7 +633,8 @@ public class MainWindow {
 					for (DeckCardDetail card : p2Cards) {
 						if (!card.isLb()) {
 							p2Main.add(new CardData(card.imageUrl(), card.name(), card.element(),
-									card.cost(), card.type(), card.isLb(), card.lbCost(), card.exBurst()));
+									card.cost(), card.type(), card.isLb(), card.lbCost(), card.exBurst(),
+									CardData.parseTraits(card.textEn())));
 						}
 					}
 					gameState.initializeP2Deck(p2Main);
@@ -3256,9 +3258,10 @@ public class MainWindow {
 		int    state = p1ForwardStates.get(idx);
 		JLabel slot  = p1ForwardLabels.get(idx);
 		if (url == null) return;
+		boolean hasHaste  = p1ForwardCards.get(idx).hasTrait(CardData.Trait.HASTE);
 		boolean canAttack = gameState.getCurrentPhase() == GameState.GamePhase.ATTACK
 				&& state == BACKUP_NORMAL
-				&& p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber();
+				&& (hasHaste || p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber());
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
@@ -3282,7 +3285,9 @@ public class MainWindow {
 	private boolean hasAttackableForward() {
 		int turn = gameState.getTurnNumber();
 		for (int i = 0; i < p1ForwardStates.size(); i++) {
-			if (p1ForwardStates.get(i) == BACKUP_NORMAL && p1ForwardPlayedOnTurn.get(i) != turn)
+			if (p1ForwardStates.get(i) == BACKUP_NORMAL
+					&& (p1ForwardCards.get(i).hasTrait(CardData.Trait.HASTE)
+					    || p1ForwardPlayedOnTurn.get(i) != turn))
 				return true;
 		}
 		return false;
@@ -3293,9 +3298,10 @@ public class MainWindow {
 		JPopupMenu menu = new JPopupMenu();
 
 		GameState.GamePhase phase = gameState.getCurrentPhase();
+		boolean hasHaste  = p1ForwardCards.get(idx).hasTrait(CardData.Trait.HASTE);
 		boolean canAttack = phase == GameState.GamePhase.ATTACK
 				&& p1ForwardStates.get(idx) == BACKUP_NORMAL
-				&& p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber();
+				&& (hasHaste || p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber());
 		if (canAttack) {
 			JMenuItem attackItem = new JMenuItem("Attack");
 			attackItem.addActionListener(ae -> {

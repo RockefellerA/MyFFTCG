@@ -1,5 +1,9 @@
 package fftcg;
 
+import java.util.EnumSet;
+import java.util.Set;
+import java.util.regex.Pattern;
+
 /**
  * Immutable value object representing a single card in game state.
  * Carries everything needed for display and rules checks.
@@ -12,8 +16,41 @@ public record CardData(
         String type,
         boolean isLb,
         int     lbCost,
-        boolean exBurst
+        boolean exBurst,
+        Set<Trait> traits
 ) {
+
+    public Set<Trait> getTraits() {
+        return traits;
+    }
+    public enum Trait {
+        HASTE
+    }
+
+    /** Defensive copy — traits is always immutable after construction. */
+    public CardData {
+        traits = Set.copyOf(traits);
+    }
+
+    // Haste appears as a Special Trait in three forms:
+    //   1. Start of text:   Haste[[br]]         (optional whitespace before [[br]])
+    //   2. Middle of text:  [[br]]Haste[[br]]
+    //   3. Paired keyword:  Haste First Strike   (variable whitespace between words)
+    private static final Pattern HASTE_PATTERN = Pattern.compile(
+        "(?i)(?:^Haste\\s*\\[\\[br\\]\\]|\\[\\[br\\]\\]Haste\\[\\[br\\]\\]|Haste\\s+First\\s+Strike)"
+    );
+
+    /** Parses {@code textEn} and returns the set of Special Traits present. */
+    public static Set<Trait> parseTraits(String textEn) {
+        if (textEn == null || textEn.isBlank()) return Set.of();
+        EnumSet<Trait> found = EnumSet.noneOf(Trait.class);
+        if (HASTE_PATTERN.matcher(textEn).find()) found.add(Trait.HASTE);
+        return found;
+    }
+
+    /** Returns {@code true} if this card has the given Special Trait. */
+    public boolean hasTrait(Trait t) { return traits.contains(t); }
+
     /** Returns {@code true} if any of this card's elements is Light or Dark (cannot be discarded for CP). */
     public boolean isLightOrDark() {
         for (String e : element.split("/"))
