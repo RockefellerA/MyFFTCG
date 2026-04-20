@@ -3136,29 +3136,16 @@ public class MainWindow {
 	 * Pass {@code true} for P1 to store a reference for dynamic card placement.
 	 */
 	private JScrollPane buildForwardZonePanel(boolean isP1) {
-		JLabel forwardTag = new JLabel("FORWARDS", SwingConstants.CENTER);
-		forwardTag.setFont(new Font("Pixel NES", Font.PLAIN, 11));
-		forwardTag.setBorder(BorderFactory.createEmptyBorder());
-		forwardTag.setForeground(Color.DARK_GRAY);
-		forwardTag.setOpaque(false);
-
-		int tagW = forwardTag.getPreferredSize().width;
-		JPanel tagWrapper = new JPanel(new BorderLayout());
-		tagWrapper.setOpaque(false);
-		tagWrapper.setPreferredSize(new Dimension(tagW, CARD_H));
-		tagWrapper.add(forwardTag, BorderLayout.NORTH);
-
 		JPanel inner = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0)) {
 			@Override
 			public Dimension getPreferredSize() {
-				int cardSlots = Math.max(getComponentCount() - 1, 0);
 				int gap   = 4;
-				int width = gap + tagW + gap + (CARD_H + gap) * cardSlots;
-				return new Dimension(Math.max(width, tagW + gap * 2), CARD_H);
+				int slots = getComponentCount();
+				int width = gap + (CARD_H + gap) * slots;
+				return new Dimension(Math.max(width, gap * 2), CARD_H);
 			}
 		};
 		inner.setOpaque(false);
-		inner.add(tagWrapper);
 
 		if (isP1) {
 			p1ForwardPanel = inner;
