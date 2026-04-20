@@ -95,4 +95,9 @@ public record CardData(
     public boolean isForward() {
         return "Forward".equalsIgnoreCase(type);
     }
+
+    /** Returns {@code true} if this card's type is Monster. */
+    public boolean isMonster() {
+        return "Monster".equalsIgnoreCase(type);
+    }
 }

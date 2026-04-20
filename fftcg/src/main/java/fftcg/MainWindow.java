@@ -129,6 +129,13 @@ public class MainWindow {
 	private final List<Integer>  p1ForwardPlayedOnTurn = new ArrayList<>();
 	private JPanel p1ForwardPanel;
 
+	private final List<JLabel>   p1MonsterLabels      = new ArrayList<>();
+	private final List<String>   p1MonsterUrls        = new ArrayList<>();
+	private final List<CardData> p1MonsterCards       = new ArrayList<>();
+	private final List<Integer>  p1MonsterStates      = new ArrayList<>();
+	private final List<Integer>  p1MonsterPlayedOnTurn = new ArrayList<>();
+	private JPanel p1MonsterPanel;
+
 	private int      p2DamageCount = 0;
 	private JPanel[] p2DamageSlots = new JPanel[7];
 
@@ -2024,7 +2031,8 @@ public class MainWindow {
 		JMenuItem playItem = new JMenuItem("Play");
 		GameState.GamePhase phase = gameState.getCurrentPhase();
 		boolean isMainPhase = phase == GameState.GamePhase.MAIN_1 || phase == GameState.GamePhase.MAIN_2;
-		playItem.setEnabled(isMainPhase && canAffordCard(card, handIdx) && (!card.isBackup() || hasAvailableBackupSlot()));
+		playItem.setEnabled(isMainPhase && canAffordCard(card, handIdx)
+				&& (!card.isBackup() || hasAvailableBackupSlot()));
 		playItem.addActionListener(ae -> {
 			hideZoom();
 			if (handPopup != null) { handPopup.dispose(); handPopup = null; }
@@ -2461,6 +2469,8 @@ public class MainWindow {
 			placeCardInFirstBackupSlot(card);
 		} else if (card.isForward()) {
 			placeCardInForwardZone(card);
+		} else if (card.isMonster()) {
+			placeCardInMonsterZone(card);
 		}
 
 		refreshP1HandLabel();
@@ -2764,6 +2774,8 @@ public class MainWindow {
 			placeCardInFirstBackupSlot(card);
 		} else if (card.isForward()) {
 			placeCardInForwardZone(card);
+		} else if (card.isMonster()) {
+			placeCardInMonsterZone(card);
 		}
 		refreshP1HandLabel();
 		refreshP1BreakLabel();
@@ -3195,7 +3207,7 @@ public class MainWindow {
 	private static final int FORWARD_ZONE_H = CARD_H * 5 / 4;
 
 	private JScrollPane buildForwardZonePanel(boolean isP1) {
-		JPanel inner = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0)) {
+		JPanel forwardInner = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0)) {
 			@Override
 			public Dimension getPreferredSize() {
 				int gap   = 4;
@@ -3204,13 +3216,39 @@ public class MainWindow {
 				return new Dimension(Math.max(width, gap * 2), FORWARD_ZONE_H);
 			}
 		};
-		inner.setOpaque(false);
+		forwardInner.setOpaque(false);
+		if (isP1) p1ForwardPanel = forwardInner;
 
-		if (isP1) {
-			p1ForwardPanel = inner;
-		}
+		JPanel monsterInner = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0)) {
+			@Override
+			public Dimension getPreferredSize() {
+				int gap   = 4;
+				int slots = getComponentCount();
+				int width = slots > 0 ? gap + (CARD_H + gap) * slots : 0;
+				return new Dimension(width, FORWARD_ZONE_H);
+			}
+		};
+		monsterInner.setOpaque(false);
+		if (isP1) p1MonsterPanel = monsterInner;
 
-		JScrollPane scroll = new JScrollPane(inner,
+		// Monster panel sits at the bottom of the EAST area for "lower-right" appearance
+		JPanel monsterContainer = new JPanel(new BorderLayout());
+		monsterContainer.setOpaque(false);
+		monsterContainer.add(monsterInner, BorderLayout.SOUTH);
+
+		JPanel outer = new JPanel(new BorderLayout()) {
+			@Override
+			public Dimension getPreferredSize() {
+				Dimension fwd = forwardInner.getPreferredSize();
+				Dimension mon = monsterInner.getPreferredSize();
+				return new Dimension(fwd.width + mon.width, FORWARD_ZONE_H);
+			}
+		};
+		outer.setOpaque(false);
+		outer.add(forwardInner,    BorderLayout.CENTER);
+		outer.add(monsterContainer, BorderLayout.EAST);
+
+		JScrollPane scroll = new JScrollPane(outer,
 				JScrollPane.VERTICAL_SCROLLBAR_NEVER,
 				JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
 		scroll.setBorder(BorderFactory.createEmptyBorder());
@@ -3255,6 +3293,89 @@ public class MainWindow {
 		refreshP1ForwardSlot(idx);
 	}
 
+	/** Adds a Monster card to P1's monster zone (right side of forward zone, newest leftmost). */
+	private void placeCardInMonsterZone(CardData card) {
+		if (p1MonsterPanel == null) return;
+		int idx = p1MonsterLabels.size();
+
+		JLabel lbl = new JLabel("", SwingConstants.CENTER);
+		lbl.setPreferredSize(new Dimension(CARD_H, CARD_H));
+		lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
+		lbl.setOpaque(false);
+		lbl.setForeground(Color.DARK_GRAY);
+		lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		lbl.setBorder(BorderFactory.createEmptyBorder());
+		lbl.addMouseListener(new MouseAdapter() {
+			@Override public void mousePressed(MouseEvent e) {
+				if (lbl.getIcon() != null) showMonsterContextMenu(idx, lbl, e);
+			}
+			@Override public void mouseEntered(MouseEvent e) {
+				if (lbl.getIcon() != null) showZoomAt(p1MonsterUrls.get(idx), lbl);
+			}
+			@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+		});
+
+		p1MonsterUrls.add(card.imageUrl());
+		p1MonsterCards.add(card);
+		p1MonsterStates.add(STATE_NORMAL);
+		p1MonsterPlayedOnTurn.add(gameState.getTurnNumber());
+		p1MonsterLabels.add(lbl);
+
+		// Insert at front so newest monster appears leftmost
+		p1MonsterPanel.add(lbl, 0);
+		p1MonsterPanel.revalidate();
+		p1MonsterPanel.repaint();
+
+		refreshP1MonsterSlot(idx);
+	}
+
+	/** Reloads and re-renders a single P1 monster slot using its stored URL and state. */
+	private void refreshP1MonsterSlot(int idx) {
+		String url   = p1MonsterUrls.get(idx);
+		int    state = p1MonsterStates.get(idx);
+		JLabel slot  = p1MonsterLabels.get(idx);
+		if (url == null) return;
+		new SwingWorker<ImageIcon, Void>() {
+			@Override protected ImageIcon doInBackground() throws Exception {
+				Image raw = ImageCache.load(url);
+				if (raw == null) return null;
+				BufferedImage card = toARGB(raw, CARD_W, CARD_H);
+				return new ImageIcon(renderBackupCard(card, state, false));
+			}
+			@Override protected void done() {
+				try {
+					ImageIcon icon = get();
+					if (icon != null) { slot.setIcon(icon); slot.setText(null); }
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+	}
+
+	/** Shows a context menu for a P1 monster slot. */
+	private void showMonsterContextMenu(int idx, JLabel slot, MouseEvent e) {
+		JPopupMenu menu = new JPopupMenu();
+
+		if (AppSettings.isDebugMode()) {
+			JMenuItem dullItem = new JMenuItem("Debug: Dull");
+			dullItem.addActionListener(ae -> {
+				p1MonsterStates.set(idx,
+						p1MonsterStates.get(idx) == STATE_DULLED ? STATE_NORMAL : STATE_DULLED);
+				refreshP1MonsterSlot(idx);
+			});
+			menu.add(dullItem);
+
+			JMenuItem freezeItem = new JMenuItem("Debug: Freeze");
+			freezeItem.addActionListener(ae -> {
+				p1MonsterStates.set(idx,
+						p1MonsterStates.get(idx) == STATE_FROZEN ? STATE_NORMAL : STATE_FROZEN);
+				refreshP1MonsterSlot(idx);
+			});
+			menu.add(freezeItem);
+		}
+
+		if (menu.getComponentCount() > 0) menu.show(slot, e.getX(), e.getY());
+	}
+
 	/** Reloads and re-renders a single P1 forward slot using its stored URL and state. */
 	private void refreshP1ForwardSlot(int idx) {
 		String url   = p1ForwardUrls.get(idx);
@@ -3283,6 +3404,7 @@ public class MainWindow {
 
 	private void refreshAllForwardSlots() {
 		for (int i = 0; i < p1ForwardLabels.size(); i++) refreshP1ForwardSlot(i);
+		for (int i = 0; i < p1MonsterLabels.size(); i++) refreshP1MonsterSlot(i);
 	}
 
 	private boolean hasBackAttackInHand() {
