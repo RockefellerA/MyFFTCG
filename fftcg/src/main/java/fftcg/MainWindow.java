@@ -2899,6 +2899,48 @@ public class MainWindow {
 		}.execute();
 	}
 
+	private void animateDullForward(int idx, Runnable onComplete) {
+		String url  = p1ForwardUrls.get(idx);
+		JLabel slot = p1ForwardLabels.get(idx);
+		if (url == null || slot == null) { refreshP1ForwardSlot(idx); if (onComplete != null) onComplete.run(); return; }
+
+		new SwingWorker<BufferedImage, Void>() {
+			@Override protected BufferedImage doInBackground() throws Exception {
+				Image raw = ImageCache.load(url);
+				return raw == null ? null : toARGB(raw, CARD_W, CARD_H);
+			}
+			@Override protected void done() {
+				try {
+					BufferedImage card = get();
+					if (card == null) { refreshP1ForwardSlot(idx); if (onComplete != null) onComplete.run(); return; }
+
+					int   totalFrames = 12;
+					int[] frame       = { 0 };
+					javax.swing.Timer timer = new javax.swing.Timer(16, null);
+					timer.addActionListener(ae -> {
+						frame[0]++;
+						double progress = Math.min(1.0, (double) frame[0] / totalFrames);
+						double t = progress < 0.5
+								? 2 * progress * progress
+								: 1 - Math.pow(-2 * progress + 2, 2) / 2;
+						double angle = Math.PI / 2 * t;
+						slot.setIcon(new ImageIcon(renderBackupCardAtAngle(card, angle)));
+						slot.setText(null);
+						if (frame[0] >= totalFrames) {
+							timer.stop();
+							refreshP1ForwardSlot(idx);
+							if (onComplete != null) onComplete.run();
+						}
+					});
+					timer.start();
+				} catch (InterruptedException | ExecutionException ignored) {
+					refreshP1ForwardSlot(idx);
+					if (onComplete != null) onComplete.run();
+				}
+			}
+		}.execute();
+	}
+
 	private static BufferedImage renderBackupCardAtAngle(BufferedImage card, double angle) {
 		BufferedImage canvas = new BufferedImage(CARD_H, CARD_H, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = canvas.createGraphics();
@@ -3258,9 +3300,8 @@ public class MainWindow {
 			JMenuItem attackItem = new JMenuItem("Attack");
 			attackItem.addActionListener(ae -> {
 				p1ForwardStates.set(idx, BACKUP_DULLED);
-				refreshP1ForwardSlot(idx);
 				logEntry(p1ForwardCards.get(idx).name() + " attacks!");
-				p2TakeDamage();
+				animateDullForward(idx, () -> p2TakeDamage());
 			});
 			menu.add(attackItem);
 		}
