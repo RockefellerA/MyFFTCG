@@ -1064,7 +1064,7 @@ public class MainWindow {
 		for (int i = 0; i < p1BackupLabels.length; i++) {
 			if (p1BackupLabels[i] != null) {
 				p1BackupLabels[i].setIcon(null);
-				p1BackupLabels[i].setText("BACKUP " + (i + 1));
+				p1BackupLabels[i].setText(null);
 			}
 			p1BackupUrls[i]   = null;
 			p1BackupCards[i]  = null;
@@ -2125,19 +2125,34 @@ public class MainWindow {
 	private boolean canAffordCard(CardData card, int excludeHandIdx) {
 		String[]       elems = card.elements();
 		List<CardData> hand  = gameState.getP1Hand();
-		boolean[]      hasElemSource = new boolean[elems.length];
+		int totalGenerate = 0;
+
+		if (card.isLightOrDark()) {
+			// L/D cards accept any element — sum all banked CP and all available sources
+			int totalExisting = gameState.getP1CpByElement().values().stream().mapToInt(Integer::intValue).sum();
+			for (int i = 0; i < hand.size(); i++) {
+				if (i == excludeHandIdx) continue;
+				if (!hand.get(i).isLightOrDark()) totalGenerate += 2;
+			}
+			for (int i = 0; i < p1BackupCards.length; i++) {
+				if (p1BackupCards[i] != null && p1BackupStates[i] == STATE_NORMAL)
+					totalGenerate += 1;
+			}
+			return totalExisting + totalGenerate >= card.cost();
+		}
+
+		boolean[] hasElemSource = new boolean[elems.length];
 		int totalExisting = 0;
 		for (int ei = 0; ei < elems.length; ei++) {
 			int ex = gameState.getP1CpForElement(elems[ei]);
 			totalExisting += ex;
 			if (ex > 0) hasElemSource[ei] = true;
 		}
-		int totalGenerate = 0;
 		for (int i = 0; i < hand.size(); i++) {
 			if (i == excludeHandIdx) continue;
 			CardData h = hand.get(i);
 			if (h.isLightOrDark()) continue;
-			totalGenerate += 2;  // any non-Light/Dark card can be discarded for 2 CP
+			totalGenerate += 2;
 			for (int ei = 0; ei < elems.length; ei++) {
 				if (h.containsElement(elems[ei])) hasElemSource[ei] = true;
 			}
@@ -2183,17 +2198,26 @@ public class MainWindow {
 		String         elem   = card.element();
 		String[]       elems  = card.elements();
 		int            cost   = card.cost();
+		boolean        isLD   = card.isLightOrDark();
+
+		// For L/D cards any element pays, so bank the total across all elements in one pool.
+		// For other cards track per-element as before.
 		Map<String, Integer> bankCpByElem = new LinkedHashMap<>();
-		for (String e : elems) bankCpByElem.put(e, gameState.getP1CpForElement(e));
+		if (isLD) {
+			int total = gameState.getP1CpByElement().values().stream().mapToInt(Integer::intValue).sum();
+			bankCpByElem.put(elem, total);
+		} else {
+			for (String e : elems) bankCpByElem.put(e, gameState.getP1CpForElement(e));
+		}
 
 		List<Integer> selectedBackups  = new ArrayList<>();
 		List<Integer> selectedDiscards = new ArrayList<>();
 
-		// Collect eligible (undulled, matching-element) backup slot indices
+		// L/D cards: any undulled backup is eligible. Others: must match an element.
 		List<Integer> eligibleBackupSlots = new ArrayList<>();
 		for (int i = 0; i < p1BackupCards.length; i++) {
 			if (p1BackupCards[i] != null && p1BackupStates[i] == STATE_NORMAL
-					&& matchesAnyElement(p1BackupCards[i], elems))
+					&& (isLD || matchesAnyElement(p1BackupCards[i], elems)))
 				eligibleBackupSlots.add(i);
 		}
 
@@ -2204,38 +2228,36 @@ public class MainWindow {
 		JButton confirmBtn = new JButton("Confirm");
 		confirmBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
 
-		// Labels tracked for visual refresh; parallel lists with their slot/hand indices
 		List<JLabel>   backupLbls  = new ArrayList<>();
 		List<Integer>  backupSlots = new ArrayList<>();
 		List<JLabel>   discardLbls  = new ArrayList<>();
 		List<Integer>  discardIdxs  = new ArrayList<>();
 
-		// Refreshes CP counter, Confirm state, and the clickable appearance of every card label.
-		// Backups can only be added when total < cost (no overpay).
-		// Discards can only be added if total < cost + unsatisfied elements (1 overpay per element
-		// still needing coverage — once a backup covers an element, that overpay slot is gone).
-		// For multi-element cards, Confirm also requires at least 1 CP from each element.
 		boolean[] canAddDiscard = {false};
 		Runnable updateAll = () -> {
 			Map<String, Integer> cpByElem = new LinkedHashMap<>(bankCpByElem);
 			int extraCp = 0;
 			for (int slot : selectedBackups) {
-				if (matchesAnyElement(p1BackupCards[slot], elems))
+				if (isLD)
+					cpByElem.merge(elem, 1, Integer::sum);
+				else if (matchesAnyElement(p1BackupCards[slot], elems))
 					cpByElem.merge(contributingElement(p1BackupCards[slot], elems), 1, Integer::sum);
 				else
 					extraCp += 1;
 			}
 			for (int idx : selectedDiscards) {
-				if (matchesAnyElement(hand.get(idx), elems))
+				if (isLD)
+					cpByElem.merge(elem, 2, Integer::sum);
+				else if (matchesAnyElement(hand.get(idx), elems))
 					cpByElem.merge(contributingElement(hand.get(idx), elems), 2, Integer::sum);
 				else
 					extraCp += 2;
 			}
 			int total = cpByElem.values().stream().mapToInt(Integer::intValue).sum() + extraCp;
-			int unsatisfiedElems = (int) cpByElem.values().stream().filter(v -> v < 1).count();
+			int unsatisfiedElems = isLD ? 0 : (int) cpByElem.values().stream().filter(v -> v < 1).count();
 			boolean canAddBackup  = total < cost;
 			canAddDiscard[0] = total < cost + unsatisfiedElems;
-			boolean allElemsPresent = cpByElem.values().stream().allMatch(v -> v >= 1);
+			boolean allElemsPresent = isLD || cpByElem.values().stream().allMatch(v -> v >= 1);
 			confirmBtn.setEnabled(total >= cost && allElemsPresent);
 			if (elems.length == 1) {
 				cpLabel.setText("CP: " + total + " / " + cost + "  (" + elem + ")");
@@ -2464,14 +2486,18 @@ public class MainWindow {
 	private void executePlay(CardData card, int cardHandIdx,
 			List<Integer> discardIndices, List<Integer> backupDullIndices) {
 		String[] elems = card.elements();
+		boolean  isLD  = card.isLightOrDark();
 		for (int bi : backupDullIndices) {
 			p1BackupStates[bi] = STATE_DULLED;
-			refreshP1BackupSlot(bi);
-			gameState.addP1Cp(contributingElement(p1BackupCards[bi], elems), 1);
+			animateDullBackup(bi, true);
+			String cpElem = isLD ? p1BackupCards[bi].elements()[0] : contributingElement(p1BackupCards[bi], elems);
+			gameState.addP1Cp(cpElem, 1);
 		}
 		discardIndices.sort(Collections.reverseOrder());
 		for (int di : discardIndices) {
-			gameState.addP1Cp(contributingElement(gameState.getP1Hand().get(di), elems), 2);
+			CardData discarded = gameState.getP1Hand().get(di);
+			String cpElem = isLD ? discarded.elements()[0] : contributingElement(discarded, elems);
+			gameState.addP1Cp(cpElem, 2);
 			gameState.breakFromHand(di);
 			if (di < cardHandIdx) cardHandIdx--;
 		}
@@ -2512,8 +2538,15 @@ public class MainWindow {
 		String         elem   = card.element();
 		String[]       elems  = card.elements();
 		int            cost   = card.cost();
+		boolean        isLD   = card.isLightOrDark();
+
 		Map<String, Integer> bankCpByElem = new LinkedHashMap<>();
-		for (String e : elems) bankCpByElem.put(e, gameState.getP1CpForElement(e));
+		if (isLD) {
+			int total = gameState.getP1CpByElement().values().stream().mapToInt(Integer::intValue).sum();
+			bankCpByElem.put(elem, total);
+		} else {
+			for (String e : elems) bankCpByElem.put(e, gameState.getP1CpForElement(e));
+		}
 
 		List<Integer> selectedBackups  = new ArrayList<>();
 		List<Integer> selectedDiscards = new ArrayList<>();
@@ -2521,7 +2554,7 @@ public class MainWindow {
 		List<Integer> eligibleBackupSlots = new ArrayList<>();
 		for (int i = 0; i < p1BackupCards.length; i++) {
 			if (p1BackupCards[i] != null && p1BackupStates[i] == STATE_NORMAL
-					&& matchesAnyElement(p1BackupCards[i], elems))
+					&& (isLD || matchesAnyElement(p1BackupCards[i], elems)))
 				eligibleBackupSlots.add(i);
 		}
 
@@ -2542,22 +2575,26 @@ public class MainWindow {
 			Map<String, Integer> cpByElem = new LinkedHashMap<>(bankCpByElem);
 			int extraCp = 0;
 			for (int slot : selectedBackups) {
-				if (matchesAnyElement(p1BackupCards[slot], elems))
+				if (isLD)
+					cpByElem.merge(elem, 1, Integer::sum);
+				else if (matchesAnyElement(p1BackupCards[slot], elems))
 					cpByElem.merge(contributingElement(p1BackupCards[slot], elems), 1, Integer::sum);
 				else
 					extraCp += 1;
 			}
 			for (int idx : selectedDiscards) {
-				if (matchesAnyElement(hand.get(idx), elems))
+				if (isLD)
+					cpByElem.merge(elem, 2, Integer::sum);
+				else if (matchesAnyElement(hand.get(idx), elems))
 					cpByElem.merge(contributingElement(hand.get(idx), elems), 2, Integer::sum);
 				else
 					extraCp += 2;
 			}
 			int total = cpByElem.values().stream().mapToInt(Integer::intValue).sum() + extraCp;
-			int unsatisfiedElems = (int) cpByElem.values().stream().filter(v -> v < 1).count();
+			int unsatisfiedElems = isLD ? 0 : (int) cpByElem.values().stream().filter(v -> v < 1).count();
 			boolean canAddBackup  = total < cost;
 			canAddDiscard[0] = total < cost + unsatisfiedElems;
-			boolean allElemsPresent = cpByElem.values().stream().allMatch(v -> v >= 1);
+			boolean allElemsPresent = isLD || cpByElem.values().stream().allMatch(v -> v >= 1);
 			confirmBtn.setEnabled(total >= cost && allElemsPresent);
 			if (elems.length == 1) {
 				cpLabel.setText("CP: " + total + " / " + cost + "  (" + elem + ")");
@@ -2782,14 +2819,18 @@ public class MainWindow {
 	private void executeLbPlay(CardData card, List<Integer> discardIndices,
 			List<Integer> backupDullIndices) {
 		String[] elems = card.elements();
+		boolean  isLD  = card.isLightOrDark();
 		for (int bi : backupDullIndices) {
 			p1BackupStates[bi] = STATE_DULLED;
-			refreshP1BackupSlot(bi);
-			gameState.addP1Cp(contributingElement(p1BackupCards[bi], elems), 1);
+			animateDullBackup(bi, true);
+			String cpElem = isLD ? p1BackupCards[bi].elements()[0] : contributingElement(p1BackupCards[bi], elems);
+			gameState.addP1Cp(cpElem, 1);
 		}
 		discardIndices.sort(Collections.reverseOrder());
 		for (int di : discardIndices) {
-			gameState.addP1Cp(contributingElement(gameState.getP1Hand().get(di), elems), 2);
+			CardData discarded = gameState.getP1Hand().get(di);
+			String cpElem = isLD ? discarded.elements()[0] : contributingElement(discarded, elems);
+			gameState.addP1Cp(cpElem, 2);
 			gameState.breakFromHand(di);
 		}
 		for (String e : elems) {
@@ -3499,14 +3540,12 @@ public class MainWindow {
 
 	private JPanel buildBackupZonePanel(JLabel[] labelStorage) {
 		JPanel slotsPanel = new JPanel(new GridLayout(1, 5, 2, 0));
-		slotsPanel.setBackground(Color.LIGHT_GRAY);
+		slotsPanel.setOpaque(false);
 		for (int i = 0; i < 5; i++) {
-			JLabel slot = new JLabel("BACKUP " + (i + 1), SwingConstants.CENTER);
+			JLabel slot = new JLabel();
 			slot.setFont(new Font("Pixel NES", Font.PLAIN, 11));
-			slot.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
-			slot.setBackground(Color.LIGHT_GRAY);
-			slot.setForeground(Color.DARK_GRAY);
-			slot.setOpaque(true);
+			slot.setBorder(BorderFactory.createEmptyBorder());
+			slot.setOpaque(false);
 			slot.setPreferredSize(new Dimension(CARD_H, CARD_H));
 			slot.setMinimumSize(new Dimension(CARD_H, CARD_H));
 			if (labelStorage != null) labelStorage[i] = slot;
