@@ -25,7 +25,9 @@ public record CardData(
     }
     public enum Trait {
         HASTE,
-        BRAVE
+        BRAVE,
+        FIRST_STRIKE,
+        BACK_ATTACK
     }
 
     /** Defensive copy — traits is always immutable after construction. */
@@ -43,12 +45,24 @@ public record CardData(
         "(?i)(?:^Brave\\s*(?:\\[\\[br\\]\\]|\\(Attacking)|\\[\\[br\\]\\]Brave\\[\\[br\\]\\]|Brave\\s*\\[\\[br\\]\\]|First\\s+Strike\\s+Brave|Haste\\s+Brave)"
     );
 
+    // First Strike: start of card with (If, [[br]], or paired with Haste/Brave
+    private static final Pattern FIRST_STRIKE_PATTERN = Pattern.compile(
+        "(?i)(?:^First\\s+Strike\\s*(?:\\(If|\\[\\[br\\]\\])|Haste\\s+First\\s+Strike|First\\s+Strike\\s+Brave)"
+    );
+
+    // Back Attack: start of card with (Like, <p>, or [[br]]
+    private static final Pattern BACK_ATTACK_PATTERN = Pattern.compile(
+        "(?i)(?:^Back\\s+Attack\\s*(?:\\(Like|\\[\\[br\\]\\])|<p>Back\\s+Attack)"
+    );
+
     /** Parses {@code textEn} and returns the set of Special Traits present. */
     public static Set<Trait> parseTraits(String textEn) {
         if (textEn == null || textEn.isBlank()) return Set.of();
         EnumSet<Trait> found = EnumSet.noneOf(Trait.class);
         if (HASTE_PATTERN.matcher(textEn).find()) found.add(Trait.HASTE);
         if (BRAVE_PATTERN.matcher(textEn).find()) found.add(Trait.BRAVE);
+        if (FIRST_STRIKE_PATTERN.matcher(textEn).find()) found.add(Trait.FIRST_STRIKE);
+        if (BACK_ATTACK_PATTERN.matcher(textEn).find()) found.add(Trait.BACK_ATTACK);
         return found;
     }
 

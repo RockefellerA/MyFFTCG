@@ -973,7 +973,7 @@ public class MainWindow {
 				gameState.advancePhase();   // MAIN_1 → ATTACK
 				logEntry("Attack Phase");
 				refreshAllForwardSlots();
-				if (!hasAttackableForward()) {
+				if (!hasAttackableForward() && !hasBackAttackInHand()) {
 					logEntry("No attackers available — skipping to Main Phase 2");
 					onNextPhase();
 				}
@@ -3283,6 +3283,11 @@ public class MainWindow {
 
 	private void refreshAllForwardSlots() {
 		for (int i = 0; i < p1ForwardLabels.size(); i++) refreshP1ForwardSlot(i);
+	}
+
+	private boolean hasBackAttackInHand() {
+		return gameState.getP1Hand().stream()
+				.anyMatch(c -> c.hasTrait(CardData.Trait.BACK_ATTACK));
 	}
 
 	private boolean hasAttackableForward() {
