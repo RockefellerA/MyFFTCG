@@ -160,7 +160,7 @@ public class DeckDatabase implements AutoCloseable {
     public List<DeckCardDetail> getDeckCardsDetailed(int deckId) throws SQLException {
         List<DeckCardDetail> result = new ArrayList<>();
         String sql = """
-            SELECT dc.count, c.image_url, c.name_en, c.element, c.cost, c.type_en, c.limit_break, c.lb_cost, c.ex_burst, c.text_en
+            SELECT dc.count, c.image_url, c.name_en, c.element, c.cost, c.type_en, c.limit_break, c.lb_cost, c.ex_burst, c.text_en, c.multicard
             FROM deck_cards dc
             LEFT JOIN cards c ON dc.serial = c.serial
             WHERE dc.deck_id = ?
@@ -177,11 +177,12 @@ public class DeckDatabase implements AutoCloseable {
                     String  type     = rs.getString("type_en");
                     boolean isLb     = rs.getInt("limit_break") == 1;
                     int     lbCost   = rs.getInt("lb_cost");
-                    boolean exBurst  = rs.getInt("ex_burst") == 1;
-                    String  textEn   = rs.getString("text_en");
-                    int     count    = rs.getInt("count");
+                    boolean exBurst   = rs.getInt("ex_burst") == 1;
+                    String  textEn    = rs.getString("text_en");
+                    boolean multicard = rs.getInt("multicard") == 1;
+                    int     count     = rs.getInt("count");
                     for (int i = 0; i < count; i++)
-                        result.add(new DeckCardDetail(imageUrl, name, element, cost, type, isLb, lbCost, exBurst, textEn));
+                        result.add(new DeckCardDetail(imageUrl, name, element, cost, type, isLb, lbCost, exBurst, textEn, multicard));
                 }
             }
         }
@@ -370,7 +371,7 @@ public class DeckDatabase implements AutoCloseable {
     }
 
     /** A single expanded card entry from a deck — one instance per copy. */
-    public record DeckCardDetail(String imageUrl, String name, String element, int cost, String type, boolean isLb, int lbCost, boolean exBurst, String textEn) {}
+    public record DeckCardDetail(String imageUrl, String name, String element, int cost, String type, boolean isLb, int lbCost, boolean exBurst, String textEn, boolean multicard) {}
 
     /** Deck with separate main and LB card counts, used for deck selection. */
     public record DeckSummary(int id, String name, int mainCardCount, int lbCardCount) {

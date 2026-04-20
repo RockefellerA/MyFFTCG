@@ -690,7 +690,7 @@ public class MainWindow {
 				for (DeckCardDetail card : p1Cards) {
 					CardData cd = new CardData(card.imageUrl(), card.name(), card.element(),
 							card.cost(), card.type(), card.isLb(), card.lbCost(), card.exBurst(),
-							CardData.parseTraits(card.textEn()));
+							card.multicard(), CardData.parseTraits(card.textEn()));
 					if (card.isLb()) lb.add(cd);
 					else             main.add(cd);
 				}
@@ -705,7 +705,7 @@ public class MainWindow {
 						if (!card.isLb()) {
 							p2Main.add(new CardData(card.imageUrl(), card.name(), card.element(),
 									card.cost(), card.type(), card.isLb(), card.lbCost(), card.exBurst(),
-									CardData.parseTraits(card.textEn())));
+									card.multicard(), CardData.parseTraits(card.textEn())));
 						}
 					}
 					gameState.initializeP2Deck(p2Main);
@@ -2104,7 +2104,9 @@ public class MainWindow {
 		JMenuItem playItem = new JMenuItem("Play");
 		GameState.GamePhase phase = gameState.getCurrentPhase();
 		boolean isMainPhase = phase == GameState.GamePhase.MAIN_1 || phase == GameState.GamePhase.MAIN_2;
-		playItem.setEnabled(isMainPhase && canAffordCard(card, handIdx)
+		boolean isCharacter = card.isForward() || card.isBackup() || card.isMonster();
+		boolean nameConflict = isCharacter && !card.multicard() && hasCharacterNameOnField(card.name());
+		playItem.setEnabled(isMainPhase && !nameConflict && canAffordCard(card, handIdx)
 				&& (!card.isBackup() || hasAvailableBackupSlot()));
 		playItem.addActionListener(ae -> {
 			hideZoom();
@@ -2231,6 +2233,16 @@ public class MainWindow {
 	}
 
 	/** Returns true if at least one P1 backup slot is currently empty. */
+	private boolean hasCharacterNameOnField(String name) {
+		for (CardData c : p1ForwardCards)
+			if (name.equalsIgnoreCase(c.name())) return true;
+		for (CardData c : p1MonsterCards)
+			if (name.equalsIgnoreCase(c.name())) return true;
+		for (CardData c : p1BackupCards)
+			if (c != null && name.equalsIgnoreCase(c.name())) return true;
+		return false;
+	}
+
 	private boolean hasAvailableBackupSlot() {
 		if (p1BackupLabels == null) return false;
 		for (JLabel slot : p1BackupLabels) {

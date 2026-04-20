@@ -17,6 +17,7 @@ public record CardData(
         boolean isLb,
         int     lbCost,
         boolean exBurst,
+        boolean multicard,
         Set<Trait> traits
 ) {
 
