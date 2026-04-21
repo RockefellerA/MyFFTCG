@@ -146,6 +146,19 @@ public class MainWindow {
 	private int      p2DamageCount = 0;
 	private JPanel[] p2DamageSlots = new JPanel[7];
 
+	// P2 field state (managed by ComputerPlayer)
+	private final JLabel[]     p2BackupLabels        = new JLabel[5];
+	private final String[]     p2BackupUrls          = new String[5];
+	private final CardData[]   p2BackupCards         = new CardData[5];
+	private final CardState[]  p2BackupStates        = new CardState[5];
+	private JPanel             p2ForwardPanel;
+	private final List<JLabel>    p2ForwardLabels       = new ArrayList<>();
+	private final List<String>    p2ForwardUrls         = new ArrayList<>();
+	private final List<CardData>  p2ForwardCards        = new ArrayList<>();
+	private final List<CardState> p2ForwardStates       = new ArrayList<>();
+	private final List<Integer>   p2ForwardPlayedOnTurn = new ArrayList<>();
+	private ComputerPlayer        computerPlayer;
+
 	private int             p1LbIndex   = 0;
 	private final Set<Integer> spentLbIndices = new HashSet<>();
 
@@ -276,7 +289,7 @@ public class MainWindow {
 		JComboBox<String> p2ColorBox = buildColorDropdown();
 		JPanel p2DamagePanel = buildDamageZonePanel("P2", p2ColorBox);
 
-		JPanel p2BackupSlots = buildBackupZonePanel(null);
+		JPanel p2BackupSlots = buildBackupZonePanel(p2BackupLabels);
 		JPanel p2BackupWrapper = new JPanel(new GridBagLayout());
 		GridBagConstraints p2BackupGbc = new GridBagConstraints();
 		p2BackupGbc.anchor = GridBagConstraints.NORTH;
@@ -639,6 +652,7 @@ public class MainWindow {
 	private void startGame(int deckId) {
 		gameState.reset();
 		p1LbIndex = 0;
+		computerPlayer = new ComputerPlayer();
 		clearUIZones();
 		if (nextPhaseButton != null) nextPhaseButton.setEnabled(false);
 		if (gameLog != null) gameLog.setText("");
@@ -1004,6 +1018,7 @@ public class MainWindow {
 	 */
 	private void onNextPhase() {
 		if (gameState.isP1GameOver()) return;
+		if (gameState.getCurrentPlayer() == GameState.Player.P2) return;
 		GameState.GamePhase current = gameState.getCurrentPhase();
 		if (current == null) return;
 
@@ -1057,45 +1072,10 @@ public class MainWindow {
 				break;
 
 			case END: {
-				// Advance (turn number increments inside advancePhase)
-				gameState.advancePhase();   // END → ACTIVE
-
-				// Execute Active Phase: dull → normal, frozen → dull
-				int activated = 0, thawed = 0;
-				for (int i = 0; i < p1BackupStates.length; i++) {
-					if (p1BackupStates[i] == CardState.FROZEN) {
-						p1BackupStates[i] = CardState.DULLED;
-						refreshP1BackupSlot(i);
-						thawed++;
-					} else if (p1BackupStates[i] == CardState.DULLED) {
-						p1BackupStates[i] = CardState.NORMAL;
-						refreshP1BackupSlot(i);
-						activated++;
-					}
-				}
-				for (int i = 0; i < p1ForwardStates.size(); i++) {
-					CardState fs = p1ForwardStates.get(i);
-					if (fs == CardState.FROZEN) {
-						p1ForwardStates.set(i, CardState.DULLED);
-						refreshP1ForwardSlot(i);
-						thawed++;
-					} else if (fs == CardState.DULLED || fs == CardState.BRAVE_ATTACKED) {
-						p1ForwardStates.set(i, CardState.NORMAL);
-						refreshP1ForwardSlot(i);
-						activated++;
-					}
-				}
-
-				StringBuilder msg = new StringBuilder(
-						"Turn " + gameState.getTurnNumber() + " — Active Phase");
-				if (activated > 0)
-					msg.append(" (").append(activated).append(" activated");
-				if (thawed > 0)
-					msg.append(activated > 0 ? ", " : " (").append(thawed).append(" thawed");
-				if (activated > 0 || thawed > 0) msg.append(")");
-				logEntry(msg.toString());
-				// No choices during Active Phase — advance automatically
-				onNextPhase();
+				// END → ACTIVE: increments turn number and switches to P2
+				gameState.advancePhase();
+				nextPhaseButton.setEnabled(false);
+				computerPlayer.runTurn();
 				break;
 			}
 		}
@@ -1174,6 +1154,29 @@ public class MainWindow {
 		p2RemoveLabel.setIcon(null);
 		p2RemoveLabel.setUrl(null);
 		p2RemoveLabel.setText("<html><div style='text-align:center'>REMOVED<br>FROM<br>PLAY</div></html>");
+
+		// P2 backup slots
+		for (int i = 0; i < p2BackupCards.length; i++) {
+			if (p2BackupLabels[i] != null) {
+				p2BackupLabels[i].setIcon(null);
+				p2BackupLabels[i].setText(null);
+			}
+			p2BackupUrls[i]   = null;
+			p2BackupCards[i]  = null;
+			p2BackupStates[i] = CardState.NORMAL;
+		}
+
+		// P2 forward zone
+		if (p2ForwardPanel != null) {
+			p2ForwardPanel.removeAll();
+			p2ForwardPanel.revalidate();
+			p2ForwardPanel.repaint();
+		}
+		p2ForwardLabels.clear();
+		p2ForwardUrls.clear();
+		p2ForwardCards.clear();
+		p2ForwardStates.clear();
+		p2ForwardPlayedOnTurn.clear();
 
 		// Reset P2 damage zone display
 		p2DamageCount = 0;
@@ -3349,6 +3352,7 @@ public class MainWindow {
 		};
 		forwardInner.setOpaque(false);
 		if (isP1) p1ForwardPanel = forwardInner;
+		else      p2ForwardPanel = forwardInner;
 
 		JPanel monsterInner = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0)) {
 			@Override
@@ -3868,6 +3872,389 @@ public class MainWindow {
 	// -------------------------------------------------------------------------
 	// Gradient board panel
 	// -------------------------------------------------------------------------
+
+	// -------------------------------------------------------------------------
+	// P2 rendering helpers
+	// -------------------------------------------------------------------------
+
+	private boolean p2HasAvailableBackupSlot() {
+		for (int i = 0; i < p2BackupCards.length; i++) {
+			if (p2BackupCards[i] == null) return true;
+		}
+		return false;
+	}
+
+	private void placeP2CardInForwardZone(CardData card) {
+		if (p2ForwardPanel == null) return;
+		int idx = p2ForwardLabels.size();
+
+		JLabel lbl = new JLabel("", SwingConstants.CENTER);
+		lbl.setPreferredSize(new Dimension(CARD_H, CARD_H));
+		lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
+		lbl.setOpaque(false);
+		lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		lbl.setBorder(BorderFactory.createEmptyBorder());
+		lbl.addMouseListener(new MouseAdapter() {
+			@Override public void mouseEntered(MouseEvent e) {
+				if (lbl.getIcon() != null) showZoomAt(p2ForwardUrls.get(idx), lbl);
+			}
+			@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+		});
+
+		p2ForwardUrls.add(card.imageUrl());
+		p2ForwardCards.add(card);
+		p2ForwardStates.add(CardState.NORMAL);
+		p2ForwardPlayedOnTurn.add(gameState.getTurnNumber());
+		p2ForwardLabels.add(lbl);
+
+		p2ForwardPanel.add(lbl);
+		p2ForwardPanel.revalidate();
+		p2ForwardPanel.repaint();
+
+		refreshP2ForwardSlot(idx);
+	}
+
+	private void placeP2CardInFirstBackupSlot(CardData card) {
+		for (int i = 0; i < p2BackupCards.length; i++) {
+			if (p2BackupCards[i] != null) continue;
+			p2BackupUrls[i]   = card.imageUrl();
+			p2BackupCards[i]  = card;
+			p2BackupStates[i] = CardState.DULLED;
+			refreshP2BackupSlot(i);
+			return;
+		}
+	}
+
+	private void refreshP2BackupSlot(int idx) {
+		String url    = p2BackupUrls[idx];
+		JLabel slot   = p2BackupLabels[idx];
+		CardState state = p2BackupStates[idx];
+		if (url == null || slot == null) return;
+		new SwingWorker<ImageIcon, Void>() {
+			@Override protected ImageIcon doInBackground() throws Exception {
+				Image raw = ImageCache.load(url);
+				if (raw == null) return null;
+				return new ImageIcon(renderBackupCard(toARGB(raw, CARD_W, CARD_H), state));
+			}
+			@Override protected void done() {
+				try {
+					ImageIcon icon = get();
+					if (icon != null) { slot.setIcon(icon); slot.setText(null); }
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+	}
+
+	private void refreshP2ForwardSlot(int idx) {
+		String url      = p2ForwardUrls.get(idx);
+		CardState state = p2ForwardStates.get(idx);
+		JLabel slot     = p2ForwardLabels.get(idx);
+		if (url == null) return;
+		new SwingWorker<ImageIcon, Void>() {
+			@Override protected ImageIcon doInBackground() throws Exception {
+				Image raw = ImageCache.load(url);
+				if (raw == null) return null;
+				return new ImageIcon(renderBackupCard(toARGB(raw, CARD_W, CARD_H), state));
+			}
+			@Override protected void done() {
+				try {
+					ImageIcon icon = get();
+					if (icon != null) { slot.setIcon(icon); slot.setText(null); }
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+	}
+
+	private void refreshAllP2ForwardSlots() {
+		for (int i = 0; i < p2ForwardLabels.size(); i++) refreshP2ForwardSlot(i);
+	}
+
+	// -------------------------------------------------------------------------
+	// Computer player (P2 AI)
+	// -------------------------------------------------------------------------
+
+	private class ComputerPlayer {
+		private static final int PAUSE_MS = 500;
+
+		/** Schedules {@code r} to run after {@link #PAUSE_MS} ms on the EDT. */
+		private void step(Runnable r) {
+			javax.swing.Timer t = new javax.swing.Timer(PAUSE_MS, e -> {
+				if (!gameState.isP1GameOver()) r.run();
+			});
+			t.setRepeats(false);
+			t.start();
+		}
+
+		/** Entry point: called when P2's ACTIVE phase begins. */
+		void runTurn() {
+			step(this::doActivePhase);
+		}
+
+		// ── Active Phase ─────────────────────────────────────────────────────
+
+		private void doActivePhase() {
+			int activated = 0, thawed = 0;
+			for (int i = 0; i < p2BackupStates.length; i++) {
+				if (p2BackupCards[i] == null) continue;
+				if (p2BackupStates[i] == CardState.FROZEN) {
+					p2BackupStates[i] = CardState.DULLED;
+					refreshP2BackupSlot(i);
+					thawed++;
+				} else if (p2BackupStates[i] == CardState.DULLED) {
+					p2BackupStates[i] = CardState.NORMAL;
+					refreshP2BackupSlot(i);
+					activated++;
+				}
+			}
+			for (int i = 0; i < p2ForwardStates.size(); i++) {
+				CardState fs = p2ForwardStates.get(i);
+				if (fs == CardState.FROZEN) {
+					p2ForwardStates.set(i, CardState.DULLED);
+					refreshP2ForwardSlot(i);
+					thawed++;
+				} else if (fs == CardState.DULLED || fs == CardState.BRAVE_ATTACKED) {
+					p2ForwardStates.set(i, CardState.NORMAL);
+					refreshP2ForwardSlot(i);
+					activated++;
+				}
+			}
+			StringBuilder msg = new StringBuilder("Turn " + gameState.getTurnNumber() + " — P2 Active Phase");
+			if (activated > 0) msg.append(" (").append(activated).append(" activated");
+			if (thawed > 0)    msg.append(activated > 0 ? ", " : " (").append(thawed).append(" thawed");
+			if (activated > 0 || thawed > 0) msg.append(")");
+			logEntry(msg.toString());
+
+			gameState.advancePhase(); // ACTIVE → DRAW
+			step(this::doDrawPhase);
+		}
+
+		// ── Draw Phase ───────────────────────────────────────────────────────
+
+		private void doDrawPhase() {
+			int drawCount = gameState.getTurnNumber() == 1 ? 1 : 2;
+			List<CardData> drawn = gameState.drawP2ToHand(drawCount);
+			refreshP2DeckLabel();
+			if (drawn.size() < drawCount) {
+				triggerGameOver("P2 milled out — You Win!");
+				return;
+			}
+			logEntry("[P2] Draw Phase — Drew " + drawn.size() + " card(s) (hand: " + gameState.getP2Hand().size() + ")");
+			gameState.advancePhase(); // DRAW → MAIN_1
+			logEntry("[P2] Main Phase 1");
+			step(() -> doMainPhase(() -> {
+				gameState.advancePhase(); // MAIN_1 → ATTACK
+				boolean canAttack = false;
+				for (int i = 0; i < p2ForwardStates.size(); i++) {
+					if (p2ForwardCanAttack(i)) { canAttack = true; break; }
+				}
+				if (!canAttack) {
+					logEntry("[P2] Attack Phase — No attackers, skipping");
+					gameState.advancePhase(); // ATTACK → MAIN_2
+					logEntry("[P2] Main Phase 2");
+					step(() -> doMainPhase(this::doEndPhase));
+				} else {
+					logEntry("[P2] Attack Phase");
+					refreshAllP2ForwardSlots();
+					step(() -> doAttackPhase(() -> {
+						gameState.advancePhase(); // ATTACK → MAIN_2
+						logEntry("[P2] Main Phase 2");
+						step(() -> doMainPhase(this::doEndPhase));
+					}));
+				}
+			}));
+		}
+
+		// ── Main Phase (shared for Main 1 and Main 2) ────────────────────────
+
+		private void doMainPhase(Runnable onDone) {
+			if (gameState.isP1GameOver()) return;
+			int[] plan = findPlayPlan();
+			if (plan == null) { onDone.run(); return; }
+
+			int cardIdx = plan[0];
+			List<Integer> discards = new ArrayList<>();
+			for (int i = 1; i < plan.length; i++) discards.add(plan[i]);
+			discards.sort(Collections.reverseOrder());
+
+			// Adjust card index after descending discards
+			int adjustedIdx = cardIdx;
+			for (int di : discards) {
+				if (di < cardIdx) adjustedIdx--;
+			}
+
+			for (int di : discards) {
+				CardData d = gameState.discardP2FromHand(di);
+				if (d != null) logEntry("[P2] Discards " + d.name() + " for CP");
+			}
+
+			CardData toPlay = gameState.removeP2FromHand(adjustedIdx);
+			if (toPlay != null) {
+				String element = toPlay.elements()[0];
+				gameState.spendP2Cp(element, Math.min(toPlay.cost(), gameState.getP2CpForElement(element)));
+				logEntry("[P2] Plays " + toPlay.name());
+				if (toPlay.isForward())     placeP2CardInForwardZone(toPlay);
+				else if (toPlay.isBackup()) placeP2CardInFirstBackupSlot(toPlay);
+			}
+			step(() -> doMainPhase(onDone));
+		}
+
+		// ── Attack Phase ─────────────────────────────────────────────────────
+
+		private void doAttackPhase(Runnable onDone) {
+			if (gameState.isP1GameOver()) return;
+			for (int i = 0; i < p2ForwardStates.size(); i++) {
+				if (!p2ForwardCanAttack(i)) continue;
+				CardData attacker = p2ForwardCards.get(i);
+				logEntry("[P2] " + attacker.name() + " attacks!");
+				if (attacker.hasTrait(CardData.Trait.BRAVE)) {
+					p2ForwardStates.set(i, CardState.BRAVE_ATTACKED);
+				} else {
+					p2ForwardStates.set(i, CardState.DULLED);
+				}
+				refreshP2ForwardSlot(i);
+				p1TakeDamage();
+				if (gameState.isP1GameOver()) return;
+				step(() -> doAttackPhase(onDone));
+				return;
+			}
+			onDone.run();
+		}
+
+		// ── End Phase ────────────────────────────────────────────────────────
+
+		private void doEndPhase() {
+			List<CardData> hand = gameState.getP2Hand();
+			while (hand.size() > 5) {
+				int idx = pickWorstHandCard(hand);
+				CardData d = gameState.discardP2FromHand(idx);
+				if (d != null) logEntry("[P2] End Phase — discards " + d.name());
+			}
+			gameState.advancePhase(); // MAIN_2 → END
+			logEntry("[P2] End Phase");
+			gameState.advancePhase(); // END → ACTIVE (switches to P1, increments turn)
+			step(this::startP1Turn);  // startP1Turn expects phase == ACTIVE
+		}
+
+		// ── P1 turn start (Active + Draw, then hand control back to player) ──
+
+		private void startP1Turn() {
+			int activated = 0, thawed = 0;
+			for (int i = 0; i < p1BackupStates.length; i++) {
+				if (p1BackupStates[i] == CardState.FROZEN) {
+					p1BackupStates[i] = CardState.DULLED;
+					refreshP1BackupSlot(i);
+					thawed++;
+				} else if (p1BackupStates[i] == CardState.DULLED) {
+					p1BackupStates[i] = CardState.NORMAL;
+					refreshP1BackupSlot(i);
+					activated++;
+				}
+			}
+			for (int i = 0; i < p1ForwardStates.size(); i++) {
+				CardState fs = p1ForwardStates.get(i);
+				if (fs == CardState.FROZEN) {
+					p1ForwardStates.set(i, CardState.DULLED);
+					refreshP1ForwardSlot(i);
+					thawed++;
+				} else if (fs == CardState.DULLED || fs == CardState.BRAVE_ATTACKED) {
+					p1ForwardStates.set(i, CardState.NORMAL);
+					refreshP1ForwardSlot(i);
+					activated++;
+				}
+			}
+			StringBuilder msg = new StringBuilder("Turn " + gameState.getTurnNumber() + " — Active Phase");
+			if (activated > 0) msg.append(" (").append(activated).append(" activated");
+			if (thawed > 0)    msg.append(activated > 0 ? ", " : " (").append(thawed).append(" thawed");
+			if (activated > 0 || thawed > 0) msg.append(")");
+			logEntry(msg.toString());
+
+			gameState.advancePhase(); // ACTIVE → DRAW
+
+			List<CardData> drawn = gameState.drawToHand(2);
+			refreshP1HandLabel();
+			refreshP1DeckLabel();
+			if (drawn.size() < 2) {
+				triggerGameOver("Milled Out - You Lose!");
+				return;
+			}
+			logEntry("Draw Phase — Drew " + drawn.size() + " card(s)");
+			gameState.advancePhase(); // DRAW → MAIN_1
+			logEntry("Main Phase 1");
+			nextPhaseButton.setEnabled(true);
+		}
+
+		// ── Helpers ──────────────────────────────────────────────────────────
+
+		private boolean p2ForwardCanAttack(int idx) {
+			return p2ForwardStates.get(idx) == CardState.NORMAL
+				&& (p2ForwardCards.get(idx).hasTrait(CardData.Trait.HASTE)
+					|| p2ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber());
+		}
+
+		/** Returns the index of the least-valuable card in {@code hand} for end-phase discard. */
+		private int pickWorstHandCard(List<CardData> hand) {
+			int worstIdx = 0, worstScore = Integer.MAX_VALUE;
+			for (int i = 0; i < hand.size(); i++) {
+				CardData c = hand.get(i);
+				// Prefer to keep forwards and higher-cost cards; sacrifice backups and cheap cards first
+				int score = c.cost() + (c.isForward() ? 10 : 0);
+				if (score < worstScore) { worstScore = score; worstIdx = i; }
+			}
+			return worstIdx;
+		}
+
+		/**
+		 * Finds the best card P2 can play from hand, along with the minimum
+		 * discards needed to afford it.
+		 *
+		 * @return {@code int[]} where {@code [0]} is the hand index of the card to
+		 *         play and {@code [1..n]} are hand indices to discard first (sorted
+		 *         ascending), or {@code null} if nothing is playable.
+		 */
+		private int[] findPlayPlan() {
+			List<CardData> hand = gameState.getP2Hand();
+			if (hand.isEmpty()) return null;
+
+			// Candidates: forwards (highest cost first), then backups (highest cost first)
+			List<Integer> candidates = new ArrayList<>();
+			for (int i = 0; i < hand.size(); i++) {
+				if (hand.get(i).isForward()) candidates.add(i);
+			}
+			candidates.sort((a, b) -> hand.get(b).cost() - hand.get(a).cost());
+			List<Integer> backupCands = new ArrayList<>();
+			for (int i = 0; i < hand.size(); i++) {
+				if (hand.get(i).isBackup() && p2HasAvailableBackupSlot()) backupCands.add(i);
+			}
+			backupCands.sort((a, b) -> hand.get(b).cost() - hand.get(a).cost());
+			candidates.addAll(backupCands);
+
+			for (int cardIdx : candidates) {
+				CardData card    = hand.get(cardIdx);
+				String element   = card.elements()[0];
+				int haveCp       = gameState.getP2CpForElement(element);
+				int needed       = Math.max(0, card.cost() - haveCp);
+
+				if (needed == 0) return new int[]{ cardIdx };
+
+				// Cheapest non-Light/Dark matching-element cards available as discards
+				List<Integer> discardable = new ArrayList<>();
+				for (int i = 0; i < hand.size(); i++) {
+					if (i == cardIdx) continue;
+					CardData c = hand.get(i);
+					if (!c.isLightOrDark() && c.containsElement(element)) discardable.add(i);
+				}
+				int discardCount = (needed + 1) / 2; // ceil(needed / 2)
+				if (discardable.size() >= discardCount) {
+					discardable.sort((a, b) -> hand.get(a).cost() - hand.get(b).cost());
+					int[] result = new int[1 + discardCount];
+					result[0] = cardIdx;
+					for (int i = 0; i < discardCount; i++) result[i + 1] = discardable.get(i);
+					return result;
+				}
+			}
+			return null;
+		}
+	}
 
 	private class GradientPanel extends JPanel {
 		private Color gradientColor;

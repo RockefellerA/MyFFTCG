@@ -29,8 +29,18 @@ public class GameState {
     private final List<CardData>           stack        = new ArrayList<>();
 
     // --- P2 ---
-    private final Deque<CardData>          p2MainDeck   = new ArrayDeque<>();
-    private final List<CardData>           p2DamageZone = new ArrayList<>();
+    private final Deque<CardData>          p2MainDeck    = new ArrayDeque<>();
+    private final List<CardData>           p2DamageZone  = new ArrayList<>();
+    private final List<CardData>           p2Hand        = new ArrayList<>();
+    private final List<CardData>           p2BreakZone   = new ArrayList<>();
+    private final Map<String, Integer>     p2CpByElement = new HashMap<>();
+
+    // -------------------------------------------------------------------------
+    // Player tracking
+    // -------------------------------------------------------------------------
+
+    public enum Player { P1, P2 }
+    private Player currentPlayer = Player.P1;
 
     // -------------------------------------------------------------------------
     // Lifecycle
@@ -50,8 +60,12 @@ public class GameState {
         stack.clear();
         p2MainDeck.clear();
         p2DamageZone.clear();
-        currentPhase         = null;
-        turnNumber           = 0;
+        p2Hand.clear();
+        p2BreakZone.clear();
+        p2CpByElement.clear();
+        currentPhase  = null;
+        turnNumber    = 0;
+        currentPlayer = Player.P1;
     }
 
     /**
@@ -153,11 +167,14 @@ public class GameState {
         return card;
     }
 
-    /** Shuffles {@code mainCards} and loads them as P2's main deck. */
+    /** Shuffles {@code mainCards}, loads them as P2's main deck, and draws P2's 5-card opening hand. */
     public void initializeP2Deck(List<CardData> mainCards) {
         List<CardData> shuffled = new ArrayList<>(mainCards);
         Collections.shuffle(shuffled);
         p2MainDeck.addAll(shuffled);
+        for (int i = 0; i < 5 && !p2MainDeck.isEmpty(); i++) {
+            p2Hand.add(p2MainDeck.poll());
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -307,10 +324,11 @@ public class GameState {
     private GamePhase currentPhase = null;  // null ⇒ game not yet started
     private int       turnNumber   = 0;
 
-    /** Begins the very first turn: sets phase to Active and turn number to 1. */
+    /** Begins the very first turn: sets phase to Active, turn 1, P1 to move. */
     public void startFirstTurn() {
-        currentPhase = GamePhase.ACTIVE;
-        turnNumber   = 1;
+        currentPhase  = GamePhase.ACTIVE;
+        turnNumber    = 1;
+        currentPlayer = Player.P1;
     }
 
     /**
@@ -322,15 +340,79 @@ public class GameState {
      */
     public GamePhase advancePhase() {
         if (currentPhase == null) {
-            currentPhase = GamePhase.ACTIVE;
-            turnNumber   = 1;
+            currentPhase  = GamePhase.ACTIVE;
+            turnNumber    = 1;
+            currentPlayer = Player.P1;
         } else {
-            if (currentPhase == GamePhase.END) turnNumber++;
+            if (currentPhase == GamePhase.END) {
+                turnNumber++;
+                currentPlayer = (currentPlayer == Player.P1) ? Player.P2 : Player.P1;
+            }
             currentPhase = currentPhase.next();
         }
         return currentPhase;
     }
 
-    public GamePhase getCurrentPhase() { return currentPhase; }
-    public int       getTurnNumber()   { return turnNumber; }
+    public GamePhase getCurrentPhase()   { return currentPhase; }
+    public int       getTurnNumber()     { return turnNumber; }
+    public Player    getCurrentPlayer()  { return currentPlayer; }
+
+    // -------------------------------------------------------------------------
+    // P2 hand / draw
+    // -------------------------------------------------------------------------
+
+    public List<CardData> drawP2ToHand(int count) {
+        List<CardData> drawn = new ArrayList<>();
+        for (int i = 0; i < count && !p2MainDeck.isEmpty(); i++) {
+            CardData card = p2MainDeck.poll();
+            p2Hand.add(card);
+            drawn.add(card);
+        }
+        return drawn;
+    }
+
+    public CardData discardP2FromHand(int idx) {
+        if (idx < 0 || idx >= p2Hand.size()) return null;
+        CardData card = p2Hand.remove(idx);
+        p2BreakZone.add(card);
+        if (!card.isLightOrDark()) {
+            addP2Cp(card.element(), 2);
+        }
+        return card;
+    }
+
+    public CardData removeP2FromHand(int idx) {
+        if (idx < 0 || idx >= p2Hand.size()) return null;
+        return p2Hand.remove(idx);
+    }
+
+    // -------------------------------------------------------------------------
+    // P2 Crystal Points
+    // -------------------------------------------------------------------------
+
+    public int getP2CpForElement(String element) {
+        return p2CpByElement.getOrDefault(element, 0);
+    }
+
+    public Map<String, Integer> getP2CpByElement() {
+        return Collections.unmodifiableMap(p2CpByElement);
+    }
+
+    public void addP2Cp(String element, int amount) {
+        p2CpByElement.merge(element, amount, Integer::sum);
+    }
+
+    public boolean spendP2Cp(String element, int amount) {
+        int current = getP2CpForElement(element);
+        if (current < amount) return false;
+        p2CpByElement.put(element, current - amount);
+        return true;
+    }
+
+    // -------------------------------------------------------------------------
+    // P2 accessors
+    // -------------------------------------------------------------------------
+
+    public List<CardData> getP2Hand()      { return p2Hand; }
+    public List<CardData> getP2BreakZone() { return p2BreakZone; }
 }
