@@ -324,11 +324,11 @@ public class GameState {
     private GamePhase currentPhase = null;  // null ⇒ game not yet started
     private int       turnNumber   = 0;
 
-    /** Begins the very first turn: sets phase to Active, turn 1, P1 to move. */
-    public void startFirstTurn() {
+    /** Begins the very first turn: sets phase to Active, turn 1, {@code firstPlayer} to move. */
+    public void startFirstTurn(Player firstPlayer) {
         currentPhase  = GamePhase.ACTIVE;
         turnNumber    = 1;
-        currentPlayer = Player.P1;
+        currentPlayer = firstPlayer;
     }
 
     /**

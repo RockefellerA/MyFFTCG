@@ -890,11 +890,21 @@ public class MainWindow {
 			openingHandPopup = null;
 			if (mulliganAvailable) logEntry("Kept opening hand");
 			gameState.keepHand(handOrder);
-			gameState.startFirstTurn();
-			logEntry("Turn 1 — Active Phase");
-			if (nextPhaseButton != null) nextPhaseButton.setEnabled(true);
+			boolean p1GoesFirst = Math.random() < 0.5;
+			GameState.Player firstPlayer = p1GoesFirst
+					? GameState.Player.P1 : GameState.Player.P2;
+			gameState.startFirstTurn(firstPlayer);
 			refreshP1HandLabel();
-			onNextPhase();
+			if (p1GoesFirst) {
+				logEntry("Coin flip: You go first!");
+				logEntry("Turn 1 — Active Phase");
+				if (nextPhaseButton != null) nextPhaseButton.setEnabled(true);
+				onNextPhase();
+			} else {
+				logEntry("Coin flip: Opponent goes first!");
+				if (nextPhaseButton != null) nextPhaseButton.setEnabled(false);
+				computerPlayer.runTurn();
+			}
 		});
 
 		JButton mulliganBtn = new JButton("Mulligan");
@@ -1034,8 +1044,7 @@ public class MainWindow {
 				logEntry("Draw Phase — Drew " + drawn.size()
 						+ " card" + (drawn.size() != 1 ? "s" : ""));
 				if (drawn.size() < drawCount) {
-					logEntry("Milled Out - You Lose!");
-					nextPhaseButton.setEnabled(false);
+					triggerGameOver("Milled Out - You Lose!");
 					return;
 				}
 				// No choices to make during Draw phase — advance automatically
