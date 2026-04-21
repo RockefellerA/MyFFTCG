@@ -96,6 +96,7 @@ public class MainWindow {
 	private JLabel p1LimitLabel;
 	private JPanel handPanel;
 	private JLabel p1BreakLabel;
+	private JLabel p2BreakLabel;
 	private GrayscaleLabel p1RemoveLabel;
 	private GrayscaleLabel p2RemoveLabel;
 	// Game event log
@@ -260,16 +261,23 @@ public class MainWindow {
 		lblLimit_1.setPreferredSize(cardSize);
 		lblLimit_1.setMinimumSize(cardSize);
 
-		JLabel break1_1 = new JLabel("BREAK");
-		break1_1.setToolTipText("Player 2 Break Zone");
-		break1_1.setHorizontalAlignment(SwingConstants.CENTER);
-		break1_1.setFont(new Font("Pixel NES", Font.PLAIN, 18));
-		break1_1.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
-		break1_1.setBackground(Color.DARK_GRAY);
-		break1_1.setForeground(Color.WHITE);
-		break1_1.setOpaque(true);
-		break1_1.setPreferredSize(cardSize);
-		break1_1.setMinimumSize(cardSize);
+		p2BreakLabel = new JLabel("BREAK");
+		p2BreakLabel.setToolTipText("Player 2 Break Zone");
+		p2BreakLabel.setHorizontalAlignment(SwingConstants.CENTER);
+		p2BreakLabel.setFont(new Font("Pixel NES", Font.PLAIN, 18));
+		p2BreakLabel.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
+		p2BreakLabel.setBackground(Color.DARK_GRAY);
+		p2BreakLabel.setForeground(Color.WHITE);
+		p2BreakLabel.setOpaque(true);
+		p2BreakLabel.setPreferredSize(cardSize);
+		p2BreakLabel.setMinimumSize(cardSize);
+		p2BreakLabel.addMouseListener(new MouseAdapter() {
+			@Override public void mouseEntered(MouseEvent e) {
+				List<CardData> zone = gameState.getP2BreakZone();
+				if (!zone.isEmpty()) showZoomAt(zone.get(zone.size() - 1).imageUrl(), p2BreakLabel);
+			}
+			@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+		});
 
 		p2DeckLabel = new JLabel("DECK");
 		p2DeckLabel.setFont(new Font("Pixel NES", Font.PLAIN, 18));
@@ -282,7 +290,7 @@ public class MainWindow {
 
 		JPanel p2CornerPanel = new JPanel(new GridLayout(2, 2));
 		p2CornerPanel.add(lblRemove_1);
-		p2CornerPanel.add(break1_1);
+		p2CornerPanel.add(p2BreakLabel);
 		p2CornerPanel.add(lblLimit_1);
 		p2CornerPanel.add(p2DeckLabel);
 
@@ -1150,8 +1158,9 @@ public class MainWindow {
 			}
 		}
 
-		// Break zone label
+		// Break zone labels
 		refreshP1BreakLabel();
+		refreshP2BreakLabel();
 
 		// Limit label
 		refreshP1LimitLabel();
@@ -2159,6 +2168,30 @@ public class MainWindow {
 				try {
 					ImageIcon icon = get();
 					if (icon != null) { p1BreakLabel.setIcon(icon); p1BreakLabel.setText(null); }
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+	}
+
+	private void refreshP2BreakLabel() {
+		List<CardData> zone = gameState.getP2BreakZone();
+		if (zone.isEmpty()) {
+			p2BreakLabel.setIcon(null);
+			p2BreakLabel.setFont(new Font("Pixel NES", Font.PLAIN, 18));
+			p2BreakLabel.setText("BREAK");
+			return;
+		}
+		String url = zone.get(zone.size() - 1).imageUrl();
+		new SwingWorker<ImageIcon, Void>() {
+			@Override protected ImageIcon doInBackground() throws Exception {
+				Image img = ImageCache.load(url);
+				return img == null ? null
+						: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+			}
+			@Override protected void done() {
+				try {
+					ImageIcon icon = get();
+					if (icon != null) { p2BreakLabel.setIcon(icon); p2BreakLabel.setText(null); }
 				} catch (InterruptedException | ExecutionException ignored) {}
 			}
 		}.execute();
@@ -4095,6 +4128,7 @@ public class MainWindow {
 				CardData d = gameState.discardP2FromHand(di);
 				if (d != null) logEntry("[P2] Discards " + d.name() + " for CP");
 			}
+			refreshP2BreakLabel();
 
 			CardData toPlay = gameState.removeP2FromHand(adjustedIdx);
 			if (toPlay != null) {
@@ -4138,6 +4172,7 @@ public class MainWindow {
 				CardData d = gameState.discardP2FromHand(idx);
 				if (d != null) logEntry("[P2] End Phase — discards " + d.name());
 			}
+			refreshP2BreakLabel();
 			gameState.advancePhase(); // MAIN_2 → END
 			logEntry("[P2] End Phase");
 			gameState.advancePhase(); // END → ACTIVE (switches to P1, increments turn)
