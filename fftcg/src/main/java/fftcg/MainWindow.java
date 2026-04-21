@@ -1,11 +1,5 @@
 package fftcg;
 
-import fftcg.menu.FileMenu;
-import fftcg.menu.HelpMenu;
-import fftcg.menu.MultiplayerMenu;
-import fftcg.net.ActionType;
-import fftcg.net.GameConnection;
-
 import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;
@@ -62,14 +56,19 @@ import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.JWindow;
 import javax.swing.SwingConstants;
-import javax.swing.SwingWorker;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import javax.swing.UIManager;
 import javax.swing.border.BevelBorder;
 import javax.swing.border.SoftBevelBorder;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 
+import fftcg.menu.FileMenu;
+import fftcg.menu.HelpMenu;
+import fftcg.menu.MultiplayerMenu;
+import fftcg.net.ActionType;
+import fftcg.net.GameConnection;
 import scraper.DeckDatabase;
 import scraper.DeckDatabase.DeckCardDetail;
 
@@ -121,11 +120,6 @@ public class MainWindow {
 	private javax.swing.Timer handPopupHideTimer;
 	private boolean handCardMenuOpen = false;
 
-	// Backup card state constants
-	private static final int STATE_NORMAL        = 0;
-	private static final int STATE_DULLED        = 1;
-	private static final int STATE_FROZEN        = 2;
-	private static final int STATE_BRAVE_ATTACKED = 3; // Brave forward: attacked this turn but stays active
 
 	// --- Game state ---
 	private final GameState gameState   = new GameState();
@@ -133,19 +127,19 @@ public class MainWindow {
 	private JLabel[]    p1BackupLabels = new JLabel[5];
 	private String[]    p1BackupUrls   = new String[5];
 	private CardData[]  p1BackupCards  = new CardData[5];
-	private int[]       p1BackupStates = new int[5];
+	private CardState[] p1BackupStates = new CardState[5];
 
 	private final List<JLabel>   p1ForwardLabels      = new ArrayList<>();
 	private final List<String>   p1ForwardUrls;
 	private final List<CardData> p1ForwardCards       = new ArrayList<>();
-	private final List<Integer>  p1ForwardStates      = new ArrayList<>();
+	private final List<CardState> p1ForwardStates      = new ArrayList<>();
 	private final List<Integer>  p1ForwardPlayedOnTurn = new ArrayList<>();
 	private JPanel p1ForwardPanel;
 
 	private final List<JLabel>   p1MonsterLabels      = new ArrayList<>();
 	private final List<String>   p1MonsterUrls        = new ArrayList<>();
 	private final List<CardData> p1MonsterCards       = new ArrayList<>();
-	private final List<Integer>  p1MonsterStates      = new ArrayList<>();
+	private final List<CardState> p1MonsterStates      = new ArrayList<>();
 	private final List<Integer>  p1MonsterPlayedOnTurn = new ArrayList<>();
 	private JPanel p1MonsterPanel;
 
@@ -1069,24 +1063,24 @@ public class MainWindow {
 				// Execute Active Phase: dull → normal, frozen → dull
 				int activated = 0, thawed = 0;
 				for (int i = 0; i < p1BackupStates.length; i++) {
-					if (p1BackupStates[i] == STATE_FROZEN) {
-						p1BackupStates[i] = STATE_DULLED;
+					if (p1BackupStates[i] == CardState.FROZEN) {
+						p1BackupStates[i] = CardState.DULLED;
 						refreshP1BackupSlot(i);
 						thawed++;
-					} else if (p1BackupStates[i] == STATE_DULLED) {
-						p1BackupStates[i] = STATE_NORMAL;
+					} else if (p1BackupStates[i] == CardState.DULLED) {
+						p1BackupStates[i] = CardState.NORMAL;
 						refreshP1BackupSlot(i);
 						activated++;
 					}
 				}
 				for (int i = 0; i < p1ForwardStates.size(); i++) {
-					int fs = p1ForwardStates.get(i);
-					if (fs == STATE_FROZEN) {
-						p1ForwardStates.set(i, STATE_DULLED);
+					CardState fs = p1ForwardStates.get(i);
+					if (fs == CardState.FROZEN) {
+						p1ForwardStates.set(i, CardState.DULLED);
 						refreshP1ForwardSlot(i);
 						thawed++;
-					} else if (fs == STATE_DULLED || fs == STATE_BRAVE_ATTACKED) {
-						p1ForwardStates.set(i, STATE_NORMAL);
+					} else if (fs == CardState.DULLED || fs == CardState.BRAVE_ATTACKED) {
+						p1ForwardStates.set(i, CardState.NORMAL);
 						refreshP1ForwardSlot(i);
 						activated++;
 					}
@@ -1126,7 +1120,7 @@ public class MainWindow {
 			}
 			p1BackupUrls[i]   = null;
 			p1BackupCards[i]  = null;
-			p1BackupStates[i] = 0;
+			p1BackupStates[i] = CardState.NORMAL;
 		}
 
 		// Forward zone
@@ -2195,7 +2189,7 @@ public class MainWindow {
 				if (!hand.get(i).isLightOrDark()) totalGenerate += 2;
 			}
 			for (int i = 0; i < p1BackupCards.length; i++) {
-				if (p1BackupCards[i] != null && p1BackupStates[i] == STATE_NORMAL)
+				if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.NORMAL)
 					totalGenerate += 1;
 			}
 			return totalExisting + totalGenerate >= card.cost();
@@ -2218,7 +2212,7 @@ public class MainWindow {
 			}
 		}
 		for (int i = 0; i < p1BackupCards.length; i++) {
-			if (p1BackupCards[i] != null && p1BackupStates[i] == STATE_NORMAL) {
+			if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.NORMAL) {
 				for (int ei = 0; ei < elems.length; ei++) {
 					if (p1BackupCards[i].containsElement(elems[ei])) {
 						totalGenerate += 1;
@@ -2286,7 +2280,7 @@ public class MainWindow {
 		// L/D cards: any undulled backup is eligible. Others: must match an element.
 		List<Integer> eligibleBackupSlots = new ArrayList<>();
 		for (int i = 0; i < p1BackupCards.length; i++) {
-			if (p1BackupCards[i] != null && p1BackupStates[i] == STATE_NORMAL
+			if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.NORMAL
 					&& (isLD || matchesAnyElement(p1BackupCards[i], elems)))
 				eligibleBackupSlots.add(i);
 		}
@@ -2558,7 +2552,7 @@ public class MainWindow {
 		String[] elems = card.elements();
 		boolean  isLD  = card.isLightOrDark();
 		for (int bi : backupDullIndices) {
-			p1BackupStates[bi] = STATE_DULLED;
+			p1BackupStates[bi] = CardState.DULLED;
 			animateDullBackup(bi, true);
 			String cpElem = isLD ? p1BackupCards[bi].elements()[0] : contributingElement(p1BackupCards[bi], elems);
 			gameState.addP1Cp(cpElem, 1);
@@ -2623,7 +2617,7 @@ public class MainWindow {
 
 		List<Integer> eligibleBackupSlots = new ArrayList<>();
 		for (int i = 0; i < p1BackupCards.length; i++) {
-			if (p1BackupCards[i] != null && p1BackupStates[i] == STATE_NORMAL
+			if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.NORMAL
 					&& (isLD || matchesAnyElement(p1BackupCards[i], elems)))
 				eligibleBackupSlots.add(i);
 		}
@@ -2891,7 +2885,7 @@ public class MainWindow {
 		String[] elems = card.elements();
 		boolean  isLD  = card.isLightOrDark();
 		for (int bi : backupDullIndices) {
-			p1BackupStates[bi] = STATE_DULLED;
+			p1BackupStates[bi] = CardState.DULLED;
 			animateDullBackup(bi, true);
 			String cpElem = isLD ? p1BackupCards[bi].elements()[0] : contributingElement(p1BackupCards[bi], elems);
 			gameState.addP1Cp(cpElem, 1);
@@ -2926,7 +2920,7 @@ public class MainWindow {
 			if (p1BackupLabels[i] == null || p1BackupLabels[i].getIcon() != null) continue;
 			p1BackupUrls[i]   = card.imageUrl();
 			p1BackupCards[i]  = card;
-			p1BackupStates[i] = STATE_DULLED;
+			p1BackupStates[i] = CardState.DULLED;
 			refreshP1BackupSlot(i);
 			break;
 		}
@@ -2971,7 +2965,7 @@ public class MainWindow {
 		}.execute();
 	}
 
-	private void animateFreezeBackup(int idx, boolean freezing, int prevState) {
+	private void animateFreezeBackup(int idx, boolean freezing, CardState prevState) {
 		String url  = p1BackupUrls[idx];
 		JLabel slot = p1BackupLabels[idx];
 		if (url == null || slot == null) return;
@@ -2986,7 +2980,7 @@ public class MainWindow {
 					BufferedImage card = get();
 					if (card == null) { refreshP1BackupSlot(idx); return; }
 
-					double startAngle = freezing ? (prevState == STATE_DULLED ? Math.PI / 2 : 0.0) : Math.PI;
+					double startAngle = freezing ? (prevState == CardState.DULLED ? Math.PI / 2 : 0.0) : Math.PI;
 					double endAngle   = freezing ? Math.PI : 0.0;
 
 					int   totalFrames = 12;
@@ -3012,7 +3006,7 @@ public class MainWindow {
 		}.execute();
 	}
 
-	private void animateFreezeForward(int idx, boolean freezing, int prevState) {
+	private void animateFreezeForward(int idx, boolean freezing, CardState prevState) {
 		String url  = p1ForwardUrls.get(idx);
 		JLabel slot = p1ForwardLabels.get(idx);
 		if (url == null || slot == null) return;
@@ -3027,7 +3021,7 @@ public class MainWindow {
 					BufferedImage card = get();
 					if (card == null) { refreshP1ForwardSlot(idx); return; }
 
-					double startAngle = freezing ? (prevState == STATE_DULLED ? Math.PI / 2 : 0.0) : Math.PI;
+					double startAngle = freezing ? (prevState == CardState.DULLED ? Math.PI / 2 : 0.0) : Math.PI;
 					double endAngle   = freezing ? Math.PI : 0.0;
 
 					int   totalFrames = 12;
@@ -3111,7 +3105,7 @@ public class MainWindow {
 	/** Reloads and re-renders a single P1 backup slot using its stored URL and state. */
 	private void refreshP1BackupSlot(int idx) {
 		String url  = p1BackupUrls[idx];
-		int    state = p1BackupStates[idx];
+		CardState state = p1BackupStates[idx];
 		JLabel slot  = p1BackupLabels[idx];
 		if (url == null || slot == null) return;
 		new SwingWorker<ImageIcon, Void>() {
@@ -3138,19 +3132,19 @@ public class MainWindow {
 	 *   <li>Dulled — card rotated 90° CW ({@code CARD_H × CARD_W}), pinned left + bottom</li>
 	 * </ul>
 	 */
-	private static BufferedImage renderBackupCard(BufferedImage card, int state) {
+	private static BufferedImage renderBackupCard(BufferedImage card, CardState state) {
 		return renderBackupCard(card, state, false);
 	}
 
-	private static BufferedImage renderBackupCard(BufferedImage card, int state, boolean highlight) {
+	private static BufferedImage renderBackupCard(BufferedImage card, CardState state, boolean highlight) {
 		BufferedImage canvas = new BufferedImage(CARD_H, CARD_H, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = canvas.createGraphics();
 		switch (state) {
-			case STATE_DULLED -> {
+			case CardState.DULLED -> {
 				BufferedImage rotated = rotateCW90(card);          // now CARD_H × CARD_W
 				g.drawImage(rotated, 0, CARD_H - CARD_W, null);   // pinned to bottom-left
 			}
-			case STATE_FROZEN -> {
+			case CardState.FROZEN -> {
 				BufferedImage flipped = rotate180(card);
 				g.drawImage(applyBlueTint(flipped), 0, 0, null);  // pinned to top-left
 			}
@@ -3216,17 +3210,17 @@ public class MainWindow {
 
 		JMenuItem dullItem = new JMenuItem("Debug: Dull");
 		dullItem.addActionListener(ae -> {
-			boolean dulling = p1BackupStates[idx] != STATE_DULLED;
-			p1BackupStates[idx] = dulling ? STATE_DULLED : STATE_NORMAL;
+			boolean dulling = p1BackupStates[idx] != CardState.DULLED;
+			p1BackupStates[idx] = dulling ? CardState.DULLED : CardState.NORMAL;
 			animateDullBackup(idx, dulling);
 		});
 		menu.add(dullItem);
 
 		JMenuItem freezeItem = new JMenuItem("Debug: Freeze");
 		freezeItem.addActionListener(ae -> {
-			boolean freezing = p1BackupStates[idx] != STATE_FROZEN;
-			int prevState = p1BackupStates[idx];
-			p1BackupStates[idx] = freezing ? STATE_FROZEN : STATE_NORMAL;
+			boolean freezing = p1BackupStates[idx] != CardState.FROZEN;
+			CardState prevState = p1BackupStates[idx];
+			p1BackupStates[idx] = freezing ? CardState.FROZEN : CardState.NORMAL;
 			animateFreezeBackup(idx, freezing, prevState);
 		});
 		menu.add(freezeItem);
@@ -3419,7 +3413,7 @@ public class MainWindow {
 
 		p1ForwardUrls.add(card.imageUrl());
 		p1ForwardCards.add(card);
-		p1ForwardStates.add(STATE_NORMAL);
+		p1ForwardStates.add(CardState.NORMAL);
 		p1ForwardPlayedOnTurn.add(gameState.getTurnNumber());
 		p1ForwardLabels.add(lbl);
 
@@ -3454,7 +3448,7 @@ public class MainWindow {
 
 		p1MonsterUrls.add(card.imageUrl());
 		p1MonsterCards.add(card);
-		p1MonsterStates.add(STATE_NORMAL);
+		p1MonsterStates.add(CardState.NORMAL);
 		p1MonsterPlayedOnTurn.add(gameState.getTurnNumber());
 		p1MonsterLabels.add(lbl);
 
@@ -3469,7 +3463,7 @@ public class MainWindow {
 	/** Reloads and re-renders a single P1 monster slot using its stored URL and state. */
 	private void refreshP1MonsterSlot(int idx) {
 		String url   = p1MonsterUrls.get(idx);
-		int    state = p1MonsterStates.get(idx);
+		CardState state = p1MonsterStates.get(idx);
 		JLabel slot  = p1MonsterLabels.get(idx);
 		if (url == null) return;
 		new SwingWorker<ImageIcon, Void>() {
@@ -3496,7 +3490,7 @@ public class MainWindow {
 			JMenuItem dullItem = new JMenuItem("Debug: Dull");
 			dullItem.addActionListener(ae -> {
 				p1MonsterStates.set(idx,
-						p1MonsterStates.get(idx) == STATE_DULLED ? STATE_NORMAL : STATE_DULLED);
+						p1MonsterStates.get(idx) == CardState.DULLED ? CardState.NORMAL : CardState.DULLED);
 				refreshP1MonsterSlot(idx);
 			});
 			menu.add(dullItem);
@@ -3504,7 +3498,7 @@ public class MainWindow {
 			JMenuItem freezeItem = new JMenuItem("Debug: Freeze");
 			freezeItem.addActionListener(ae -> {
 				p1MonsterStates.set(idx,
-						p1MonsterStates.get(idx) == STATE_FROZEN ? STATE_NORMAL : STATE_FROZEN);
+						p1MonsterStates.get(idx) == CardState.FROZEN ? CardState.NORMAL : CardState.FROZEN);
 				refreshP1MonsterSlot(idx);
 			});
 			menu.add(freezeItem);
@@ -3516,12 +3510,12 @@ public class MainWindow {
 	/** Reloads and re-renders a single P1 forward slot using its stored URL and state. */
 	private void refreshP1ForwardSlot(int idx) {
 		String url   = p1ForwardUrls.get(idx);
-		int    state = p1ForwardStates.get(idx);
+		CardState state = p1ForwardStates.get(idx);
 		JLabel slot  = p1ForwardLabels.get(idx);
 		if (url == null) return;
 		boolean hasHaste  = p1ForwardCards.get(idx).hasTrait(CardData.Trait.HASTE);
 		boolean canAttack = gameState.getCurrentPhase() == GameState.GamePhase.ATTACK
-				&& state == STATE_NORMAL
+				&& state == CardState.NORMAL
 				&& (hasHaste || p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber());
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
@@ -3552,7 +3546,7 @@ public class MainWindow {
 	private boolean hasAttackableForward() {
 		int turn = gameState.getTurnNumber();
 		for (int i = 0; i < p1ForwardStates.size(); i++) {
-			if (p1ForwardStates.get(i) == STATE_NORMAL
+			if (p1ForwardStates.get(i) == CardState.NORMAL
 					&& (p1ForwardCards.get(i).hasTrait(CardData.Trait.HASTE)
 					    || p1ForwardPlayedOnTurn.get(i) != turn))
 				return true;
@@ -3567,7 +3561,7 @@ public class MainWindow {
 		GameState.GamePhase phase = gameState.getCurrentPhase();
 		boolean hasHaste  = p1ForwardCards.get(idx).hasTrait(CardData.Trait.HASTE);
 		boolean canAttack = phase == GameState.GamePhase.ATTACK
-				&& p1ForwardStates.get(idx) == STATE_NORMAL
+				&& p1ForwardStates.get(idx) == CardState.NORMAL
 				&& (hasHaste || p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber());
 		if (canAttack) {
 			JMenuItem attackItem = new JMenuItem("Attack");
@@ -3575,11 +3569,11 @@ public class MainWindow {
 				CardData attacker = p1ForwardCards.get(idx);
 				logEntry(attacker.name() + " attacks!");
 				if (attacker.hasTrait(CardData.Trait.BRAVE)) {
-					p1ForwardStates.set(idx, STATE_BRAVE_ATTACKED);
+					p1ForwardStates.set(idx, CardState.BRAVE_ATTACKED);
 					refreshP1ForwardSlot(idx);
 					p2TakeDamage();
 				} else {
-					p1ForwardStates.set(idx, STATE_DULLED);
+					p1ForwardStates.set(idx, CardState.DULLED);
 					animateDullForward(idx, () -> p2TakeDamage());
 				}
 			});
@@ -3590,16 +3584,16 @@ public class MainWindow {
 			JMenuItem dullItem = new JMenuItem("Debug: Dull");
 			dullItem.addActionListener(ae -> {
 				p1ForwardStates.set(idx,
-						p1ForwardStates.get(idx) == STATE_DULLED ? STATE_NORMAL : STATE_DULLED);
+						p1ForwardStates.get(idx) == CardState.DULLED ? CardState.NORMAL : CardState.DULLED);
 				refreshP1ForwardSlot(idx);
 			});
 			menu.add(dullItem);
 
 			JMenuItem freezeItem = new JMenuItem("Debug: Freeze");
 			freezeItem.addActionListener(ae -> {
-				boolean freezing = p1ForwardStates.get(idx) != STATE_FROZEN;
-				int prevState = p1ForwardStates.get(idx);
-				p1ForwardStates.set(idx, freezing ? STATE_FROZEN : STATE_NORMAL);
+				boolean freezing = p1ForwardStates.get(idx) != CardState.FROZEN;
+				CardState prevState = p1ForwardStates.get(idx);
+				p1ForwardStates.set(idx, freezing ? CardState.FROZEN : CardState.NORMAL);
 				animateFreezeForward(idx, freezing, prevState);
 			});
 			menu.add(freezeItem);
