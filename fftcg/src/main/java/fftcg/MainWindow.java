@@ -97,6 +97,7 @@ public class MainWindow {
 	private JPanel handPanel;
 	private JLabel p1BreakLabel;
 	private JLabel p2BreakLabel;
+	private JLabel p2HandCountLabel;
 	private GrayscaleLabel p1RemoveLabel;
 	private GrayscaleLabel p2RemoveLabel;
 	// Game event log
@@ -294,6 +295,32 @@ public class MainWindow {
 		p2CornerPanel.add(lblLimit_1);
 		p2CornerPanel.add(p2DeckLabel);
 
+		p2HandCountLabel = new JLabel("P2 Hand: 0", SwingConstants.CENTER) {
+			@Override protected void paintComponent(Graphics g) {
+				Graphics2D g2 = (Graphics2D) g.create();
+				g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING,
+						RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+				FontMetrics fm = g2.getFontMetrics(getFont());
+				String text = getText();
+				int x = (getWidth()  - fm.stringWidth(text)) / 2;
+				int y = fm.getAscent();
+				g2.setFont(getFont());
+				g2.setColor(new Color(0, 0, 0, 180));
+				g2.drawString(text, x + 1, y + 1);
+				g2.setColor(getForeground());
+				g2.drawString(text, x, y);
+				g2.dispose();
+			}
+		};
+		p2HandCountLabel.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+		p2HandCountLabel.setForeground(Color.LIGHT_GRAY);
+		p2HandCountLabel.setOpaque(false);
+
+		JPanel p2CornerWrapper = new JPanel(new BorderLayout(0, 2));
+		p2CornerWrapper.setOpaque(false);
+		p2CornerWrapper.add(p2CornerPanel,    BorderLayout.CENTER);
+		p2CornerWrapper.add(p2HandCountLabel, BorderLayout.SOUTH);
+
 		JComboBox<String> p2ColorBox = buildColorDropdown();
 		JPanel p2DamagePanel = buildDamageZonePanel("P2", p2ColorBox);
 
@@ -317,7 +344,7 @@ public class MainWindow {
 		{
 			GridBagConstraints z = new GridBagConstraints();
 			z.gridy = 0; z.fill = GridBagConstraints.NONE; z.anchor = GridBagConstraints.NORTH; z.weightx = 0;
-			z.gridx = 0; p2ZonesPanel.add(p2CornerPanel, z);
+			z.gridx = 0; p2ZonesPanel.add(p2CornerWrapper, z);
 			z.gridx = 2; p2ZonesPanel.add(p2DamagePanel, z);
 			z.gridx = 1; z.fill = GridBagConstraints.BOTH; z.weightx = 1.0; z.weighty = 1.0;
 			p2ZonesPanel.add(p2MainArea, z);
@@ -726,6 +753,7 @@ public class MainWindow {
 					}
 					gameState.initializeP2Deck(p2Main);
 					refreshP2DeckLabel();
+					refreshP2HandCountLabel();
 					logEntry("P2 deck: " + p2DeckName);
 				}
 			}
@@ -1016,6 +1044,11 @@ public class MainWindow {
 		}
 	}
 
+	private void refreshP2HandCountLabel() {
+		if (p2HandCountLabel == null) return;
+		p2HandCountLabel.setText("P2 Hand: " + gameState.getP2Hand().size());
+	}
+
 	// -------------------------------------------------------------------------
 	// Phase management
 	// -------------------------------------------------------------------------
@@ -1206,6 +1239,7 @@ public class MainWindow {
 			}
 		}
 		refreshP2DeckLabel();
+		refreshP2HandCountLabel();
 	}
 
 	// -------------------------------------------------------------------------
@@ -4076,6 +4110,7 @@ public class MainWindow {
 			int drawCount = gameState.getTurnNumber() == 1 ? 1 : 2;
 			List<CardData> drawn = gameState.drawP2ToHand(drawCount);
 			refreshP2DeckLabel();
+			refreshP2HandCountLabel();
 			if (drawn.size() < drawCount) {
 				triggerGameOver("P2 milled out — You Win!");
 				return;
@@ -4131,6 +4166,7 @@ public class MainWindow {
 			refreshP2BreakLabel();
 
 			CardData toPlay = gameState.removeP2FromHand(adjustedIdx);
+			refreshP2HandCountLabel();
 			if (toPlay != null) {
 				String element = toPlay.elements()[0];
 				gameState.spendP2Cp(element, Math.min(toPlay.cost(), gameState.getP2CpForElement(element)));
@@ -4173,6 +4209,7 @@ public class MainWindow {
 				if (d != null) logEntry("[P2] End Phase — discards " + d.name());
 			}
 			refreshP2BreakLabel();
+			refreshP2HandCountLabel();
 			gameState.advancePhase(); // MAIN_2 → END
 			logEntry("[P2] End Phase");
 			gameState.advancePhase(); // END → ACTIVE (switches to P1, increments turn)
