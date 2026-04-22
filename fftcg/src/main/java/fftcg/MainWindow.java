@@ -1884,7 +1884,8 @@ public class MainWindow {
 				boolean inPaymentMode = castingIdx[0] >= 0;
 				boolean nameBlocked = !inPaymentMode && !spent
 						&& (lcd.isForward() || lcd.isBackup() || lcd.isMonster())
-						&& !lcd.multicard() && hasCharacterNameOnField(lcd.name());
+						&& ((!lcd.multicard() && hasCharacterNameOnField(lcd.name()))
+							|| (lcd.isLightOrDark() && hasLightOrDarkOnField(true)));
 
 				if (casting) {
 					lbl.setBorder(BorderFactory.createLineBorder(new Color(255, 200, 0), 3));
@@ -1966,7 +1967,8 @@ public class MainWindow {
 					if (spent) return;
 					boolean nameBlocked = castingIdx[0] < 0
 							&& (cd.isForward() || cd.isBackup() || cd.isMonster())
-							&& !cd.multicard() && hasCharacterNameOnField(cd.name());
+							&& ((!cd.multicard() && hasCharacterNameOnField(cd.name()))
+								|| (cd.isLightOrDark() && hasLightOrDarkOnField(true)));
 					if (nameBlocked) return;
 
 					if (castingIdx[0] < 0) {
@@ -2382,7 +2384,8 @@ public class MainWindow {
 		boolean isMainPhase = phase == GameState.GamePhase.MAIN_1 || phase == GameState.GamePhase.MAIN_2;
 		boolean isCharacter = card.isForward() || card.isBackup() || card.isMonster();
 		boolean nameConflict = isCharacter && !card.multicard() && hasCharacterNameOnField(card.name());
-		playItem.setEnabled(isMainPhase && !nameConflict && canAffordCard(card, handIdx)
+		boolean lightDarkConflict = isCharacter && card.isLightOrDark() && hasLightOrDarkOnField(true);
+		playItem.setEnabled(isMainPhase && !nameConflict && !lightDarkConflict && canAffordCard(card, handIdx)
 				&& (!card.isBackup() || hasAvailableBackupSlot()));
 		playItem.addActionListener(ae -> {
 			hideZoom();
@@ -2548,6 +2551,19 @@ public class MainWindow {
 			if (name.equalsIgnoreCase(c.name())) return true;
 		for (CardData c : p2BackupCards)
 			if (c != null && name.equalsIgnoreCase(c.name())) return true;
+		return false;
+	}
+
+	/** Returns true if any Light or Dark character is on the given player's field. */
+	private boolean hasLightOrDarkOnField(boolean isP1) {
+		if (isP1) {
+			for (CardData c : p1ForwardCards) if (c.isLightOrDark()) return true;
+			for (CardData c : p1MonsterCards) if (c.isLightOrDark()) return true;
+			for (CardData c : p1BackupCards)  if (c != null && c.isLightOrDark()) return true;
+		} else {
+			for (CardData c : p2ForwardCards) if (c.isLightOrDark()) return true;
+			for (CardData c : p2BackupCards)  if (c != null && c.isLightOrDark()) return true;
+		}
 		return false;
 	}
 
@@ -4535,10 +4551,12 @@ public class MainWindow {
 			// Candidates: forwards (highest cost first), then backups (highest cost first)
 			// Skip non-Multicard characters whose name is already on P2's field or backups.
 			List<Integer> candidates = new ArrayList<>();
+			boolean p2HasLD = hasLightOrDarkOnField(false);
 			for (int i = 0; i < hand.size(); i++) {
 				CardData c = hand.get(i);
 				if (!c.isForward()) continue;
 				if (!c.multicard() && p2HasCharacterNameOnField(c.name())) continue;
+				if (c.isLightOrDark() && p2HasLD) continue;
 				candidates.add(i);
 			}
 			candidates.sort((a, b) -> hand.get(b).cost() - hand.get(a).cost());
@@ -4547,6 +4565,7 @@ public class MainWindow {
 				CardData c = hand.get(i);
 				if (!c.isBackup() || !p2HasAvailableBackupSlot()) continue;
 				if (!c.multicard() && p2HasCharacterNameOnField(c.name())) continue;
+				if (c.isLightOrDark() && p2HasLD) continue;
 				backupCands.add(i);
 			}
 			backupCands.sort((a, b) -> hand.get(b).cost() - hand.get(a).cost());
