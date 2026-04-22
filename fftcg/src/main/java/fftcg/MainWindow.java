@@ -136,6 +136,7 @@ public class MainWindow {
 	private final List<CardData> p1ForwardCards       = new ArrayList<>();
 	private final List<CardState> p1ForwardStates      = new ArrayList<>();
 	private final List<Integer>  p1ForwardPlayedOnTurn = new ArrayList<>();
+	private final List<Integer>  p1ForwardDamage       = new ArrayList<>();
 	private JPanel p1ForwardPanel;
 
 	private final List<JLabel>   p1MonsterLabels      = new ArrayList<>();
@@ -159,6 +160,7 @@ public class MainWindow {
 	private final List<CardData>  p2ForwardCards        = new ArrayList<>();
 	private final List<CardState> p2ForwardStates       = new ArrayList<>();
 	private final List<Integer>   p2ForwardPlayedOnTurn = new ArrayList<>();
+	private final List<Integer>   p2ForwardDamage       = new ArrayList<>();
 	private ComputerPlayer        computerPlayer;
 
 	private int             p1LbIndex   = 0;
@@ -1117,6 +1119,8 @@ public class MainWindow {
 			case MAIN_2:
 				gameState.advancePhase();   // MAIN_2 → END
 				logEntry("End Phase");
+				for (int i = 0; i < p1ForwardDamage.size(); i++) p1ForwardDamage.set(i, 0);
+				for (int i = 0; i < p1ForwardCards.size(); i++) refreshP1ForwardSlot(i);
 				showEndPhaseDiscardDialog();
 				onNextPhase();             // END → ACTIVE (auto-advance)
 				break;
@@ -1164,6 +1168,7 @@ public class MainWindow {
 		p1ForwardCards.clear();
 		p1ForwardStates.clear();
 		p1ForwardPlayedOnTurn.clear();
+		p1ForwardDamage.clear();
 
 		// Monster zone
 		if (p1MonsterPanel != null) {
@@ -1228,6 +1233,7 @@ public class MainWindow {
 		p2ForwardCards.clear();
 		p2ForwardStates.clear();
 		p2ForwardPlayedOnTurn.clear();
+		p2ForwardDamage.clear();
 
 		// Reset P2 damage zone display
 		p2DamageCount = 0;
@@ -1456,6 +1462,7 @@ public class MainWindow {
 		p1ForwardUrls.remove(idx);
 		p1ForwardStates.remove(idx);
 		p1ForwardPlayedOnTurn.remove(idx);
+		p1ForwardDamage.remove(idx);
 		p1ForwardLabels.remove(idx);
 
 		if (p1ForwardPanel != null) {
@@ -1500,6 +1507,7 @@ public class MainWindow {
 		p2ForwardUrls.remove(idx);
 		p2ForwardStates.remove(idx);
 		p2ForwardPlayedOnTurn.remove(idx);
+		p2ForwardDamage.remove(idx);
 		p2ForwardLabels.remove(idx);
 
 		if (p2ForwardPanel != null) {
@@ -1557,10 +1565,34 @@ public class MainWindow {
 		if (attackerBroken) {
 			if (attackerIsP1) breakP1Forward(attackerIdx);
 			else              breakP2Forward(attackerIdx);
+		} else {
+			// Attacker survives — accumulate damage it received from the blocker
+			int received = blockerFirst ? 0 : blocker.power();
+			if (received > 0) {
+				if (attackerIsP1) {
+					p1ForwardDamage.set(attackerIdx, p1ForwardDamage.get(attackerIdx) + received);
+					refreshP1ForwardSlot(attackerIdx);
+				} else {
+					p2ForwardDamage.set(attackerIdx, p2ForwardDamage.get(attackerIdx) + received);
+					refreshP2ForwardSlot(attackerIdx);
+				}
+			}
 		}
 		if (blockerBroken) {
 			if (blockerIsP1) breakP1Forward(blockerIdx);
 			else             breakP2Forward(blockerIdx);
+		} else {
+			// Blocker survives — accumulate damage it received from the attacker
+			int received = attackerFirst ? 0 : attacker.power();
+			if (received > 0) {
+				if (blockerIsP1) {
+					p1ForwardDamage.set(blockerIdx, p1ForwardDamage.get(blockerIdx) + received);
+					refreshP1ForwardSlot(blockerIdx);
+				} else {
+					p2ForwardDamage.set(blockerIdx, p2ForwardDamage.get(blockerIdx) + received);
+					refreshP2ForwardSlot(blockerIdx);
+				}
+			}
 		}
 		if (!attackerBroken && !blockerBroken) {
 			logEntry("Both forwards survive combat");
@@ -3489,6 +3521,28 @@ public class MainWindow {
 		return canvas;
 	}
 
+	/**
+	 * Draws remaining-HP text in the bottom-center of {@code canvas} when a forward
+	 * has taken damage but not broken.  The dark pill behind the number keeps it
+	 * readable over any card art.
+	 */
+	private static void renderDamageOverlay(BufferedImage canvas, int remainingHp) {
+		Graphics2D g = canvas.createGraphics();
+		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+		String text = String.valueOf(remainingHp);
+		Font font = new Font("Pixel NES", Font.BOLD, 13);
+		g.setFont(font);
+		FontMetrics fm = g.getFontMetrics();
+		int tw = fm.stringWidth(text);
+		int tx = 4;
+		int ty = canvas.getHeight() - 5;
+		g.setColor(new Color(0, 0, 0, 180));
+		g.fillRoundRect(tx - 4, ty - fm.getAscent() - 1, tw + 8, fm.getAscent() + fm.getDescent() + 2, 5, 5);
+		g.setColor(new Color(255, 50, 50));
+		g.drawString(text, tx, ty);
+		g.dispose();
+	}
+
 	/** Converts any {@link Image} to a scaled {@link BufferedImage} (ARGB). */
 	private static BufferedImage toARGB(Image src, int w, int h) {
 		BufferedImage buf = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
@@ -3746,6 +3800,7 @@ public class MainWindow {
 		p1ForwardCards.add(card);
 		p1ForwardStates.add(CardState.NORMAL);
 		p1ForwardPlayedOnTurn.add(gameState.getTurnNumber());
+		p1ForwardDamage.add(0);
 		p1ForwardLabels.add(lbl);
 
 		p1ForwardPanel.add(lbl);
@@ -3848,12 +3903,15 @@ public class MainWindow {
 		boolean canAttack = gameState.getCurrentPhase() == GameState.GamePhase.ATTACK
 				&& state == CardState.NORMAL
 				&& (hasHaste || p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber());
+		int damage = p1ForwardDamage.get(idx);
+		int power  = p1ForwardCards.get(idx).power();
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
 				if (raw == null) return null;
-				BufferedImage card = toARGB(raw, CARD_W, CARD_H);
-				return new ImageIcon(renderBackupCard(card, state, canAttack));
+				BufferedImage canvas = renderBackupCard(toARGB(raw, CARD_W, CARD_H), state, canAttack);
+				if (damage > 0 && power > 0) renderDamageOverlay(canvas, power - damage);
+				return new ImageIcon(canvas);
 			}
 			@Override protected void done() {
 				try {
@@ -4232,6 +4290,7 @@ public class MainWindow {
 		p2ForwardCards.add(card);
 		p2ForwardStates.add(CardState.NORMAL);
 		p2ForwardPlayedOnTurn.add(gameState.getTurnNumber());
+		p2ForwardDamage.add(0);
 		p2ForwardLabels.add(lbl);
 
 		p2ForwardPanel.add(lbl);
@@ -4277,11 +4336,15 @@ public class MainWindow {
 		CardState state = p2ForwardStates.get(idx);
 		JLabel slot     = p2ForwardLabels.get(idx);
 		if (url == null) return;
+		int damage = p2ForwardDamage.get(idx);
+		int power  = p2ForwardCards.get(idx).power();
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
 				if (raw == null) return null;
-				return new ImageIcon(renderBackupCard(toARGB(raw, CARD_W, CARD_H), state));
+				BufferedImage canvas = renderBackupCard(toARGB(raw, CARD_W, CARD_H), state);
+				if (damage > 0 && power > 0) renderDamageOverlay(canvas, power - damage);
+				return new ImageIcon(canvas);
 			}
 			@Override protected void done() {
 				try {
@@ -4323,26 +4386,26 @@ public class MainWindow {
 			int activated = 0, thawed = 0;
 			for (int i = 0; i < p2BackupStates.length; i++) {
 				if (p2BackupCards[i] == null) continue;
-				if (p2BackupStates[i] == CardState.FROZEN) {
-					p2BackupStates[i] = CardState.DULLED;
-					refreshP2BackupSlot(i);
-					thawed++;
-				} else if (p2BackupStates[i] == CardState.DULLED) {
-					p2BackupStates[i] = CardState.NORMAL;
-					refreshP2BackupSlot(i);
-					activated++;
+				switch (p2BackupStates[i]) {
+					case FROZEN -> { p2BackupStates[i] = CardState.DULLED;  refreshP2BackupSlot(i); thawed++;    }
+					case DULLED -> { p2BackupStates[i] = CardState.NORMAL;  refreshP2BackupSlot(i); activated++; }
+					default -> {}
 				}
 			}
 			for (int i = 0; i < p2ForwardStates.size(); i++) {
-				CardState fs = p2ForwardStates.get(i);
-				if (fs == CardState.FROZEN) {
-					p2ForwardStates.set(i, CardState.DULLED);
-					refreshP2ForwardSlot(i);
-					thawed++;
-				} else if (fs == CardState.DULLED || fs == CardState.BRAVE_ATTACKED) {
-					p2ForwardStates.set(i, CardState.NORMAL);
-					refreshP2ForwardSlot(i);
-					activated++;
+				p2ForwardDamage.set(i, 0);
+				switch (p2ForwardStates.get(i)) {
+					case FROZEN -> {
+						p2ForwardStates.set(i, CardState.DULLED);
+						refreshP2ForwardSlot(i);
+						thawed++;
+					}
+					case DULLED, BRAVE_ATTACKED -> {
+						p2ForwardStates.set(i, CardState.NORMAL);
+						refreshP2ForwardSlot(i);
+						activated++;
+					}
+					default -> refreshP2ForwardSlot(i);
 				}
 			}
 			StringBuilder msg = new StringBuilder("Turn " + gameState.getTurnNumber() + " — P2 Active Phase");
@@ -4462,6 +4525,8 @@ public class MainWindow {
 			}
 			refreshP2BreakLabel();
 			refreshP2HandCountLabel();
+			for (int i = 0; i < p2ForwardDamage.size(); i++) p2ForwardDamage.set(i, 0);
+			for (int i = 0; i < p2ForwardCards.size(); i++) refreshP2ForwardSlot(i);
 			gameState.advancePhase(); // MAIN_2 → END
 			logEntry("[P2] End Phase");
 			gameState.advancePhase(); // END → ACTIVE (switches to P1, increments turn)
