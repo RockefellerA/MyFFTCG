@@ -13,6 +13,7 @@ public record CardData(
         String name,
         String element,
         int    cost,
+        int    power,
         String type,
         boolean isLb,
         int     lbCost,

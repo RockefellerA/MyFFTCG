@@ -732,7 +732,7 @@ public class MainWindow {
 				List<CardData> lb   = new ArrayList<>();
 				for (DeckCardDetail card : p1Cards) {
 					CardData cd = new CardData(card.imageUrl(), card.name(), card.element(),
-							card.cost(), card.type(), card.isLb(), card.lbCost(), card.exBurst(),
+							card.cost(), card.power(), card.type(), card.isLb(), card.lbCost(), card.exBurst(),
 							card.multicard(), CardData.parseTraits(card.textEn()));
 					if (card.isLb()) lb.add(cd);
 					else             main.add(cd);
@@ -747,7 +747,7 @@ public class MainWindow {
 					for (DeckCardDetail card : p2Cards) {
 						if (!card.isLb()) {
 							p2Main.add(new CardData(card.imageUrl(), card.name(), card.element(),
-									card.cost(), card.type(), card.isLb(), card.lbCost(), card.exBurst(),
+									card.cost(), card.power(), card.type(), card.isLb(), card.lbCost(), card.exBurst(),
 									card.multicard(), CardData.parseTraits(card.textEn())));
 						}
 					}
@@ -1441,6 +1441,221 @@ public class MainWindow {
 		}
 	}
 
+	// -------------------------------------------------------------------------
+	// Combat: breaking forwards
+	// -------------------------------------------------------------------------
+
+	/** Removes P1's forward at {@code idx} from the field and sends it to P1's Break Zone. */
+	private void breakP1Forward(int idx) {
+		if (idx < 0 || idx >= p1ForwardCards.size()) return;
+		CardData card = p1ForwardCards.get(idx);
+		gameState.getP1BreakZone().add(card);
+		logEntry(card.name() + " → Break Zone");
+
+		p1ForwardCards.remove(idx);
+		p1ForwardUrls.remove(idx);
+		p1ForwardStates.remove(idx);
+		p1ForwardPlayedOnTurn.remove(idx);
+		p1ForwardLabels.remove(idx);
+
+		if (p1ForwardPanel != null) {
+			p1ForwardPanel.removeAll();
+			p1ForwardLabels.clear();
+			for (int i = 0; i < p1ForwardCards.size(); i++) {
+				final int fi = i;
+				JLabel lbl = new JLabel("", SwingConstants.CENTER);
+				lbl.setPreferredSize(new Dimension(CARD_H, CARD_H));
+				lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
+				lbl.setOpaque(false);
+				lbl.setForeground(Color.DARK_GRAY);
+				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+				lbl.setBorder(BorderFactory.createEmptyBorder());
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mousePressed(MouseEvent e) {
+						if (lbl.getIcon() != null) showForwardContextMenu(fi, lbl, e);
+					}
+					@Override public void mouseEntered(MouseEvent e) {
+						if (lbl.getIcon() != null) showZoomAt(p1ForwardUrls.get(fi), lbl);
+					}
+					@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+				});
+				p1ForwardLabels.add(lbl);
+				p1ForwardPanel.add(lbl);
+			}
+			p1ForwardPanel.revalidate();
+			p1ForwardPanel.repaint();
+			for (int i = 0; i < p1ForwardCards.size(); i++) refreshP1ForwardSlot(i);
+		}
+		refreshP1BreakLabel();
+	}
+
+	/** Removes P2's forward at {@code idx} from the field and sends it to P2's Break Zone. */
+	private void breakP2Forward(int idx) {
+		if (idx < 0 || idx >= p2ForwardCards.size()) return;
+		CardData card = p2ForwardCards.get(idx);
+		gameState.getP2BreakZone().add(card);
+		logEntry("[P2] " + card.name() + " → Break Zone");
+
+		p2ForwardCards.remove(idx);
+		p2ForwardUrls.remove(idx);
+		p2ForwardStates.remove(idx);
+		p2ForwardPlayedOnTurn.remove(idx);
+		p2ForwardLabels.remove(idx);
+
+		if (p2ForwardPanel != null) {
+			p2ForwardPanel.removeAll();
+			p2ForwardLabels.clear();
+			for (int i = 0; i < p2ForwardCards.size(); i++) {
+				final int fi = i;
+				JLabel lbl = new JLabel("", SwingConstants.CENTER);
+				lbl.setPreferredSize(new Dimension(CARD_H, CARD_H));
+				lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
+				lbl.setOpaque(false);
+				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+				lbl.setBorder(BorderFactory.createEmptyBorder());
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mouseEntered(MouseEvent e) {
+						if (lbl.getIcon() != null) showZoomAt(p2ForwardUrls.get(fi), lbl);
+					}
+					@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+				});
+				p2ForwardLabels.add(lbl);
+				p2ForwardPanel.add(lbl);
+			}
+			p2ForwardPanel.revalidate();
+			p2ForwardPanel.repaint();
+			for (int i = 0; i < p2ForwardCards.size(); i++) refreshP2ForwardSlot(i);
+		}
+		refreshP2BreakLabel();
+	}
+
+	/**
+	 * Resolves combat between an attacker and a blocker.
+	 * A forward breaks when the opponent's power equals or exceeds its own power.
+	 * First Strike: if one side has it and the other doesn't, that side strikes first;
+	 * if the strike kills the opponent, the survivor takes no damage.
+	 */
+	private void resolveCombat(CardData attacker, boolean attackerIsP1, int attackerIdx,
+			CardData blocker, boolean blockerIsP1, int blockerIdx) {
+		boolean attackerFirst = attacker.hasTrait(CardData.Trait.FIRST_STRIKE)
+				&& !blocker.hasTrait(CardData.Trait.FIRST_STRIKE);
+		boolean blockerFirst = blocker.hasTrait(CardData.Trait.FIRST_STRIKE)
+				&& !attacker.hasTrait(CardData.Trait.FIRST_STRIKE);
+
+		logEntry((attackerIsP1 ? "" : "[P2] ") + attacker.name() + " (" + attacker.power() + ")"
+				+ " vs " + (blockerIsP1 ? "" : "[P2] ") + blocker.name() + " (" + blocker.power() + ")");
+
+		boolean attackerBroken = blocker.power() >= attacker.power();
+		boolean blockerBroken  = attacker.power() >= blocker.power();
+
+		if (attackerFirst && blockerBroken) {
+			attackerBroken = false;
+		} else if (blockerFirst && attackerBroken) {
+			blockerBroken = false;
+		}
+
+		if (attackerBroken) {
+			if (attackerIsP1) breakP1Forward(attackerIdx);
+			else              breakP2Forward(attackerIdx);
+		}
+		if (blockerBroken) {
+			if (blockerIsP1) breakP1Forward(blockerIdx);
+			else             breakP2Forward(blockerIdx);
+		}
+		if (!attackerBroken && !blockerBroken) {
+			logEntry("Both forwards survive combat");
+		}
+	}
+
+	/**
+	 * P2 AI: returns the index of the best P2 blocker against {@code attacker},
+	 * or -1 if P2 declines to block.
+	 * Strategy: block with the highest-power active forward that can survive (power >= attacker) or trade evenly.
+	 */
+	private int p2ChooseBlocker(CardData attacker) {
+		int bestIdx = -1, bestPower = -1;
+		for (int i = 0; i < p2ForwardStates.size(); i++) {
+			if (p2ForwardStates.get(i) != CardState.NORMAL) continue;
+			CardData c = p2ForwardCards.get(i);
+			if (c.power() >= attacker.power() && c.power() > bestPower) {
+				bestPower = c.power();
+				bestIdx = i;
+			}
+		}
+		return bestIdx;
+	}
+
+	/** Called after P1 attacks: gives P2 AI a chance to declare a blocker. */
+	private void p2OfferBlock(CardData attacker, int attackerIdx) {
+		int blockerIdx = p2ChooseBlocker(attacker);
+		if (blockerIdx >= 0) {
+			CardData blocker = p2ForwardCards.get(blockerIdx);
+			logEntry("[P2] " + blocker.name() + " blocks!");
+			resolveCombat(attacker, true, attackerIdx, blocker, false, blockerIdx);
+		} else {
+			p2TakeDamage();
+		}
+	}
+
+	/**
+	 * Called when P2 attacks: shows a modal dialog for P1 to optionally declare a blocker.
+	 * {@code onDone} is called synchronously after combat (or taking damage) resolves.
+	 */
+	private void p1ChooseBlockerDialog(CardData attacker, int attackerIdx, Runnable onDone) {
+		List<Integer> eligible = new ArrayList<>();
+		for (int i = 0; i < p1ForwardStates.size(); i++) {
+			if (p1ForwardStates.get(i) == CardState.NORMAL) eligible.add(i);
+		}
+		if (eligible.isEmpty()) {
+			p1TakeDamage();
+			onDone.run();
+			return;
+		}
+
+		JDialog dlg = new JDialog(frame, "Declare Blocker", true);
+		dlg.setResizable(false);
+		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+		JPanel panel = new JPanel(new BorderLayout(8, 8));
+		panel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+
+		JLabel header = new JLabel("[P2] " + attacker.name() + " (" + attacker.power() + ") attacks!");
+		header.setFont(new Font("Pixel NES", Font.PLAIN, 12));
+		header.setHorizontalAlignment(SwingConstants.CENTER);
+		panel.add(header, BorderLayout.NORTH);
+
+		JPanel forwardPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 4));
+		int[] chosen = { -1 };
+		for (int bi : eligible) {
+			CardData c = p1ForwardCards.get(bi);
+			JButton btn = new JButton("<html><center>" + c.name() + "<br>(" + c.power() + ")</center></html>");
+			btn.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+			btn.setPreferredSize(new Dimension(130, 60));
+			final int blockerIdx = bi;
+			btn.addActionListener(ae -> { chosen[0] = blockerIdx; dlg.dispose(); });
+			forwardPanel.add(btn);
+		}
+		panel.add(forwardPanel, BorderLayout.CENTER);
+
+		JButton noBlockBtn = new JButton("No Block (Take Damage)");
+		noBlockBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		noBlockBtn.addActionListener(ae -> dlg.dispose());
+		panel.add(noBlockBtn, BorderLayout.SOUTH);
+
+		dlg.setContentPane(panel);
+		dlg.pack();
+		dlg.setLocationRelativeTo(frame);
+		dlg.setVisible(true);
+
+		if (chosen[0] >= 0) {
+			CardData blocker = p1ForwardCards.get(chosen[0]);
+			resolveCombat(attacker, false, attackerIdx, blocker, true, chosen[0]);
+		} else {
+			p1TakeDamage();
+		}
+		onDone.run();
+	}
+
 	private void showP2DamageZoneDialog() {
 		List<CardData> zone = gameState.getP2DamageZone();
 		if (zone.isEmpty()) return;
@@ -1662,10 +1877,14 @@ public class MainWindow {
 		Runnable refreshLabels = () -> {
 			for (int i = 0; i < cardLabels.size(); i++) {
 				JLabel lbl = cardLabels.get(i);
-				boolean spent   = spentLbIndices.contains(i);
-				boolean casting = (castingIdx[0] == i);
-				boolean payment = paymentSet.contains(i);
+				CardData lcd = lbDeck.get(i);
+				boolean spent       = spentLbIndices.contains(i);
+				boolean casting     = (castingIdx[0] == i);
+				boolean payment     = paymentSet.contains(i);
 				boolean inPaymentMode = castingIdx[0] >= 0;
+				boolean nameBlocked = !inPaymentMode && !spent
+						&& (lcd.isForward() || lcd.isBackup() || lcd.isMonster())
+						&& !lcd.multicard() && hasCharacterNameOnField(lcd.name());
 
 				if (casting) {
 					lbl.setBorder(BorderFactory.createLineBorder(new Color(255, 200, 0), 3));
@@ -1673,11 +1892,15 @@ public class MainWindow {
 					lbl.setBorder(BorderFactory.createLineBorder(Color.CYAN, 3));
 				} else if (spent) {
 					lbl.setBorder(BorderFactory.createLineBorder(new Color(60, 60, 60), 1));
+				} else if (nameBlocked) {
+					lbl.setBorder(BorderFactory.createLineBorder(Color.RED, 2));
 				} else {
 					lbl.setBorder(BorderFactory.createLineBorder(
 							inPaymentMode ? Color.GRAY : Color.LIGHT_GRAY, 1));
 				}
-				lbl.setCursor((!spent && !casting && (castingIdx[0] < 0 || !paymentSet.contains(i) || payment))
+				boolean canInteract = !spent && !nameBlocked && !casting
+						&& (castingIdx[0] < 0 || !paymentSet.contains(i) || payment);
+				lbl.setCursor(canInteract
 						? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
 			}
 			if (castingIdx[0] >= 0) {
@@ -1741,6 +1964,10 @@ public class MainWindow {
 				@Override public void mousePressed(MouseEvent e) {
 					boolean spent = spentLbIndices.contains(idx);
 					if (spent) return;
+					boolean nameBlocked = castingIdx[0] < 0
+							&& (cd.isForward() || cd.isBackup() || cd.isMonster())
+							&& !cd.multicard() && hasCharacterNameOnField(cd.name());
+					if (nameBlocked) return;
 
 					if (castingIdx[0] < 0) {
 						// Start casting this card
@@ -2312,6 +2539,14 @@ public class MainWindow {
 		for (CardData c : p1MonsterCards)
 			if (name.equalsIgnoreCase(c.name())) return true;
 		for (CardData c : p1BackupCards)
+			if (c != null && name.equalsIgnoreCase(c.name())) return true;
+		return false;
+	}
+
+	private boolean p2HasCharacterNameOnField(String name) {
+		for (CardData c : p2ForwardCards)
+			if (name.equalsIgnoreCase(c.name())) return true;
+		for (CardData c : p2BackupCards)
 			if (c != null && name.equalsIgnoreCase(c.name())) return true;
 		return false;
 	}
@@ -3651,10 +3886,10 @@ public class MainWindow {
 				if (attacker.hasTrait(CardData.Trait.BRAVE)) {
 					p1ForwardStates.set(idx, CardState.BRAVE_ATTACKED);
 					refreshP1ForwardSlot(idx);
-					p2TakeDamage();
+					p2OfferBlock(attacker, idx);
 				} else {
 					p1ForwardStates.set(idx, CardState.DULLED);
-					animateDullForward(idx, () -> p2TakeDamage());
+					animateDullForward(idx, () -> p2OfferBlock(attacker, idx));
 				}
 			});
 			menu.add(attackItem);
@@ -4191,9 +4426,10 @@ public class MainWindow {
 					p2ForwardStates.set(i, CardState.DULLED);
 				}
 				refreshP2ForwardSlot(i);
-				p1TakeDamage();
-				if (gameState.isP1GameOver()) return;
-				step(() -> doAttackPhase(onDone));
+				final int fi = i;
+				p1ChooseBlockerDialog(attacker, fi, () -> {
+					if (!gameState.isP1GameOver()) step(() -> doAttackPhase(onDone));
+				});
 				return;
 			}
 			onDone.run();
@@ -4297,14 +4533,21 @@ public class MainWindow {
 			if (hand.isEmpty()) return null;
 
 			// Candidates: forwards (highest cost first), then backups (highest cost first)
+			// Skip non-Multicard characters whose name is already on P2's field or backups.
 			List<Integer> candidates = new ArrayList<>();
 			for (int i = 0; i < hand.size(); i++) {
-				if (hand.get(i).isForward()) candidates.add(i);
+				CardData c = hand.get(i);
+				if (!c.isForward()) continue;
+				if (!c.multicard() && p2HasCharacterNameOnField(c.name())) continue;
+				candidates.add(i);
 			}
 			candidates.sort((a, b) -> hand.get(b).cost() - hand.get(a).cost());
 			List<Integer> backupCands = new ArrayList<>();
 			for (int i = 0; i < hand.size(); i++) {
-				if (hand.get(i).isBackup() && p2HasAvailableBackupSlot()) backupCands.add(i);
+				CardData c = hand.get(i);
+				if (!c.isBackup() || !p2HasAvailableBackupSlot()) continue;
+				if (!c.multicard() && p2HasCharacterNameOnField(c.name())) continue;
+				backupCands.add(i);
 			}
 			backupCands.sort((a, b) -> hand.get(b).cost() - hand.get(a).cost());
 			candidates.addAll(backupCands);
