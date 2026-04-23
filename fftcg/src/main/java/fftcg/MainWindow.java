@@ -100,6 +100,8 @@ public class MainWindow {
 	private JLabel p2HandCountLabel;
 	private GrayscaleLabel p1RemoveLabel;
 	private GrayscaleLabel p2RemoveLabel;
+	private JButton        p1RemoveButton;
+	private JButton        p2RemoveButton;
 	// Game event log
 	private JTextArea gameLog;
 	// Chat bar (enabled only when connected to multiplayer)
@@ -162,7 +164,9 @@ public class MainWindow {
 	private ComputerPlayer        computerPlayer;
 
 	private int             p1LbIndex   = 0;
-	private final Set<Integer> spentLbIndices = new HashSet<>();
+	private final Set<Integer> spentLbIndices   = new HashSet<>();
+	private final Set<Integer> p2SpentLbIndices = new HashSet<>();
+	private JButton            p2LimitButton;
 
 	// Damage zone UI
 	private JPanel   p1DamageSlotPanel;
@@ -244,8 +248,9 @@ public class MainWindow {
 		int LIMIT_W      = (CARD_W * 3) / 4;   // 105 px
 		int REMOVE_W     = CARD_W - LIMIT_W;    //  35 px
 
-		JButton lblLimit_1 = new JButton("LIMIT");
-		lblLimit_1.setToolTipText("Player 2 LB");
+		p2LimitButton = new JButton("LIMIT");
+		JButton lblLimit_1 = p2LimitButton;
+		lblLimit_1.setToolTipText("Player 2 LB Deck");
 		lblLimit_1.setFont(new Font("Pixel NES", Font.PLAIN, 10));
 		lblLimit_1.setBackground(new Color(212, 175, 55));
 		lblLimit_1.setForeground(Color.BLACK);
@@ -255,6 +260,7 @@ public class MainWindow {
 		lblLimit_1.setPreferredSize(new Dimension(LIMIT_W, CORNER_BAR_H));
 		lblLimit_1.setMinimumSize(new Dimension(LIMIT_W, CORNER_BAR_H));
 		lblLimit_1.setMaximumSize(new Dimension(LIMIT_W, CORNER_BAR_H));
+		lblLimit_1.addActionListener(e -> showP2LbViewerDialog());
 
 		p2BreakLabel = new JLabel("BREAK");
 		p2BreakLabel.setToolTipText("Player 2 Break Zone");
@@ -286,7 +292,7 @@ public class MainWindow {
 		p2DeckLabel.setForeground(Color.WHITE);
 		p2DeckLabel.setOpaque(true);
 
-		JButton p2RemoveButton = new JButton("RFP");
+		p2RemoveButton = new JButton("RFP");
 		p2RemoveButton.setToolTipText("Player 2 Removed From Play");
 		p2RemoveButton.setFont(new Font("Pixel NES", Font.PLAIN, 7));
 		p2RemoveButton.setBackground(new Color(30, 30, 30));
@@ -294,6 +300,7 @@ public class MainWindow {
 		p2RemoveButton.setOpaque(true);
 		p2RemoveButton.setBorderPainted(false);
 		p2RemoveButton.setFocusPainted(false);
+		p2RemoveButton.setEnabled(false);
 		p2RemoveButton.setPreferredSize(new Dimension(REMOVE_W, CORNER_BAR_H));
 		p2RemoveButton.setMinimumSize(new Dimension(REMOVE_W, CORNER_BAR_H));
 		p2RemoveButton.setMaximumSize(new Dimension(REMOVE_W, CORNER_BAR_H));
@@ -434,7 +441,7 @@ public class MainWindow {
 
 		p1RemoveLabel = new GrayscaleLabel("");
 
-		JButton p1RemoveButton = new JButton("RFP");
+		p1RemoveButton = new JButton("RFP");
 		p1RemoveButton.setToolTipText("Player 1 Removed From Play");
 		p1RemoveButton.setFont(new Font("Pixel NES", Font.PLAIN, 7));
 		p1RemoveButton.setBackground(new Color(30, 30, 30));
@@ -442,6 +449,7 @@ public class MainWindow {
 		p1RemoveButton.setOpaque(true);
 		p1RemoveButton.setBorderPainted(false);
 		p1RemoveButton.setFocusPainted(false);
+		p1RemoveButton.setEnabled(false);
 		p1RemoveButton.setPreferredSize(new Dimension(REMOVE_W, CORNER_BAR_H));
 		p1RemoveButton.setMinimumSize(new Dimension(REMOVE_W, CORNER_BAR_H));
 		p1RemoveButton.setMaximumSize(new Dimension(REMOVE_W, CORNER_BAR_H));
@@ -789,16 +797,19 @@ public class MainWindow {
 
 				if (p2Cards != null) {
 					List<CardData> p2Main = new ArrayList<>();
+					List<CardData> p2Lb   = new ArrayList<>();
 					for (DeckCardDetail card : p2Cards) {
-						if (!card.isLb()) {
-							p2Main.add(new CardData(card.imageUrl(), card.name(), card.element(),
-									card.cost(), card.power(), card.type(), card.isLb(), card.lbCost(), card.exBurst(),
-									card.multicard(), CardData.parseTraits(card.textEn())));
-						}
+						CardData cd = new CardData(card.imageUrl(), card.name(), card.element(),
+								card.cost(), card.power(), card.type(), card.isLb(), card.lbCost(), card.exBurst(),
+								card.multicard(), CardData.parseTraits(card.textEn()));
+						if (card.isLb()) p2Lb.add(cd);
+						else             p2Main.add(cd);
 					}
 					gameState.initializeP2Deck(p2Main);
+					gameState.initializeP2LbDeck(p2Lb);
 					refreshP2DeckLabel();
 					refreshP2HandCountLabel();
+					refreshP2LimitButton();
 					logEntry("P2 deck: " + p2DeckName);
 				}
 			}
@@ -1232,6 +1243,7 @@ public class MainWindow {
 		p1MonsterStates.clear();
 		p1MonsterPlayedOnTurn.clear();
 		spentLbIndices.clear();
+		p2SpentLbIndices.clear();
 
 		// Damage zone
 		if (p1DamageSlotPanel != null) {
@@ -1250,16 +1262,16 @@ public class MainWindow {
 		refreshP1BreakLabel();
 		refreshP2BreakLabel();
 
-		// Limit label
+		// Limit labels
 		refreshP1LimitLabel();
+		refreshP2LimitButton();
 
 		// Removed from play labels
 		p1RemoveLabel.setIcon(null);
 		p1RemoveLabel.setUrl(null);
-		p1RemoveLabel.setText("<html><div style='text-align:center'>REMOVED<br>FROM<br>PLAY</div></html>");
 		p2RemoveLabel.setIcon(null);
 		p2RemoveLabel.setUrl(null);
-		p2RemoveLabel.setText("<html><div style='text-align:center'>REMOVED<br>FROM<br>PLAY</div></html>");
+		refreshRemoveButtons();
 
 		// P2 backup slots
 		for (int i = 0; i < p2BackupCards.length; i++) {
@@ -1309,20 +1321,118 @@ public class MainWindow {
 			p1LimitLabel.setText("LIMIT");
 			p1LimitLabel.setForeground(new Color(80, 65, 20));
 		} else {
-			p1LimitLabel.setText("LIMIT (" + playable + ")");
+			p1LimitLabel.setText("LIMIT -" + playable + "-");
 			p1LimitLabel.setForeground(Color.BLACK);
 		}
 	}
 
 
-	private void showRemovedFromPlayDialog(GrayscaleLabel removeLabel, String player) {
-		String url = removeLabel.getUrl();
-		if (url == null) {
-			JOptionPane.showMessageDialog(frame,
-					player + " has no cards removed from play.",
-					"Removed From Play", JOptionPane.INFORMATION_MESSAGE);
+	private void refreshP2LimitButton() {
+		if (p2LimitButton == null) return;
+		int total    = gameState.getP2LbDeck().size();
+		int playable = total - p2SpentLbIndices.size();
+		if (total == 0) {
+			p2LimitButton.setText("LIMIT");
+			p2LimitButton.setForeground(new Color(80, 65, 20));
+		} else {
+			p2LimitButton.setText("LIMIT -" + playable + "-");
+			p2LimitButton.setForeground(Color.BLACK);
+		}
+	}
+
+	/** Shows P2's LB deck: cardback for unplayed cards, face-up for spent ones. */
+	private void showP2LbViewerDialog() {
+		List<CardData> lbDeck = gameState.getP2LbDeck();
+		if (lbDeck.isEmpty()) {
+			JOptionPane.showMessageDialog(frame, "P2 has no LB cards.",
+					"P2 Limit Break Deck", JOptionPane.INFORMATION_MESSAGE);
 			return;
 		}
+
+		JDialog dlg = new JDialog(frame, "P2 Limit Break Deck (" + lbDeck.size() + " cards)", true);
+		dlg.setResizable(false);
+		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+		JPanel cardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+
+		for (int i = 0; i < lbDeck.size(); i++) {
+			final int idx   = i;
+			final CardData cd = lbDeck.get(i);
+			boolean spent   = p2SpentLbIndices.contains(idx);
+
+			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
+			lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+			lbl.setOpaque(true);
+			lbl.setBackground(Color.DARK_GRAY);
+			if (spent) {
+				lbl.setBorder(BorderFactory.createLineBorder(new Color(60, 60, 60), 1));
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mouseEntered(MouseEvent e) { showZoomAt(cd.imageUrl(), lbl); }
+					@Override public void mouseExited(MouseEvent e)  { hideZoom(); }
+				});
+			} else {
+				lbl.setBorder(BorderFactory.createLineBorder(new Color(212, 175, 55), 2));
+			}
+
+			new SwingWorker<ImageIcon, Void>() {
+				final boolean loadFace = spent;
+				@Override protected ImageIcon doInBackground() throws Exception {
+					String url = loadFace ? cd.imageUrl()
+							: getClass().getResource("/resources/cardback.jpg").toString();
+					Image img = loadFace ? ImageCache.load(url)
+							: new ImageIcon(getClass().getResource("/resources/cardback.jpg")).getImage();
+					return img == null ? null
+							: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+				}
+				@Override protected void done() {
+					try {
+						ImageIcon icon = get();
+						if (icon != null) { lbl.setIcon(icon); lbl.setText(null); }
+					} catch (InterruptedException | ExecutionException ignored) {}
+				}
+			}.execute();
+
+			JPanel wrapper = new JPanel(new BorderLayout(0, 4));
+			wrapper.setBackground(cardsPanel.getBackground());
+			JLabel nameLabel = new JLabel(spent ? cd.name() : "???", SwingConstants.CENTER);
+			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
+			wrapper.add(lbl,       BorderLayout.CENTER);
+			wrapper.add(nameLabel, BorderLayout.SOUTH);
+			cardsPanel.add(wrapper);
+		}
+
+		JScrollPane scrollPane = new JScrollPane(cardsPanel,
+				JScrollPane.VERTICAL_SCROLLBAR_NEVER,
+				JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+		scrollPane.setPreferredSize(new Dimension(
+				Math.min(lbDeck.size() * (CARD_W + 16) + 16, 900), CARD_H + 60));
+
+		JButton closeBtn = new JButton("Close");
+		closeBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		closeBtn.addActionListener(ae -> { hideZoom(); dlg.dispose(); });
+
+		JPanel south = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
+		south.add(closeBtn);
+		south.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 8));
+
+		dlg.getContentPane().setLayout(new BorderLayout(0, 4));
+		dlg.getContentPane().add(scrollPane, BorderLayout.CENTER);
+		dlg.getContentPane().add(south,      BorderLayout.SOUTH);
+		dlg.pack();
+		dlg.setLocationRelativeTo(frame);
+		dlg.setVisible(true);
+	}
+
+	private void refreshRemoveButtons() {
+		if (p1RemoveButton != null) p1RemoveButton.setEnabled(p1RemoveLabel != null && p1RemoveLabel.getUrl() != null);
+		if (p2RemoveButton != null) p2RemoveButton.setEnabled(p2RemoveLabel != null && p2RemoveLabel.getUrl() != null);
+	}
+
+	private void showRemovedFromPlayDialog(GrayscaleLabel removeLabel, String player) {
+		String url = removeLabel.getUrl();
+		if (url == null) return;
 		JDialog dlg = new JDialog(frame, player + " — Removed From Play", true);
 		dlg.setResizable(false);
 		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
@@ -4572,6 +4682,24 @@ public class MainWindow {
 
 		private void doMainPhase(Runnable onDone) {
 			if (gameState.isP1GameOver()) return;
+
+			// Try LB plays first
+			int[] lbPlan = findLbPlayPlan();
+			if (lbPlan != null) {
+				int castIdx = lbPlan[0];
+				CardData card = gameState.getP2LbDeck().get(castIdx);
+				p2SpentLbIndices.add(castIdx);
+				for (int i = 1; i < lbPlan.length; i++) p2SpentLbIndices.add(lbPlan[i]);
+				String element = card.elements()[0];
+				gameState.spendP2Cp(element, Math.min(card.cost(), gameState.getP2CpForElement(element)));
+				refreshP2LimitButton();
+				logEntry("[P2] Plays LB \"" + card.name() + "\"");
+				if (card.isForward())     placeP2CardInForwardZone(card);
+				else if (card.isBackup()) placeP2CardInFirstBackupSlot(card);
+				step(() -> doMainPhase(onDone));
+				return;
+			}
+
 			int[] plan = findPlayPlan();
 			if (plan == null) { onDone.run(); return; }
 
@@ -4724,6 +4852,35 @@ public class MainWindow {
 		 *         play and {@code [1..n]} are hand indices to discard first (sorted
 		 *         ascending), or {@code null} if nothing is playable.
 		 */
+		/** Returns [castIdx, paymentIdx…] if any unspent LB card is affordable, else null. */
+		private int[] findLbPlayPlan() {
+			List<CardData> lbDeck = gameState.getP2LbDeck();
+			boolean p2HasLD = hasLightOrDarkOnField(false);
+			for (int i = 0; i < lbDeck.size(); i++) {
+				if (p2SpentLbIndices.contains(i)) continue;
+				CardData card = lbDeck.get(i);
+				if (card.isSummon()) continue; // skip summons — no simple board placement
+				if (!card.multicard() && p2HasCharacterNameOnField(card.name())) continue;
+				if (card.isLightOrDark() && p2HasLD) continue;
+				if (card.isBackup() && !p2HasAvailableBackupSlot()) continue;
+				// Count unspent LB cards available as payment (excluding this card)
+				List<Integer> available = new ArrayList<>();
+				for (int j = 0; j < lbDeck.size(); j++) {
+					if (j != i && !p2SpentLbIndices.contains(j)) available.add(j);
+				}
+				if (available.size() < card.lbCost()) continue;
+				// Check CP
+				String element = card.elements()[0];
+				if (gameState.getP2CpForElement(element) < card.cost()) continue;
+				// Build result: [castIdx, payment…]
+				int[] result = new int[1 + card.lbCost()];
+				result[0] = i;
+				for (int k = 0; k < card.lbCost(); k++) result[k + 1] = available.get(k);
+				return result;
+			}
+			return null;
+		}
+
 		private int[] findPlayPlan() {
 			List<CardData> hand = gameState.getP2Hand();
 			if (hand.isEmpty()) return null;

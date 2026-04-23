@@ -30,6 +30,7 @@ public class GameState {
 
     // --- P2 ---
     private final Deque<CardData>          p2MainDeck    = new ArrayDeque<>();
+    private final List<CardData>           p2LbDeck      = new ArrayList<>();
     private final List<CardData>           p2DamageZone  = new ArrayList<>();
     private final List<CardData>           p2Hand        = new ArrayList<>();
     private final List<CardData>           p2BreakZone   = new ArrayList<>();
@@ -59,6 +60,7 @@ public class GameState {
         p1GameOver           = false;
         stack.clear();
         p2MainDeck.clear();
+        p2LbDeck.clear();
         p2DamageZone.clear();
         p2Hand.clear();
         p2BreakZone.clear();
@@ -166,6 +168,13 @@ public class GameState {
         p2DamageZone.add(card);
         return card;
     }
+
+    /** Loads P2's LB deck (not shuffled — order is preserved as the hidden zone). */
+    public void initializeP2LbDeck(List<CardData> lbCards) {
+        p2LbDeck.addAll(lbCards);
+    }
+
+    public List<CardData> getP2LbDeck() { return p2LbDeck; }
 
     /** Shuffles {@code mainCards}, loads them as P2's main deck, and draws P2's 5-card opening hand. */
     public void initializeP2Deck(List<CardData> mainCards) {
