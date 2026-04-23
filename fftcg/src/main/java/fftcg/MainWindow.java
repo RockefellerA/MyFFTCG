@@ -93,7 +93,7 @@ public class MainWindow {
 	// P1 zone labels that change during gameplay
 	private JLabel p1DeckLabel;
 	private JLabel p2DeckLabel;
-	private JLabel p1LimitLabel;
+	private JButton p1LimitLabel;
 	private JPanel handPanel;
 	private JLabel p1BreakLabel;
 	private JLabel p2BreakLabel;
@@ -115,8 +115,6 @@ public class MainWindow {
 	private javax.swing.Timer fadeTimer;      // drives fade-in / fade-out animation
 	// Opening hand confirmation popup
 	private JWindow openingHandPopup;
-	// Removed from Play confirmation popup
-	private JWindow removeConfirmPopup;
 	// Hand hover popover (deck zone mouseover)
 	private JWindow handPopup;
 	private javax.swing.Timer handPopupHideTimer;
@@ -240,33 +238,23 @@ public class MainWindow {
 		Dimension cardSize = new Dimension(CARD_W, CARD_H);
 
 		// --- P2 Zones (top of screen) ---
-		p2RemoveLabel = new GrayscaleLabel("<html><div style='text-align:center'>REMOVED<br>FROM<br>PLAY</div></html>");
-		GrayscaleLabel lblRemove_1 = p2RemoveLabel;
-		lblRemove_1.setToolTipText("Player 2 Removed From Play");
-		lblRemove_1.setHorizontalAlignment(SwingConstants.CENTER);
-		lblRemove_1.setFont(new Font("Pixel NES", Font.PLAIN, 18));
-		lblRemove_1.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
-		lblRemove_1.setBackground(Color.DARK_GRAY);
-		lblRemove_1.setForeground(Color.WHITE);
-		lblRemove_1.setOpaque(true);
-		lblRemove_1.setPreferredSize(cardSize);
-		lblRemove_1.setMinimumSize(cardSize);
-		lblRemove_1.addMouseListener(new MouseAdapter() {
-			@Override public void mousePressed(MouseEvent e)  { addRandomCardToRemoved(p2RemoveLabel); }
-			@Override public void mouseEntered(MouseEvent e)  { showGrayscaleZoom(p2RemoveLabel); }
-			@Override public void mouseExited(MouseEvent e)   { hideZoom(); }
-		});
+		p2RemoveLabel = new GrayscaleLabel("");
 
-		JLabel lblLimit_1 = new JLabel("LIMIT");
+		int CORNER_BAR_H = 28;
+		int LIMIT_W      = (CARD_W * 3) / 4;   // 105 px
+		int REMOVE_W     = CARD_W - LIMIT_W;    //  35 px
+
+		JButton lblLimit_1 = new JButton("LIMIT");
 		lblLimit_1.setToolTipText("Player 2 LB");
-		lblLimit_1.setHorizontalAlignment(SwingConstants.CENTER);
-		lblLimit_1.setFont(new Font("Pixel NES", Font.PLAIN, 18));
-		lblLimit_1.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
-		lblLimit_1.setBackground(Color.DARK_GRAY);
-		lblLimit_1.setForeground(Color.WHITE);
+		lblLimit_1.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+		lblLimit_1.setBackground(new Color(212, 175, 55));
+		lblLimit_1.setForeground(Color.BLACK);
 		lblLimit_1.setOpaque(true);
-		lblLimit_1.setPreferredSize(cardSize);
-		lblLimit_1.setMinimumSize(cardSize);
+		lblLimit_1.setBorderPainted(false);
+		lblLimit_1.setFocusPainted(false);
+		lblLimit_1.setPreferredSize(new Dimension(LIMIT_W, CORNER_BAR_H));
+		lblLimit_1.setMinimumSize(new Dimension(LIMIT_W, CORNER_BAR_H));
+		lblLimit_1.setMaximumSize(new Dimension(LIMIT_W, CORNER_BAR_H));
 
 		p2BreakLabel = new JLabel("BREAK");
 		p2BreakLabel.setToolTipText("Player 2 Break Zone");
@@ -284,6 +272,9 @@ public class MainWindow {
 				if (!zone.isEmpty()) showZoomAt(zone.get(zone.size() - 1).imageUrl(), p2BreakLabel);
 			}
 			@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+			@Override public void mousePressed(MouseEvent e) {
+				if (!gameState.getP2BreakZone().isEmpty()) { hideZoom(); showP2BreakZoneDialog(); }
+			}
 		});
 
 		p2DeckLabel = new JLabel("DECK");
@@ -295,11 +286,36 @@ public class MainWindow {
 		p2DeckLabel.setForeground(Color.WHITE);
 		p2DeckLabel.setOpaque(true);
 
-		JPanel p2CornerPanel = new JPanel(new GridLayout(2, 2));
-		p2CornerPanel.add(lblRemove_1);
-		p2CornerPanel.add(p2BreakLabel);
-		p2CornerPanel.add(lblLimit_1);
-		p2CornerPanel.add(p2DeckLabel);
+		JButton p2RemoveButton = new JButton("RFP");
+		p2RemoveButton.setToolTipText("Player 2 Removed From Play");
+		p2RemoveButton.setFont(new Font("Pixel NES", Font.PLAIN, 7));
+		p2RemoveButton.setBackground(new Color(30, 30, 30));
+		p2RemoveButton.setForeground(Color.LIGHT_GRAY);
+		p2RemoveButton.setOpaque(true);
+		p2RemoveButton.setBorderPainted(false);
+		p2RemoveButton.setFocusPainted(false);
+		p2RemoveButton.setPreferredSize(new Dimension(REMOVE_W, CORNER_BAR_H));
+		p2RemoveButton.setMinimumSize(new Dimension(REMOVE_W, CORNER_BAR_H));
+		p2RemoveButton.setMaximumSize(new Dimension(REMOVE_W, CORNER_BAR_H));
+		p2RemoveButton.addActionListener(e -> showRemovedFromPlayDialog(p2RemoveLabel, "P2"));
+
+		JPanel p2BottomBar = new JPanel(new GridBagLayout());
+		p2BottomBar.setPreferredSize(new Dimension(CARD_W, CORNER_BAR_H));
+		p2BottomBar.setMinimumSize(new Dimension(CARD_W, CORNER_BAR_H));
+		{
+			GridBagConstraints bbc = new GridBagConstraints();
+			bbc.fill = GridBagConstraints.BOTH; bbc.weighty = 1.0; bbc.gridy = 0;
+			bbc.gridx = 0; bbc.weightx = 0.75; p2BottomBar.add(lblLimit_1, bbc);
+			bbc.gridx = 1; bbc.weightx = 0.25; p2BottomBar.add(p2RemoveButton, bbc);
+		}
+
+		p2DeckLabel.setPreferredSize(cardSize);
+		p2DeckLabel.setMinimumSize(cardSize);
+
+		JPanel p2CornerPanel = new JPanel(new BorderLayout(0, 0));
+		p2CornerPanel.add(p2BreakLabel, BorderLayout.NORTH);
+		p2CornerPanel.add(p2DeckLabel,  BorderLayout.CENTER);
+		p2CornerPanel.add(p2BottomBar,  BorderLayout.SOUTH);
 
 		p2HandCountLabel = new JLabel("P2 Hand: 0", SwingConstants.CENTER) {
 			@Override protected void paintComponent(Graphics g) {
@@ -397,49 +413,57 @@ public class MainWindow {
 			}
 		});
 
-		// P1 limit label — interactive
-		p1LimitLabel = new JLabel("LIMIT");
+		// P1 limit button — gold, 3/4 of card width
+		p1LimitLabel = new JButton("LIMIT");
 		p1LimitLabel.setToolTipText("Player 1 LB Deck");
-		p1LimitLabel.setHorizontalAlignment(SwingConstants.CENTER);
-		p1LimitLabel.setFont(new Font("Pixel NES", Font.PLAIN, 18));
-		p1LimitLabel.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
-		p1LimitLabel.setBackground(Color.DARK_GRAY);
-		p1LimitLabel.setForeground(Color.WHITE);
+		p1LimitLabel.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+		p1LimitLabel.setBackground(new Color(212, 175, 55));
+		p1LimitLabel.setForeground(Color.BLACK);
 		p1LimitLabel.setOpaque(true);
-		p1LimitLabel.setPreferredSize(cardSize);
-		p1LimitLabel.setMinimumSize(cardSize);
-		p1LimitLabel.addMouseListener(new MouseAdapter() {
-			@Override
-			public void mousePressed(MouseEvent e) {
-				GameState.GamePhase phase = gameState.getCurrentPhase();
-				boolean isMainPhase = phase == GameState.GamePhase.MAIN_1
-						|| phase == GameState.GamePhase.MAIN_2;
-				if (!gameState.getP1LbDeck().isEmpty() && isMainPhase && !gameState.isP1GameOver()) showLbDialog();
-			}
+		p1LimitLabel.setBorderPainted(false);
+		p1LimitLabel.setFocusPainted(false);
+		p1LimitLabel.setPreferredSize(new Dimension(LIMIT_W, CORNER_BAR_H));
+		p1LimitLabel.setMinimumSize(new Dimension(LIMIT_W, CORNER_BAR_H));
+		p1LimitLabel.setMaximumSize(new Dimension(LIMIT_W, CORNER_BAR_H));
+		p1LimitLabel.addActionListener(e -> {
+			GameState.GamePhase phase = gameState.getCurrentPhase();
+			boolean isMainPhase = phase == GameState.GamePhase.MAIN_1
+					|| phase == GameState.GamePhase.MAIN_2;
+			if (!gameState.getP1LbDeck().isEmpty() && isMainPhase && !gameState.isP1GameOver()) showLbDialog();
 		});
 
-		p1RemoveLabel = new GrayscaleLabel("<html><div style='text-align:center'>REMOVED<br>FROM<br>PLAY</div></html>");
-		GrayscaleLabel lblRemove = p1RemoveLabel;
-		lblRemove.setToolTipText("Player 1 Removed From Play");
-		lblRemove.setHorizontalAlignment(SwingConstants.CENTER);
-		lblRemove.setFont(new Font("Pixel NES", Font.PLAIN, 18));
-		lblRemove.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
-		lblRemove.setBackground(Color.DARK_GRAY);
-		lblRemove.setForeground(Color.WHITE);
-		lblRemove.setOpaque(true);
-		lblRemove.setPreferredSize(cardSize);
-		lblRemove.setMinimumSize(cardSize);
-		lblRemove.addMouseListener(new MouseAdapter() {
-			@Override public void mousePressed(MouseEvent e)  { addRandomCardToRemoved(p1RemoveLabel); }
-			@Override public void mouseEntered(MouseEvent e)  { showGrayscaleZoom(p1RemoveLabel); }
-			@Override public void mouseExited(MouseEvent e)   { hideZoom(); }
-		});
+		p1RemoveLabel = new GrayscaleLabel("");
 
-		JPanel p1CornerPanel = new JPanel(new GridLayout(2, 2));
-		p1CornerPanel.add(p1DeckLabel);
-		p1CornerPanel.add(p1LimitLabel);
-		p1CornerPanel.add(p1BreakLabel);
-		p1CornerPanel.add(lblRemove);
+		JButton p1RemoveButton = new JButton("RFP");
+		p1RemoveButton.setToolTipText("Player 1 Removed From Play");
+		p1RemoveButton.setFont(new Font("Pixel NES", Font.PLAIN, 7));
+		p1RemoveButton.setBackground(new Color(30, 30, 30));
+		p1RemoveButton.setForeground(Color.LIGHT_GRAY);
+		p1RemoveButton.setOpaque(true);
+		p1RemoveButton.setBorderPainted(false);
+		p1RemoveButton.setFocusPainted(false);
+		p1RemoveButton.setPreferredSize(new Dimension(REMOVE_W, CORNER_BAR_H));
+		p1RemoveButton.setMinimumSize(new Dimension(REMOVE_W, CORNER_BAR_H));
+		p1RemoveButton.setMaximumSize(new Dimension(REMOVE_W, CORNER_BAR_H));
+		p1RemoveButton.addActionListener(e -> showRemovedFromPlayDialog(p1RemoveLabel, "P1"));
+
+		JPanel p1TopBar = new JPanel(new GridBagLayout());
+		p1TopBar.setPreferredSize(new Dimension(CARD_W, CORNER_BAR_H));
+		p1TopBar.setMinimumSize(new Dimension(CARD_W, CORNER_BAR_H));
+		{
+			GridBagConstraints tbc = new GridBagConstraints();
+			tbc.fill = GridBagConstraints.BOTH; tbc.weighty = 1.0; tbc.gridy = 0;
+			tbc.gridx = 0; tbc.weightx = 0.75; p1TopBar.add(p1LimitLabel, tbc);
+			tbc.gridx = 1; tbc.weightx = 0.25; p1TopBar.add(p1RemoveButton, tbc);
+		}
+
+		p1DeckLabel.setPreferredSize(cardSize);
+		p1DeckLabel.setMinimumSize(cardSize);
+
+		JPanel p1CornerPanel = new JPanel(new BorderLayout(0, 0));
+		p1CornerPanel.add(p1TopBar,    BorderLayout.NORTH);
+		p1CornerPanel.add(p1DeckLabel, BorderLayout.CENTER);
+		p1CornerPanel.add(p1BreakLabel, BorderLayout.SOUTH);
 
 		JPanel p1BackupSlots = buildBackupZonePanel(p1BackupLabels);
 		for (int i = 0; i < p1BackupLabels.length; i++) {
@@ -1279,45 +1303,59 @@ public class MainWindow {
 	// -------------------------------------------------------------------------
 
 	private void refreshP1LimitLabel() {
-		if (gameState.getP1LbDeck().isEmpty()) {
-			p1LimitLabel.setIcon(null);
-			p1LimitLabel.setFont(new Font("Pixel NES", Font.PLAIN, 18));
+		int total    = gameState.getP1LbDeck().size();
+		int playable = total - spentLbIndices.size();
+		if (total == 0) {
 			p1LimitLabel.setText("LIMIT");
+			p1LimitLabel.setForeground(new Color(80, 65, 20));
+		} else {
+			p1LimitLabel.setText("LIMIT (" + playable + ")");
+			p1LimitLabel.setForeground(Color.BLACK);
+		}
+	}
+
+
+	private void showRemovedFromPlayDialog(GrayscaleLabel removeLabel, String player) {
+		String url = removeLabel.getUrl();
+		if (url == null) {
+			JOptionPane.showMessageDialog(frame,
+					player + " has no cards removed from play.",
+					"Removed From Play", JOptionPane.INFORMATION_MESSAGE);
 			return;
 		}
-		int playable = gameState.getP1LbDeck().size() - spentLbIndices.size();
-		p1LimitLabel.setText(null);
-		p1LimitLabel.setIcon(goldenCardback(new Dimension(CARD_W, CARD_H), playable));
+		JDialog dlg = new JDialog(frame, player + " — Removed From Play", true);
+		dlg.setResizable(false);
+		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+		JLabel card = new JLabel("...", SwingConstants.CENTER);
+		card.setPreferredSize(new Dimension(CARD_W, CARD_H));
+		card.setOpaque(true);
+		card.setBackground(Color.DARK_GRAY);
+		new SwingWorker<ImageIcon, Void>() {
+			@Override protected ImageIcon doInBackground() throws Exception {
+				Image img = ImageCache.load(url);
+				return img == null ? null : new ImageIcon(
+						img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+			}
+			@Override protected void done() {
+				try { ImageIcon ic = get(); if (ic != null) { card.setIcon(ic); card.setText(null); } }
+				catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+		JPanel wrap = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 8));
+		wrap.add(card);
+		dlg.getContentPane().add(wrap);
+		dlg.pack();
+		dlg.setLocationRelativeTo(frame);
+		dlg.setVisible(true);
 	}
 
-	private ImageIcon goldenCardback(Dimension size, int count) {
-		Image base = new ImageIcon(getClass().getResource("/resources/cardback.jpg")).getImage();
-		BufferedImage buf = new BufferedImage(size.width, size.height, BufferedImage.TYPE_INT_ARGB);
-		Graphics2D g = buf.createGraphics();
-		g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-		g.drawImage(base, 0, 0, size.width, size.height, null);
-		g.setColor(new Color(255, 200, 0, 90));
-		g.fillRect(0, 0, size.width, size.height);
-		String text = String.valueOf(count);
-		g.setFont(new Font("Pixel NES", Font.PLAIN, 12));
-		int textW = g.getFontMetrics().stringWidth(text);
-		int textH = g.getFontMetrics().getAscent();
-		int x = size.width - textW - 4;
-		int y = textH + 4;
-		g.setColor(Color.BLACK);
-		g.drawString(text, x + 1, y + 1);
-		g.setColor(Color.WHITE);
-		g.drawString(text, x, y);
-		g.dispose();
-		return new ImageIcon(buf);
-	}
+	private void showBreakZoneDialog() { showBreakZoneDialog(gameState.getP1BreakZone(), "P1 Break Zone"); }
+	private void showP2BreakZoneDialog() { showBreakZoneDialog(gameState.getP2BreakZone(), "P2 Break Zone"); }
 
-	private void showBreakZoneDialog() {
-		List<CardData> zone = gameState.getP1BreakZone();
+	private void showBreakZoneDialog(List<CardData> zone, String title) {
 		if (zone.isEmpty()) return;
 
-		JDialog dlg = new JDialog(frame, "Break Zone (" + zone.size() + " cards)", true);
+		JDialog dlg = new JDialog(frame, title + " (" + zone.size() + " cards)", true);
 		dlg.setResizable(false);
 		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 
@@ -3651,94 +3689,6 @@ public class MainWindow {
 		menu.show(slot, e.getX(), e.getY());
 	}
 
-	private void addRandomCardToRemoved(GrayscaleLabel removeLabel) {
-		if (!AppSettings.isDebugMode()) return;
-		if (removeConfirmPopup != null) { removeConfirmPopup.dispose(); }
-		removeConfirmPopup = new JWindow(frame);
-
-		JButton yesBtn = new JButton("Debug: Add Card to Removed from Play");
-		yesBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
-		yesBtn.addActionListener(e -> {
-			removeConfirmPopup.dispose();
-			removeConfirmPopup = null;
-			doAddRandomCardToRemoved(removeLabel);
-		});
-
-		JButton noBtn = new JButton("Cancel");
-		noBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
-		noBtn.addActionListener(e -> {
-			removeConfirmPopup.dispose();
-			removeConfirmPopup = null;
-		});
-
-		JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 8));
-		panel.setBorder(BorderFactory.createRaisedBevelBorder());
-		panel.add(yesBtn);
-		panel.add(noBtn);
-
-		removeConfirmPopup.getContentPane().add(panel);
-		removeConfirmPopup.pack();
-
-		Point loc = removeLabel.getLocationOnScreen();
-		removeConfirmPopup.setLocation(loc.x - removeConfirmPopup.getWidth() - 6, loc.y);
-		removeConfirmPopup.setVisible(true);
-	}
-
-	private void doAddRandomCardToRemoved(GrayscaleLabel removeLabel) {
-		List<CardData> pool = new ArrayList<>(gameState.getP1MainDeck());
-		pool.addAll(gameState.getP1Hand());
-		if (pool.isEmpty()) return;
-		String url = pool.get((int) (Math.random() * pool.size())).imageUrl();
-		new SwingWorker<ImageIcon, Void>() {
-			@Override
-			protected ImageIcon doInBackground() throws Exception {
-				Image img = ImageCache.load(url);
-				return img == null ? null : new ImageIcon(
-						img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
-			}
-			@Override
-			protected void done() {
-				try {
-					ImageIcon icon = get();
-					if (icon != null) {
-						removeLabel.setText(null);
-						removeLabel.setIcon(icon);
-						removeLabel.setUrl(url);
-					}
-				} catch (InterruptedException | ExecutionException ignored) {}
-			}
-		}.execute();
-	}
-
-	/** Shows a grayscale preview of a "Removed from Play" card in the side panel. */
-	private void showGrayscaleZoom(GrayscaleLabel label) {
-		String url = label.getUrl();
-		if (url == null || cardPreviewPanel == null) return;
-		new SwingWorker<BufferedImage, Void>() {
-			@Override
-			protected BufferedImage doInBackground() throws Exception {
-				Image img = ImageCache.load(url);
-				if (img == null) return null;
-				int nativeW = img.getWidth(null);
-				int nativeH = img.getHeight(null);
-				BufferedImage buf = new BufferedImage(nativeW, nativeH, BufferedImage.TYPE_INT_ARGB);
-				buf.getGraphics().drawImage(img, 0, 0, null);
-				return new ColorConvertOp(
-						ColorSpace.getInstance(ColorSpace.CS_GRAY), null).filter(buf, null);
-			}
-			@Override
-			protected void done() {
-				try {
-					BufferedImage img = get();
-					if (img != null) {
-						sizePreviewPanel(img.getWidth(), img.getHeight());
-						previewImage = img;
-						startFadeIn();
-					}
-				} catch (InterruptedException | ExecutionException ignored) {}
-			}
-		}.execute();
-	}
 
 	// -------------------------------------------------------------------------
 	// -------------------------------------------------------------------------
