@@ -176,6 +176,10 @@ public class MainWindow {
 	private javax.swing.Timer    glowTimer;
 	private final float[]        glowAngle = { 0f };
 
+	// Attack button and selection state for party attacks
+	private JButton              attackButton;
+	private final List<Integer>  p1AttackSelection = new ArrayList<>();
+
 	public static void main(String[] args) {
 		Runtime.getRuntime().addShutdownHook(new Thread(ImageCache::shutdown));
 		EventQueue.invokeLater(new Runnable() {
@@ -574,9 +578,24 @@ public class MainWindow {
 		cardPreviewPanel.setBackground(Color.DARK_GRAY);
 		cardPreviewPanel.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Color.GRAY));
 
+		// Attack button (enabled only during P1's Attack Phase with a selection)
+		attackButton = new JButton("Attack");
+		attackButton.setFont(new Font("Pixel NES", Font.PLAIN, 12));
+		attackButton.setEnabled(false);
+		attackButton.setFocusPainted(false);
+		attackButton.addActionListener(e -> {
+			if (!p1AttackSelection.isEmpty()) {
+				List<Integer> sel = new ArrayList<>(p1AttackSelection);
+				p1AttackSelection.clear();
+				refreshAttackButton();
+				executeP1Attack(sel);
+			}
+		});
+
 		// Next-phase button, centred below the preview
-		JPanel nextBtnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 8));
+		JPanel nextBtnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 8));
 		nextBtnPanel.add(nextPhaseButton);
+		nextBtnPanel.add(attackButton);
 
 		JPanel sideNorth = new JPanel();
 		sideNorth.setLayout(new BoxLayout(sideNorth, BoxLayout.Y_AXIS));
@@ -1101,7 +1120,9 @@ public class MainWindow {
 				break;
 
 			case MAIN_1:
+				p1AttackSelection.clear();
 				gameState.advancePhase();   // MAIN_1 → ATTACK
+				refreshAttackButton();
 				logEntry("Attack Phase");
 				refreshAllForwardSlots();
 				if (!hasAttackableForward() && !hasBackAttackInHand()) {
@@ -1111,6 +1132,8 @@ public class MainWindow {
 				break;
 
 			case ATTACK:
+				p1AttackSelection.clear();
+				refreshAttackButton();
 				gameState.advancePhase();   // ATTACK → MAIN_2
 				refreshAllForwardSlots();
 				logEntry("Main Phase 2");
@@ -1121,6 +1144,8 @@ public class MainWindow {
 				logEntry("End Phase");
 				for (int i = 0; i < p1ForwardDamage.size(); i++) p1ForwardDamage.set(i, 0);
 				for (int i = 0; i < p1ForwardCards.size(); i++) refreshP1ForwardSlot(i);
+				for (int i = 0; i < p2ForwardDamage.size(); i++) p2ForwardDamage.set(i, 0);
+				for (int i = 0; i < p2ForwardCards.size(); i++) refreshP2ForwardSlot(i);
 				showEndPhaseDiscardDialog();
 				onNextPhase();             // END → ACTIVE (auto-advance)
 				break;
@@ -1169,6 +1194,7 @@ public class MainWindow {
 		p1ForwardStates.clear();
 		p1ForwardPlayedOnTurn.clear();
 		p1ForwardDamage.clear();
+		p1AttackSelection.clear();
 
 		// Monster zone
 		if (p1MonsterPanel != null) {
@@ -1479,7 +1505,13 @@ public class MainWindow {
 				lbl.setBorder(BorderFactory.createEmptyBorder());
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mousePressed(MouseEvent e) {
-						if (lbl.getIcon() != null) showForwardContextMenu(fi, lbl, e);
+						if (lbl.getIcon() == null) return;
+						if (SwingUtilities.isLeftMouseButton(e)
+								&& gameState.getCurrentPhase() == GameState.GamePhase.ATTACK) {
+							toggleAttackSelection(fi);
+						} else {
+							showForwardContextMenu(fi, lbl, e);
+						}
 					}
 					@Override public void mouseEntered(MouseEvent e) {
 						if (lbl.getIcon() != null) showZoomAt(p1ForwardUrls.get(fi), lbl);
@@ -2626,14 +2658,13 @@ public class MainWindow {
 		int            cost   = card.cost();
 		boolean        isLD   = card.isLightOrDark();
 
-		// For L/D cards any element pays, so bank the total across all elements in one pool.
-		// For other cards track per-element as before.
+		// Always start from 0 — CP is generated and spent within a single payment action
+		// and must never carry over from a previous play.
 		Map<String, Integer> bankCpByElem = new LinkedHashMap<>();
 		if (isLD) {
-			int total = gameState.getP1CpByElement().values().stream().mapToInt(Integer::intValue).sum();
-			bankCpByElem.put(elem, total);
+			bankCpByElem.put(elem, 0);
 		} else {
-			for (String e : elems) bankCpByElem.put(e, gameState.getP1CpForElement(e));
+			for (String e : elems) bankCpByElem.put(e, 0);
 		}
 
 		List<Integer> selectedBackups  = new ArrayList<>();
@@ -2966,12 +2997,12 @@ public class MainWindow {
 		int            cost   = card.cost();
 		boolean        isLD   = card.isLightOrDark();
 
+		// Always start from 0 — CP is generated and spent within a single payment action.
 		Map<String, Integer> bankCpByElem = new LinkedHashMap<>();
 		if (isLD) {
-			int total = gameState.getP1CpByElement().values().stream().mapToInt(Integer::intValue).sum();
-			bankCpByElem.put(elem, total);
+			bankCpByElem.put(elem, 0);
 		} else {
-			for (String e : elems) bankCpByElem.put(e, gameState.getP1CpForElement(e));
+			for (String e : elems) bankCpByElem.put(e, 0);
 		}
 
 		List<Integer> selectedBackups  = new ArrayList<>();
@@ -3499,6 +3530,10 @@ public class MainWindow {
 	}
 
 	private static BufferedImage renderBackupCard(BufferedImage card, CardState state, boolean highlight) {
+		return renderBackupCard(card, state, highlight, false);
+	}
+
+	private static BufferedImage renderBackupCard(BufferedImage card, CardState state, boolean highlight, boolean selected) {
 		BufferedImage canvas = new BufferedImage(CARD_H, CARD_H, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = canvas.createGraphics();
 		switch (state) {
@@ -3512,7 +3547,11 @@ public class MainWindow {
 			}
 			default -> g.drawImage(card, 0, 0, null);             // pinned to top-left
 		}
-		if (highlight) {
+		if (selected) {
+			g.setColor(new Color(255, 165, 0));
+			g.setStroke(new BasicStroke(4f));
+			g.drawRect(2, 2, CARD_W - 5, CARD_H - 5);
+		} else if (highlight) {
 			g.setColor(new Color(0, 220, 0));
 			g.setStroke(new BasicStroke(3f));
 			g.drawRect(1, 1, CARD_W - 3, CARD_H - 3);
@@ -3788,7 +3827,13 @@ public class MainWindow {
 		lbl.setBorder(BorderFactory.createEmptyBorder());
 		lbl.addMouseListener(new MouseAdapter() {
 			@Override public void mousePressed(MouseEvent e) {
-				if (lbl.getIcon() != null) showForwardContextMenu(idx, lbl, e);
+				if (lbl.getIcon() == null) return;
+				if (SwingUtilities.isLeftMouseButton(e)
+						&& gameState.getCurrentPhase() == GameState.GamePhase.ATTACK) {
+					toggleAttackSelection(idx);
+				} else {
+					showForwardContextMenu(idx, lbl, e);
+				}
 			}
 			@Override public void mouseEntered(MouseEvent e) {
 				if (lbl.getIcon() != null) showZoomAt(p1ForwardUrls.get(idx), lbl);
@@ -3905,11 +3950,12 @@ public class MainWindow {
 				&& (hasHaste || p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber());
 		int damage = p1ForwardDamage.get(idx);
 		int power  = p1ForwardCards.get(idx).power();
+		boolean selected = p1AttackSelection.contains(idx);
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
 				if (raw == null) return null;
-				BufferedImage canvas = renderBackupCard(toARGB(raw, CARD_W, CARD_H), state, canAttack);
+				BufferedImage canvas = renderBackupCard(toARGB(raw, CARD_W, CARD_H), state, canAttack, selected);
 				if (damage > 0 && power > 0) renderDamageOverlay(canvas, power - damage);
 				return new ImageIcon(canvas);
 			}
@@ -3925,6 +3971,145 @@ public class MainWindow {
 	private void refreshAllForwardSlots() {
 		for (int i = 0; i < p1ForwardLabels.size(); i++) refreshP1ForwardSlot(i);
 		for (int i = 0; i < p1MonsterLabels.size(); i++) refreshP1MonsterSlot(i);
+	}
+
+	private boolean isForwardSelectable(int idx) {
+		if (gameState.getCurrentPhase() != GameState.GamePhase.ATTACK) return false;
+		if (idx < 0 || idx >= p1ForwardStates.size()) return false;
+		if (p1ForwardStates.get(idx) != CardState.NORMAL) return false;
+		boolean hasHaste = p1ForwardCards.get(idx).hasTrait(CardData.Trait.HASTE);
+		return hasHaste || p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber();
+	}
+
+	private void toggleAttackSelection(int idx) {
+		if (!isForwardSelectable(idx)) return;
+		if (p1AttackSelection.contains(idx)) {
+			p1AttackSelection.remove((Integer) idx);
+			refreshAttackButton();
+			refreshP1ForwardSlot(idx);
+			return;
+		}
+		if (!p1AttackSelection.isEmpty()) {
+			String partyElement = p1ForwardCards.get(p1AttackSelection.get(0)).elements()[0];
+			if (!p1ForwardCards.get(idx).containsElement(partyElement)) {
+				logEntry("Cannot add to party — different element");
+				return;
+			}
+		}
+		p1AttackSelection.add(idx);
+		refreshAttackButton();
+		refreshP1ForwardSlot(idx);
+	}
+
+	private void refreshAttackButton() {
+		if (attackButton == null) return;
+		boolean inAttack = gameState.getCurrentPhase() == GameState.GamePhase.ATTACK
+				&& gameState.getCurrentPlayer() == GameState.Player.P1;
+		int n = p1AttackSelection.size();
+		attackButton.setEnabled(inAttack && n > 0);
+		attackButton.setText(n > 1 ? "Party Attack" : "Attack");
+	}
+
+	private void executeP1Attack(List<Integer> selection) {
+		if (selection.isEmpty()) return;
+		for (int idx : selection) {
+			CardData c = p1ForwardCards.get(idx);
+			if (c.hasTrait(CardData.Trait.BRAVE)) {
+				p1ForwardStates.set(idx, CardState.BRAVE_ATTACKED);
+			} else {
+				p1ForwardStates.set(idx, CardState.DULLED);
+			}
+			refreshP1ForwardSlot(idx);
+		}
+		if (selection.size() == 1) {
+			int idx = selection.get(0);
+			CardData attacker = p1ForwardCards.get(idx);
+			logEntry(attacker.name() + " attacks!");
+			p2OfferBlock(attacker, idx);
+		} else {
+			int combinedPower = 0;
+			StringBuilder names = new StringBuilder();
+			for (int idx : selection) {
+				combinedPower += p1ForwardCards.get(idx).power();
+				if (names.length() > 0) names.append(", ");
+				names.append(p1ForwardCards.get(idx).name());
+			}
+			logEntry("Party Attack! " + names + " (" + combinedPower + " combined)");
+			p2OfferBlockParty(selection, combinedPower);
+		}
+	}
+
+	private void p2OfferBlockParty(List<Integer> attackerIndices, int combinedPower) {
+		int bestBlockerIdx = -1, bestBlockerPower = 0;
+		int minAttackerPower = Integer.MAX_VALUE;
+		for (int idx : attackerIndices) {
+			if (idx < p1ForwardCards.size())
+				minAttackerPower = Math.min(minAttackerPower,
+						p1ForwardCards.get(idx).power() - p1ForwardDamage.get(idx));
+		}
+		for (int i = 0; i < p2ForwardStates.size(); i++) {
+			if (p2ForwardStates.get(i) != CardState.NORMAL) continue;
+			int pw = p2ForwardCards.get(i).power();
+			if (pw >= minAttackerPower && pw > bestBlockerPower) {
+				bestBlockerPower = pw;
+				bestBlockerIdx = i;
+			}
+		}
+		if (bestBlockerIdx >= 0) {
+			CardData blocker = p2ForwardCards.get(bestBlockerIdx);
+			int blockerPower = blocker.power();
+			logEntry("[P2] " + blocker.name() + " blocks the party!");
+			if (combinedPower >= blockerPower) breakP2Forward(bestBlockerIdx);
+			p2AiDistributeDamage(attackerIndices, blockerPower);
+		} else {
+			p2TakeDamage();
+		}
+	}
+
+	private void p2AiDistributeDamage(List<Integer> attackerIndices, int blockerPower) {
+		if (attackerIndices.isEmpty() || blockerPower <= 0) return;
+		List<int[]> targets = new ArrayList<>();
+		for (int idx : attackerIndices) {
+			if (idx < p1ForwardCards.size()) {
+				int hp = p1ForwardCards.get(idx).power() - p1ForwardDamage.get(idx);
+				targets.add(new int[]{ idx, hp });
+			}
+		}
+		if (targets.isEmpty()) return;
+		targets.sort((a, b) -> Integer.compare(a[1], b[1]));
+
+		Map<Integer, Integer> damageMap = new LinkedHashMap<>();
+		int remaining = blockerPower;
+		for (int[] t : targets) {
+			if (remaining <= 0) break;
+			int idx = t[0], hp = t[1];
+			int dmg = Math.min(remaining, roundToThousand(hp));
+			damageMap.put(idx, dmg);
+			remaining -= dmg;
+		}
+		if (remaining > 0) {
+			int lastIdx = targets.get(targets.size() - 1)[0];
+			damageMap.merge(lastIdx, remaining, Integer::sum);
+		}
+
+		for (Map.Entry<Integer, Integer> entry : damageMap.entrySet()) {
+			int idx = entry.getKey(), dmg = entry.getValue();
+			p1ForwardDamage.set(idx, p1ForwardDamage.get(idx) + dmg);
+			logEntry("[P2] Deals " + dmg + " damage to " + p1ForwardCards.get(idx).name());
+		}
+
+		List<Integer> toBreak = new ArrayList<>();
+		for (int idx : damageMap.keySet()) {
+			if (p1ForwardDamage.get(idx) >= p1ForwardCards.get(idx).power()) toBreak.add(idx);
+		}
+		toBreak.sort(Collections.reverseOrder());
+		for (int idx : toBreak) breakP1Forward(idx);
+
+		for (int i = 0; i < p1ForwardCards.size(); i++) refreshP1ForwardSlot(i);
+	}
+
+	private static int roundToThousand(int value) {
+		return ((value + 999) / 1000) * 1000;
 	}
 
 	private boolean hasBackAttackInHand() {
@@ -3946,28 +4131,6 @@ public class MainWindow {
 	/** Shows a context menu for a P1 forward slot. */
 	private void showForwardContextMenu(int idx, JLabel slot, MouseEvent e) {
 		JPopupMenu menu = new JPopupMenu();
-
-		GameState.GamePhase phase = gameState.getCurrentPhase();
-		boolean hasHaste  = p1ForwardCards.get(idx).hasTrait(CardData.Trait.HASTE);
-		boolean canAttack = phase == GameState.GamePhase.ATTACK
-				&& p1ForwardStates.get(idx) == CardState.NORMAL
-				&& (hasHaste || p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber());
-		if (canAttack) {
-			JMenuItem attackItem = new JMenuItem("Attack");
-			attackItem.addActionListener(ae -> {
-				CardData attacker = p1ForwardCards.get(idx);
-				logEntry(attacker.name() + " attacks!");
-				if (attacker.hasTrait(CardData.Trait.BRAVE)) {
-					p1ForwardStates.set(idx, CardState.BRAVE_ATTACKED);
-					refreshP1ForwardSlot(idx);
-					p2OfferBlock(attacker, idx);
-				} else {
-					p1ForwardStates.set(idx, CardState.DULLED);
-					animateDullForward(idx, () -> p2OfferBlock(attacker, idx));
-				}
-			});
-			menu.add(attackItem);
-		}
 
 		if (AppSettings.isDebugMode()) {
 			JMenuItem dullItem = new JMenuItem("Debug: Dull");
@@ -4527,6 +4690,8 @@ public class MainWindow {
 			refreshP2HandCountLabel();
 			for (int i = 0; i < p2ForwardDamage.size(); i++) p2ForwardDamage.set(i, 0);
 			for (int i = 0; i < p2ForwardCards.size(); i++) refreshP2ForwardSlot(i);
+			for (int i = 0; i < p1ForwardDamage.size(); i++) p1ForwardDamage.set(i, 0);
+			for (int i = 0; i < p1ForwardCards.size(); i++) refreshP1ForwardSlot(i);
 			gameState.advancePhase(); // MAIN_2 → END
 			logEntry("[P2] End Phase");
 			gameState.advancePhase(); // END → ACTIVE (switches to P1, increments turn)
