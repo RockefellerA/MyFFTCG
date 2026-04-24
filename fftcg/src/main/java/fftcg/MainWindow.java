@@ -869,46 +869,6 @@ public class MainWindow {
 	// -------------------------------------------------------------------------
 
 	private void onP1DeckClicked() {
-		if (gameState.isP1GameOver()) return;
-		if (gameState.getP1MainDeck().isEmpty()) return;
-
-		if (gameState.isP1OpeningHandPending()) {
-			showOpeningHandConfirm();
-			return;
-		}
-
-	}
-
-	private void showOpeningHandConfirm() {
-		if (openingHandPopup != null) { openingHandPopup.dispose(); }
-		openingHandPopup = new JWindow(frame);
-
-		JButton yesBtn = new JButton("Draw opening hand (5 cards)");
-		yesBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
-		yesBtn.addActionListener(e -> {
-			openingHandPopup.dispose();
-			openingHandPopup = null;
-			drawOpeningHand();
-		});
-
-		JButton noBtn = new JButton("Cancel");
-		noBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
-		noBtn.addActionListener(e -> {
-			openingHandPopup.dispose();
-			openingHandPopup = null;
-		});
-
-		JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 8));
-		panel.setBorder(BorderFactory.createRaisedBevelBorder());
-		panel.add(yesBtn);
-		panel.add(noBtn);
-
-		openingHandPopup.getContentPane().add(panel);
-		openingHandPopup.pack();
-
-		Point loc = p1DeckLabel.getLocationOnScreen();
-		openingHandPopup.setLocation(loc.x - openingHandPopup.getWidth() - 6, loc.y);
-		openingHandPopup.setVisible(true);
 	}
 
 	private void drawOpeningHand() {
@@ -1835,7 +1795,9 @@ public class MainWindow {
 						}
 					}
 					@Override public void mouseEntered(MouseEvent e) {
-						if (lbl.getIcon() != null) showZoomAt(p1ForwardUrls.get(fi), lbl);
+						if (lbl.getIcon() == null) return;
+						CardData top = p1ForwardPrimedTop.get(fi);
+						showZoomAt(top != null ? top.imageUrl() : p1ForwardUrls.get(fi), lbl);
 					}
 					@Override public void mouseExited(MouseEvent e) { hideZoom(); }
 				});
@@ -1989,7 +1951,10 @@ public class MainWindow {
 	private void p1ChooseBlockerDialog(CardData attacker, int attackerIdx, Runnable onDone) {
 		List<Integer> eligible = new ArrayList<>();
 		for (int i = 0; i < p1ForwardStates.size(); i++) {
-			if (p1ForwardStates.get(i) == CardState.NORMAL) eligible.add(i);
+			CardState s = p1ForwardStates.get(i);
+			// NORMAL forwards can always block; BRAVE_ATTACKED forwards can block because
+			// Brave allows acting again even after attacking
+			if (s == CardState.NORMAL || s == CardState.BRAVE_ATTACKED) eligible.add(i);
 		}
 		if (eligible.isEmpty()) {
 			p1TakeDamage();
@@ -2012,8 +1977,10 @@ public class MainWindow {
 		JPanel forwardPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 4));
 		int[] chosen = { -1 };
 		for (int bi : eligible) {
-			CardData c = p1ForwardCards.get(bi);
-			JButton btn = new JButton("<html><center>" + c.name() + "<br>(" + c.power() + ")</center></html>");
+			// Use the top card's name/power for display when the forward is primed
+			CardData top = p1ForwardPrimedTop.get(bi);
+			CardData display = top != null ? top : p1ForwardCards.get(bi);
+			JButton btn = new JButton("<html><center>" + display.name() + "<br>(" + display.power() + ")</center></html>");
 			btn.setFont(new Font("Pixel NES", Font.PLAIN, 10));
 			btn.setPreferredSize(new Dimension(130, 60));
 			final int blockerIdx = bi;
@@ -2033,7 +2000,9 @@ public class MainWindow {
 		dlg.setVisible(true);
 
 		if (chosen[0] >= 0) {
-			CardData blocker = p1ForwardCards.get(chosen[0]);
+			// Use the top card's stats for combat when the blocker is primed
+			CardData top = p1ForwardPrimedTop.get(chosen[0]);
+			CardData blocker = top != null ? top : p1ForwardCards.get(chosen[0]);
 			resolveCombat(attacker, false, attackerIdx, blocker, true, chosen[0]);
 		} else {
 			p1TakeDamage();
@@ -4483,7 +4452,9 @@ public class MainWindow {
 				}
 			}
 			@Override public void mouseEntered(MouseEvent e) {
-				if (lbl.getIcon() != null) showZoomAt(p1ForwardUrls.get(idx), lbl);
+				if (lbl.getIcon() == null) return;
+				CardData top = p1ForwardPrimedTop.get(idx);
+				showZoomAt(top != null ? top.imageUrl() : p1ForwardUrls.get(idx), lbl);
 			}
 			@Override public void mouseExited(MouseEvent e) { hideZoom(); }
 		});
@@ -4609,13 +4580,6 @@ public class MainWindow {
 				if (raw == null) return null;
 				BufferedImage canvas = renderBackupCard(toARGB(raw, CARD_W, CARD_H), state, canAttack, selected);
 				if (damage > 0 && power > 0) renderDamageOverlay(canvas, power - damage);
-				if (primed) {
-					Graphics2D g = canvas.createGraphics();
-					g.setColor(new Color(218, 165, 32));  // gold primed border
-					g.setStroke(new BasicStroke(3f));
-					g.drawRect(2, 2, canvas.getWidth() - 5, canvas.getHeight() - 5);
-					g.dispose();
-				}
 				return new ImageIcon(canvas);
 			}
 			@Override protected void done() {
