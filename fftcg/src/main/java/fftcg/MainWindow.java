@@ -5288,8 +5288,8 @@ public class MainWindow {
 					if (javax.swing.SwingUtilities.isRightMouseButton(e)) {
 						JPopupMenu menu = new JPopupMenu();
 						boolean gameActive = gameState.getCurrentPhase() != null;
-						if (gameActive && !gameState.getP1MainDeck().isEmpty()) {
-							JMenuItem dmgItem = new JMenuItem("Take 1 Damage");
+						if (gameActive && !gameState.getP1MainDeck().isEmpty() && AppSettings.isDebugMode()) {
+							JMenuItem dmgItem = new JMenuItem("Debug: Take 1 Damage");
 							dmgItem.addActionListener(ae -> p1TakeDamage());
 							menu.add(dmgItem);
 						}
