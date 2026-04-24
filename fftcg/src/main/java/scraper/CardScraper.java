@@ -28,7 +28,7 @@ import org.json.JSONObject;
  */
 public class CardScraper {
 
-    private static final Map<String, String> ELEMENT_TRANSLATIONS = Map.of(
+    private static final Map<String, String> TRANSLATIONS = Map.of(
             "火", "Fire",
             "氷", "Ice",
             "風", "Wind",
@@ -36,7 +36,8 @@ public class CardScraper {
             "土", "Earth",
             "水", "Water",
             "光", "Light",
-            "闇", "Dark"
+            "闇", "Dark",
+            "ダル", "Dull"
     );
 
     private static final String API_URL =
@@ -245,7 +246,7 @@ public class CardScraper {
         c.category1 = (middot >= 0 ? cat1.substring(0, middot) : cat1).trim();
         c.category2 = j.optString("category_2", "");
         String rawTextEn = j.optString("text_en", "");
-        for (Map.Entry<String, String> entry : ELEMENT_TRANSLATIONS.entrySet())
+        for (Map.Entry<String, String> entry : TRANSLATIONS.entrySet())
             rawTextEn = rawTextEn.replace(entry.getKey(), entry.getValue());
         c.textEn = rawTextEn;
         c.setNumber = setNumber;
@@ -257,7 +258,7 @@ public class CardScraper {
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < elementArr.length(); i++) {
                 if (i > 0) sb.append("/");
-                sb.append(ELEMENT_TRANSLATIONS.getOrDefault(elementArr.optString(i), elementArr.optString(i)));
+                sb.append(TRANSLATIONS.getOrDefault(elementArr.optString(i), elementArr.optString(i)));
             }
             c.element = sb.toString();
         }
