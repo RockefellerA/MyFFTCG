@@ -5117,25 +5117,122 @@ public class MainWindow {
 		}
 		for (String e : elems) { gameState.spendP1Cp(e, gameState.getP1CpForElement(e)); gameState.clearP1Cp(e); }
 
-		// Search deck
+		// Search deck — find all versions of the target card
 		String target = card.primingTarget();
-		CardData found = gameState.searchAndRemoveFromP1MainDeck(target);
+		List<CardData> matches = gameState.findMatchingNamesInP1MainDeck(target);
 
-		// Shuffle after search regardless of result
-		List<CardData> deckList = new ArrayList<>(gameState.getP1MainDeck());
-		Collections.shuffle(deckList);
-		gameState.getP1MainDeck().clear();
-		gameState.getP1MainDeck().addAll(deckList);
-		refreshP1DeckLabel();
-
-		if (found == null) {
+		if (matches.isEmpty()) {
+			shuffleP1MainDeck();
 			logEntry("Priming: \"" + target + "\" not found in deck — no card placed");
+			refreshP1HandLabel();
+			refreshP1BreakLabel();
+		} else if (matches.size() == 1) {
+			gameState.removeFromP1MainDeck(matches.get(0));
+			shuffleP1MainDeck();
+			applyPrimedCard(matches.get(0), card, slotIdx);
+			refreshP1HandLabel();
+			refreshP1BreakLabel();
 		} else {
-			p1ForwardPrimedTop.set(slotIdx, found);
-			logEntry("Primed: \"" + card.name() + "\" topped with \"" + found.name() + "\"");
-			refreshP1ForwardSlot(slotIdx);
+			// Multiple printings found — let the player choose; shuffle and refresh happen inside the dialog
+			showPrimingVersionSelectDialog(matches, card, slotIdx);
+		}
+	}
+
+	/** Shuffles P1's main deck in-place and refreshes the deck label. */
+	private void shuffleP1MainDeck() {
+		List<CardData> list = new ArrayList<>(gameState.getP1MainDeck());
+		Collections.shuffle(list);
+		gameState.getP1MainDeck().clear();
+		gameState.getP1MainDeck().addAll(list);
+		refreshP1DeckLabel();
+	}
+
+	/** Places {@code chosen} as the primed top card on {@code slotIdx} and logs the action. */
+	private void applyPrimedCard(CardData chosen, CardData primingCard, int slotIdx) {
+		p1ForwardPrimedTop.set(slotIdx, chosen);
+		logEntry("Primed: \"" + primingCard.name() + "\" topped with \"" + chosen.name() + "\"");
+		refreshP1ForwardSlot(slotIdx);
+	}
+
+	/**
+	 * Shows a modal dialog letting the player pick which version of the priming
+	 * target to pull from the deck when multiple printings are present.
+	 * Closing without a choice auto-selects the first match.
+	 */
+	private void showPrimingVersionSelectDialog(List<CardData> matches, CardData primingCard, int slotIdx) {
+		JDialog dlg = new JDialog(frame,
+				"Choose version: " + primingCard.primingTarget() + " (" + matches.size() + " found)", true);
+		dlg.setResizable(false);
+		dlg.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+
+		// Tracks the player's selection; default to first match so closing = auto-pick
+		CardData[] selection = {matches.get(0)};
+
+		JPanel cardsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 12));
+
+		for (CardData candidate : matches) {
+			JPanel wrapper = new JPanel(new BorderLayout(0, 4));
+			wrapper.setBackground(cardsPanel.getBackground());
+
+			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
+			lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+			lbl.setOpaque(true);
+			lbl.setBackground(Color.DARK_GRAY);
+			lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 2));
+			lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+			lbl.addMouseListener(new MouseAdapter() {
+				@Override public void mouseEntered(MouseEvent e) {
+					if (lbl.getIcon() != null) showZoomAt(candidate.imageUrl(), lbl);
+					lbl.setBorder(BorderFactory.createLineBorder(Color.YELLOW, 3));
+				}
+				@Override public void mouseExited(MouseEvent e) {
+					hideZoom();
+					lbl.setBorder(BorderFactory.createLineBorder(
+							selection[0].equals(candidate) ? Color.YELLOW : Color.GRAY, 2));
+				}
+				@Override public void mousePressed(MouseEvent e) {
+					selection[0] = candidate;
+					dlg.dispose();
+				}
+			});
+
+			new SwingWorker<ImageIcon, Void>() {
+				@Override protected ImageIcon doInBackground() throws Exception {
+					Image img = ImageCache.load(candidate.imageUrl());
+					return img == null ? null
+							: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+				}
+				@Override protected void done() {
+					try { ImageIcon ic = get(); if (ic != null) { lbl.setIcon(ic); lbl.setText(null); } }
+					catch (InterruptedException | ExecutionException ignored) {}
+				}
+			}.execute();
+
+			JLabel nameLabel = new JLabel(candidate.name(), SwingConstants.CENTER);
+			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
+
+			wrapper.add(lbl, BorderLayout.CENTER);
+			wrapper.add(nameLabel, BorderLayout.SOUTH);
+			cardsPanel.add(wrapper);
 		}
 
+		JLabel hint = new JLabel("Click a card to select it", SwingConstants.CENTER);
+		hint.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+
+		dlg.getContentPane().setLayout(new BorderLayout(0, 6));
+		dlg.getContentPane().add(cardsPanel, BorderLayout.CENTER);
+		dlg.getContentPane().add(hint, BorderLayout.SOUTH);
+		dlg.pack();
+		dlg.setLocationRelativeTo(frame);
+		dlg.setVisible(true); // blocks until a card is clicked (dlg.dispose())
+
+		// Execution resumes here after dialog closes
+		gameState.removeFromP1MainDeck(selection[0]);
+		shuffleP1MainDeck();
+		applyPrimedCard(selection[0], primingCard, slotIdx);
 		refreshP1HandLabel();
 		refreshP1BreakLabel();
 	}

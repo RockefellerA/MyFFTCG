@@ -135,6 +135,30 @@ public class GameState {
     // -------------------------------------------------------------------------
 
     /**
+     * Returns all cards in P1's main deck whose name matches {@code name}
+     * (case-insensitive), without removing them.
+     */
+    public List<CardData> findMatchingNamesInP1MainDeck(String name) {
+        List<CardData> result = new ArrayList<>();
+        for (CardData c : p1MainDeck)
+            if (name.equalsIgnoreCase(c.name())) result.add(c);
+        return result;
+    }
+
+    /**
+     * Removes the first occurrence of {@code card} (by record equality) from
+     * P1's main deck.  Returns {@code true} if the card was found and removed.
+     * The caller is responsible for shuffling after searching.
+     */
+    public boolean removeFromP1MainDeck(CardData card) {
+        java.util.Iterator<CardData> it = p1MainDeck.iterator();
+        while (it.hasNext()) {
+            if (it.next().equals(card)) { it.remove(); return true; }
+        }
+        return false;
+    }
+
+    /**
      * Searches P1's main deck for the first card whose name matches {@code name}
      * (case-insensitive), removes it, and returns it.  Returns {@code null} if
      * no match is found.  The caller is responsible for shuffling after searching.
