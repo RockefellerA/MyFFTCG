@@ -25,13 +25,14 @@ public class GameState {
     }
 
     // --- P1 ---
-    private final Deque<CardData>          p1MainDeck   = new ArrayDeque<>();
-    private final List<CardData>           p1LbDeck     = new ArrayList<>();
-    private final List<CardData>           p1Hand       = new ArrayList<>();
-    private final List<CardData>           p1BreakZone  = new ArrayList<>();
-    private final List<CardData>           p1DamageZone = new ArrayList<>();
-    private final List<WarpEntry>          p1WarpZone   = new ArrayList<>();
-    private final Map<String, Integer>     p1CpByElement = new HashMap<>();
+    private final Deque<CardData>          p1MainDeck        = new ArrayDeque<>();
+    private final List<CardData>           p1LbDeck          = new ArrayList<>();
+    private final List<CardData>           p1Hand            = new ArrayList<>();
+    private final List<CardData>           p1BreakZone       = new ArrayList<>();
+    private final List<CardData>           p1DamageZone      = new ArrayList<>();
+    private final List<WarpEntry>          p1WarpZone        = new ArrayList<>();
+    private final List<CardData>           p1PermanentRfp    = new ArrayList<>();
+    private final Map<String, Integer>     p1CpByElement     = new HashMap<>();
     private boolean p1OpeningHandPending  = false;
     private boolean p1MulliganUsed        = false;
     private boolean p1GameOver            = false;
@@ -66,6 +67,7 @@ public class GameState {
         p1BreakZone.clear();
         p1DamageZone.clear();
         p1WarpZone.clear();
+        p1PermanentRfp.clear();
         p1CpByElement.clear();
         p1OpeningHandPending = false;
         p1MulliganUsed       = false;
@@ -112,6 +114,41 @@ public class GameState {
             }
         }
         return resolved;
+    }
+
+    // -------------------------------------------------------------------------
+    // Permanent Removed-From-Game zone (Primed top cards, etc.)
+    // -------------------------------------------------------------------------
+
+    /** Permanently removes a card from the game (not Warp — no counter, never returns). */
+    public void addToP1PermanentRfp(CardData card) {
+        p1PermanentRfp.add(card);
+    }
+
+    /** Returns an unmodifiable view of P1's permanently removed cards. */
+    public List<CardData> getP1PermanentRfp() {
+        return Collections.unmodifiableList(p1PermanentRfp);
+    }
+
+    // -------------------------------------------------------------------------
+    // Deck search
+    // -------------------------------------------------------------------------
+
+    /**
+     * Searches P1's main deck for the first card whose name matches {@code name}
+     * (case-insensitive), removes it, and returns it.  Returns {@code null} if
+     * no match is found.  The caller is responsible for shuffling after searching.
+     */
+    public CardData searchAndRemoveFromP1MainDeck(String name) {
+        java.util.Iterator<CardData> it = p1MainDeck.iterator();
+        while (it.hasNext()) {
+            CardData c = it.next();
+            if (name.equalsIgnoreCase(c.name())) {
+                it.remove();
+                return c;
+            }
+        }
+        return null;
     }
 
     /**

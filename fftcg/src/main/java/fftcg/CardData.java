@@ -26,7 +26,9 @@ public record CardData(
         boolean multicard,
         Set<Trait> traits,
         int    warpValue,
-        List<String> warpCost
+        List<String> warpCost,
+        String primingTarget,
+        List<String> primingCost
 ) {
 
     public Set<Trait> getTraits() {
@@ -37,13 +39,15 @@ public record CardData(
         BRAVE,
         FIRST_STRIKE,
         BACK_ATTACK,
-        WARP
+        WARP,
+        PRIMING
     }
 
-    /** Defensive copy — traits and warpCost are always immutable after construction. */
+    /** Defensive copy — collection fields are always immutable after construction. */
     public CardData {
-        traits   = Set.copyOf(traits);
-        warpCost = List.copyOf(warpCost);
+        traits     = Set.copyOf(traits);
+        warpCost   = List.copyOf(warpCost);
+        primingCost = List.copyOf(primingCost);
     }
 
     // Haste: start with [[br]] or (This descriptor, middle [[br]]…[[br]], or paired with other keywords
@@ -71,7 +75,12 @@ public record CardData(
         "(?i)(?:\\[\\[i\\]\\])?Warp\\s+(\\d+)\\s*--(?:\\[\\[/\\]\\])?\\s*((?:《[^》]*》\\s*)*)"
     );
 
-    // Matches individual 《symbol》 cost tokens within a warp cost string
+    // Priming "Card Name" -- 《...》 with optional [[i]]/[[/]] italic markup
+    private static final Pattern PRIMING_PATTERN = Pattern.compile(
+        "(?i)(?:\\[\\[i\\]\\])?Priming\\s+\"([^\"]+)\"\\s*--(?:\\[\\[/\\]\\])?\\s*((?:《[^》]*》\\s*)*)"
+    );
+
+    // Matches individual 《symbol》 cost tokens
     private static final Pattern CP_TOKEN = Pattern.compile("《([^》]*)》");
 
     // Maps element abbreviations (and full names) to canonical element strings
@@ -96,29 +105,51 @@ public record CardData(
         ELEM_SYM.put("LIGHT",      "Light");
     }
 
-    /** Parses the Warp value (X) from card text; returns 0 if the card has no Warp trait. */
+    // -------------------------------------------------------------------------
+    // Warp parsing
+    // -------------------------------------------------------------------------
+
+    /** Parses the Warp value (X) from card text; returns 0 if absent. */
     public static int parseWarpValue(String textEn) {
         if (textEn == null) return 0;
         Matcher m = WARP_PATTERN.matcher(textEn);
         return m.find() ? Integer.parseInt(m.group(1)) : 0;
     }
 
-    /**
-     * Parses the alternate Warp cost from card text as a list of element strings.
-     * Each 《X》 token becomes one entry (e.g. "《L》" → "Lightning").
-     * Returns an empty list if the card has no Warp trait or the cost section is absent.
-     */
+    /** Parses the Warp alternate cost; numeric tokens expand to N generic ("") entries. */
     public static List<String> parseWarpCost(String textEn) {
         if (textEn == null) return List.of();
         Matcher m = WARP_PATTERN.matcher(textEn);
         if (!m.find()) return List.of();
-        String costPart = m.group(2);
+        return parseCpTokens(m.group(2));
+    }
+
+    // -------------------------------------------------------------------------
+    // Priming parsing
+    // -------------------------------------------------------------------------
+
+    /** Parses the Priming target card name; returns empty string if absent. */
+    public static String parsePrimingTarget(String textEn) {
+        if (textEn == null) return "";
+        Matcher m = PRIMING_PATTERN.matcher(textEn);
+        return m.find() ? m.group(1).trim() : "";
+    }
+
+    /** Parses the Priming cost; numeric tokens expand to N generic ("") entries. */
+    public static List<String> parsePrimingCost(String textEn) {
+        if (textEn == null) return List.of();
+        Matcher m = PRIMING_PATTERN.matcher(textEn);
+        if (!m.find()) return List.of();
+        return parseCpTokens(m.group(2));
+    }
+
+    /** Shared CP-token parser used by both Warp and Priming cost parsing. */
+    private static List<String> parseCpTokens(String costPart) {
         List<String> result = new ArrayList<>();
         Matcher cpM = CP_TOKEN.matcher(costPart);
         while (cpM.find()) {
             String sym = cpM.group(1).trim();
             if (sym.matches("\\d+")) {
-                // Numeric token: N generic CP — store as N empty-string entries
                 int n = Integer.parseInt(sym);
                 for (int i = 0; i < n; i++) result.add("");
             } else {
@@ -127,6 +158,10 @@ public record CardData(
         }
         return List.copyOf(result);
     }
+
+    // -------------------------------------------------------------------------
+    // Trait parsing
+    // -------------------------------------------------------------------------
 
     /** Parses {@code textEn} and returns the set of Special Traits present. */
     public static Set<Trait> parseTraits(String textEn) {
@@ -137,6 +172,7 @@ public record CardData(
         if (FIRST_STRIKE_PATTERN.matcher(textEn).find()) found.add(Trait.FIRST_STRIKE);
         if (BACK_ATTACK_PATTERN.matcher(textEn).find())  found.add(Trait.BACK_ATTACK);
         if (WARP_PATTERN.matcher(textEn).find())         found.add(Trait.WARP);
+        if (PRIMING_PATTERN.matcher(textEn).find())      found.add(Trait.PRIMING);
         return found;
     }
 
@@ -145,6 +181,9 @@ public record CardData(
 
     /** Returns {@code true} if this card has the Warp trait (warpValue &gt; 0). */
     public boolean hasWarp() { return warpValue > 0; }
+
+    /** Returns {@code true} if this card has the Priming trait. */
+    public boolean hasPriming() { return !primingTarget.isEmpty(); }
 
     /** Returns {@code true} if any of this card's elements is Light or Dark (cannot be discarded for CP). */
     public boolean isLightOrDark() {

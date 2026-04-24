@@ -138,12 +138,14 @@ public class MainWindow {
 	private CardData[]  p1BackupCards  = new CardData[5];
 	private CardState[] p1BackupStates = new CardState[5];
 
-	private final List<JLabel>   p1ForwardLabels      = new ArrayList<>();
-	private final List<String>   p1ForwardUrls;
-	private final List<CardData> p1ForwardCards       = new ArrayList<>();
+	private final List<JLabel>    p1ForwardLabels      = new ArrayList<>();
+	private final List<String>    p1ForwardUrls;
+	private final List<CardData>  p1ForwardCards       = new ArrayList<>();
 	private final List<CardState> p1ForwardStates      = new ArrayList<>();
-	private final List<Integer>  p1ForwardPlayedOnTurn = new ArrayList<>();
-	private final List<Integer>  p1ForwardDamage       = new ArrayList<>();
+	private final List<Integer>   p1ForwardPlayedOnTurn = new ArrayList<>();
+	private final List<Integer>   p1ForwardDamage       = new ArrayList<>();
+	/** Top card of a Primed stack; {@code null} at each index means not primed. */
+	private final List<CardData>  p1ForwardPrimedTop   = new ArrayList<>();
 	private JPanel p1ForwardPanel;
 
 	private final List<JLabel>   p1MonsterLabels      = new ArrayList<>();
@@ -824,10 +826,12 @@ public class MainWindow {
 				List<CardData> main = new ArrayList<>();
 				List<CardData> lb   = new ArrayList<>();
 				for (DeckCardDetail card : p1Cards) {
+					String tx = card.textEn();
 					CardData cd = new CardData(card.imageUrl(), card.name(), card.element(),
 							card.cost(), card.power(), card.type(), card.isLb(), card.lbCost(), card.exBurst(),
-							card.multicard(), CardData.parseTraits(card.textEn()),
-							CardData.parseWarpValue(card.textEn()), CardData.parseWarpCost(card.textEn()));
+							card.multicard(), CardData.parseTraits(tx),
+							CardData.parseWarpValue(tx), CardData.parseWarpCost(tx),
+							CardData.parsePrimingTarget(tx), CardData.parsePrimingCost(tx));
 					if (card.isLb()) lb.add(cd);
 					else             main.add(cd);
 				}
@@ -840,10 +844,12 @@ public class MainWindow {
 					List<CardData> p2Main = new ArrayList<>();
 					List<CardData> p2Lb   = new ArrayList<>();
 					for (DeckCardDetail card : p2Cards) {
+						String tx = card.textEn();
 						CardData cd = new CardData(card.imageUrl(), card.name(), card.element(),
 								card.cost(), card.power(), card.type(), card.isLb(), card.lbCost(), card.exBurst(),
-								card.multicard(), CardData.parseTraits(card.textEn()),
-								CardData.parseWarpValue(card.textEn()), CardData.parseWarpCost(card.textEn()));
+								card.multicard(), CardData.parseTraits(tx),
+								CardData.parseWarpValue(tx), CardData.parseWarpCost(tx),
+								CardData.parsePrimingTarget(tx), CardData.parsePrimingCost(tx));
 						if (card.isLb()) p2Lb.add(cd);
 						else             p2Main.add(cd);
 					}
@@ -1272,6 +1278,7 @@ public class MainWindow {
 		p1ForwardStates.clear();
 		p1ForwardPlayedOnTurn.clear();
 		p1ForwardDamage.clear();
+		p1ForwardPrimedTop.clear();
 		p1AttackSelection.clear();
 
 		// Monster zone
@@ -1470,21 +1477,26 @@ public class MainWindow {
 
 	private void refreshRemoveButtons() {
 		if (p1RemoveButton != null)
-			p1RemoveButton.setEnabled(!gameState.getP1WarpZone().isEmpty());
+			p1RemoveButton.setEnabled(!gameState.getP1WarpZone().isEmpty()
+					|| !gameState.getP1PermanentRfp().isEmpty());
 		if (p2RemoveButton != null)
 			p2RemoveButton.setEnabled(p2RemoveLabel != null && p2RemoveLabel.getUrl() != null);
 	}
 
-	/** Updates the P1 RFP label to show the most-recently-warped card (or clears it). */
+	/** Updates the P1 RFP label to show the most recently added removed card (warp or permanent). */
 	private void refreshP1WarpZoneUI() {
 		List<GameState.WarpEntry> zone = gameState.getP1WarpZone();
-		if (zone.isEmpty()) {
+		List<CardData>            perm = gameState.getP1PermanentRfp();
+		if (zone.isEmpty() && perm.isEmpty()) {
 			p1RemoveLabel.setIcon(null);
 			p1RemoveLabel.setUrl(null);
 			refreshRemoveButtons();
 			return;
 		}
-		String url = zone.get(zone.size() - 1).card.imageUrl();
+		// Prefer the last-added permanent RFP card for the label; fall back to last warp card
+		String url = !perm.isEmpty()
+				? perm.get(perm.size() - 1).imageUrl()
+				: zone.get(zone.size() - 1).card.imageUrl();
 		p1RemoveLabel.setUrl(url);
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
@@ -1539,52 +1551,41 @@ public class MainWindow {
 	}
 
 	private void showRemovedFromPlayDialog(GrayscaleLabel removeLabel, String player) {
-		List<GameState.WarpEntry> zone = gameState.getP1WarpZone();
-		if (zone.isEmpty()) return;
+		List<GameState.WarpEntry> warpZone = gameState.getP1WarpZone();
+		List<CardData>            permZone = gameState.getP1PermanentRfp();
+		if (warpZone.isEmpty() && permZone.isEmpty()) return;
 
-		JDialog dlg = new JDialog(frame, player + " — Removed From Play (" + zone.size() + " card"
-				+ (zone.size() != 1 ? "s" : "") + ")", true);
+		int total = warpZone.size() + permZone.size();
+		JDialog dlg = new JDialog(frame, player + " — Removed From Play (" + total
+				+ " card" + (total != 1 ? "s" : "") + ")", true);
 		dlg.setResizable(false);
 		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 
 		JPanel cardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
 
-		for (GameState.WarpEntry entry : zone) {
+		// Warp zone cards (show remaining counter)
+		for (GameState.WarpEntry entry : warpZone) {
 			JPanel wrapper = new JPanel(new BorderLayout(0, 4));
 			wrapper.setBackground(cardsPanel.getBackground());
+			JLabel lbl = makeRfpCardLabel(entry.card.imageUrl());
+			JLabel info = new JLabel(entry.card.name() + "  [" + entry.counters + "]", SwingConstants.CENTER);
+			info.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			info.setPreferredSize(new Dimension(CARD_W, 18));
+			wrapper.add(lbl, BorderLayout.CENTER);
+			wrapper.add(info, BorderLayout.SOUTH);
+			cardsPanel.add(wrapper);
+		}
 
-			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
-			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
-			lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
-			lbl.setOpaque(true);
-			lbl.setBackground(Color.DARK_GRAY);
-			lbl.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1));
-			lbl.addMouseListener(new MouseAdapter() {
-				@Override public void mouseEntered(MouseEvent e) {
-					if (lbl.getIcon() != null) showZoomAt(entry.card.imageUrl(), lbl);
-				}
-				@Override public void mouseExited(MouseEvent e) { hideZoom(); }
-			});
-
-			new SwingWorker<ImageIcon, Void>() {
-				@Override protected ImageIcon doInBackground() throws Exception {
-					Image img = ImageCache.load(entry.card.imageUrl());
-					return img == null ? null : new ImageIcon(
-							img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
-				}
-				@Override protected void done() {
-					try { ImageIcon ic = get(); if (ic != null) { lbl.setIcon(ic); lbl.setText(null); } }
-					catch (InterruptedException | ExecutionException ignored) {}
-				}
-			}.execute();
-
-			JLabel infoLabel = new JLabel(entry.card.name() + "  [" + entry.counters + "]",
-					SwingConstants.CENTER);
-			infoLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
-			infoLabel.setPreferredSize(new Dimension(CARD_W, 18));
-
-			wrapper.add(lbl,       BorderLayout.CENTER);
-			wrapper.add(infoLabel, BorderLayout.SOUTH);
+		// Permanent RFP cards (Primed top cards, etc.)
+		for (CardData card : permZone) {
+			JPanel wrapper = new JPanel(new BorderLayout(0, 4));
+			wrapper.setBackground(cardsPanel.getBackground());
+			JLabel lbl = makeRfpCardLabel(card.imageUrl());
+			JLabel info = new JLabel(card.name() + "  [RFG]", SwingConstants.CENTER);
+			info.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			info.setPreferredSize(new Dimension(CARD_W, 18));
+			wrapper.add(lbl, BorderLayout.CENTER);
+			wrapper.add(info, BorderLayout.SOUTH);
 			cardsPanel.add(wrapper);
 		}
 
@@ -1592,6 +1593,30 @@ public class MainWindow {
 		dlg.pack();
 		dlg.setLocationRelativeTo(frame);
 		dlg.setVisible(true);
+	}
+
+	private JLabel makeRfpCardLabel(String imageUrl) {
+		JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+		lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
+		lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+		lbl.setOpaque(true);
+		lbl.setBackground(Color.DARK_GRAY);
+		lbl.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1));
+		lbl.addMouseListener(new MouseAdapter() {
+			@Override public void mouseEntered(MouseEvent e) { if (lbl.getIcon() != null) showZoomAt(imageUrl, lbl); }
+			@Override public void mouseExited(MouseEvent e)  { hideZoom(); }
+		});
+		new SwingWorker<ImageIcon, Void>() {
+			@Override protected ImageIcon doInBackground() throws Exception {
+				Image img = ImageCache.load(imageUrl);
+				return img == null ? null : new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+			}
+			@Override protected void done() {
+				try { ImageIcon ic = get(); if (ic != null) { lbl.setIcon(ic); lbl.setText(null); } }
+				catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+		return lbl;
 	}
 
 	private void showBreakZoneDialog() { showBreakZoneDialog(gameState.getP1BreakZone(), "P1 Break Zone"); }
@@ -1763,15 +1788,28 @@ public class MainWindow {
 	/** Removes P1's forward at {@code idx} from the field and sends it to P1's Break Zone. */
 	private void breakP1Forward(int idx) {
 		if (idx < 0 || idx >= p1ForwardCards.size()) return;
-		CardData card = p1ForwardCards.get(idx);
-		gameState.getP1BreakZone().add(card);
-		logEntry(card.name() + " → Break Zone");
+		CardData card    = p1ForwardCards.get(idx);
+		CardData topCard = p1ForwardPrimedTop.get(idx);
+
+		if (topCard != null) {
+			// Primed: both cards move to break zone, then top card is immediately RFP'd
+			gameState.getP1BreakZone().add(card);
+			gameState.getP1BreakZone().add(topCard);
+			logEntry(card.name() + " + " + topCard.name() + " → Break Zone (Primed)");
+			gameState.getP1BreakZone().remove(topCard);
+			gameState.addToP1PermanentRfp(topCard);
+			logEntry(topCard.name() + " → Removed From Game");
+		} else {
+			gameState.getP1BreakZone().add(card);
+			logEntry(card.name() + " → Break Zone");
+		}
 
 		p1ForwardCards.remove(idx);
 		p1ForwardUrls.remove(idx);
 		p1ForwardStates.remove(idx);
 		p1ForwardPlayedOnTurn.remove(idx);
 		p1ForwardDamage.remove(idx);
+		p1ForwardPrimedTop.remove(idx);
 		p1ForwardLabels.remove(idx);
 
 		if (p1ForwardPanel != null) {
@@ -4455,6 +4493,7 @@ public class MainWindow {
 		p1ForwardStates.add(CardState.NORMAL);
 		p1ForwardPlayedOnTurn.add(gameState.getTurnNumber());
 		p1ForwardDamage.add(0);
+		p1ForwardPrimedTop.add(null);
 		p1ForwardLabels.add(lbl);
 
 		p1ForwardPanel.add(lbl);
@@ -4549,16 +4588,20 @@ public class MainWindow {
 
 	/** Reloads and re-renders a single P1 forward slot using its stored URL and state. */
 	private void refreshP1ForwardSlot(int idx) {
-		String url   = p1ForwardUrls.get(idx);
-		CardState state = p1ForwardStates.get(idx);
-		JLabel slot  = p1ForwardLabels.get(idx);
+		CardData topCard = p1ForwardPrimedTop.get(idx);
+		boolean  primed  = topCard != null;
+		// Primed: display and stats come from the top card
+		String    url    = primed ? topCard.imageUrl() : p1ForwardUrls.get(idx);
+		CardState state  = p1ForwardStates.get(idx);
+		JLabel    slot   = p1ForwardLabels.get(idx);
 		if (url == null) return;
-		boolean hasHaste  = p1ForwardCards.get(idx).hasTrait(CardData.Trait.HASTE);
+		boolean hasHaste  = p1ForwardCards.get(idx).hasTrait(CardData.Trait.HASTE)
+				|| (primed && topCard.hasTrait(CardData.Trait.HASTE));
 		boolean canAttack = gameState.getCurrentPhase() == GameState.GamePhase.ATTACK
 				&& state == CardState.NORMAL
 				&& (hasHaste || p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber());
 		int damage = p1ForwardDamage.get(idx);
-		int power  = p1ForwardCards.get(idx).power();
+		int power  = primed ? topCard.power() : p1ForwardCards.get(idx).power();
 		boolean selected = p1AttackSelection.contains(idx);
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
@@ -4566,6 +4609,13 @@ public class MainWindow {
 				if (raw == null) return null;
 				BufferedImage canvas = renderBackupCard(toARGB(raw, CARD_W, CARD_H), state, canAttack, selected);
 				if (damage > 0 && power > 0) renderDamageOverlay(canvas, power - damage);
+				if (primed) {
+					Graphics2D g = canvas.createGraphics();
+					g.setColor(new Color(218, 165, 32));  // gold primed border
+					g.setStroke(new BasicStroke(3f));
+					g.drawRect(2, 2, canvas.getWidth() - 5, canvas.getHeight() - 5);
+					g.dispose();
+				}
 				return new ImageIcon(canvas);
 			}
 			@Override protected void done() {
@@ -4741,6 +4791,18 @@ public class MainWindow {
 	private void showForwardContextMenu(int idx, JLabel slot, MouseEvent e) {
 		JPopupMenu menu = new JPopupMenu();
 
+		// Prime — visible whenever the forward has the Priming trait
+		CardData fwd = p1ForwardCards.get(idx);
+		if (fwd.hasPriming()) {
+			boolean alreadyPrimed = p1ForwardPrimedTop.get(idx) != null;
+			GameState.GamePhase phase = gameState.getCurrentPhase();
+			boolean isMainPhase = phase == GameState.GamePhase.MAIN_1 || phase == GameState.GamePhase.MAIN_2;
+			JMenuItem primeItem = new JMenuItem("Prime (" + fwd.primingTarget() + ")");
+			primeItem.setEnabled(isMainPhase && !alreadyPrimed && canAffordPrimingCost(fwd));
+			primeItem.addActionListener(ae -> showPrimingPaymentDialog(fwd, idx));
+			menu.add(primeItem);
+		}
+
 		if (AppSettings.isDebugMode()) {
 			JMenuItem dullItem = new JMenuItem("Debug: Dull");
 			dullItem.addActionListener(ae -> {
@@ -4761,6 +4823,321 @@ public class MainWindow {
 		}
 
 		if (menu.getComponentCount() > 0) menu.show(slot, e.getX(), e.getY());
+	}
+
+	/** Returns true if the player can afford the Priming cost of {@code card} (card is on the field, not in hand). */
+	private boolean canAffordPrimingCost(CardData card) {
+		List<String> cost = card.primingCost();
+		if (cost.isEmpty()) return true;
+
+		boolean hasGeneric = cost.contains("");
+		LinkedHashMap<String, Integer> needed = new LinkedHashMap<>();
+		for (String e : cost) if (!e.isEmpty()) needed.merge(e, 1, Integer::sum);
+		String[] elems = needed.keySet().toArray(String[]::new);
+		int total = cost.size();
+
+		boolean[] hasSrc = new boolean[elems.length];
+		int available = 0;
+
+		for (int ei = 0; ei < elems.length; ei++) {
+			int b = gameState.getP1CpForElement(elems[ei]);
+			available += b;
+			if (b > 0) hasSrc[ei] = true;
+		}
+		if (hasGeneric) {
+			available += gameState.getP1CpByElement().values().stream().mapToInt(Integer::intValue).sum();
+			for (int ei = 0; ei < elems.length; ei++) available -= gameState.getP1CpForElement(elems[ei]);
+		}
+		for (int i = 0; i < p1BackupCards.length; i++) {
+			if (p1BackupCards[i] == null || p1BackupStates[i] != CardState.NORMAL) continue;
+			boolean matched = false;
+			for (int ei = 0; ei < elems.length; ei++) {
+				if (p1BackupCards[i].containsElement(elems[ei])) { available++; hasSrc[ei] = true; matched = true; break; }
+			}
+			if (!matched && hasGeneric) available++;
+		}
+		List<CardData> hand = gameState.getP1Hand();
+		for (CardData h : hand) {
+			if (h.isLightOrDark()) continue;
+			available += 2;
+			for (int ei = 0; ei < elems.length; ei++) if (h.containsElement(elems[ei])) hasSrc[ei] = true;
+		}
+		for (boolean s : hasSrc) if (!s) return false;
+		return available >= total;
+	}
+
+	/**
+	 * Payment dialog for the Priming ability cost. On confirm, searches the
+	 * main deck for the target card and places it on top of the priming forward.
+	 */
+	private void showPrimingPaymentDialog(CardData card, int slotIdx) {
+		List<String> rawCost = card.primingCost();
+		long genericNeeded = rawCost.stream().filter(String::isEmpty).count();
+		LinkedHashMap<String, Integer> costByElem = new LinkedHashMap<>();
+		for (String e : rawCost) if (!e.isEmpty()) costByElem.merge(e, 1, Integer::sum);
+		String[] elems   = costByElem.keySet().toArray(String[]::new);
+		int totalCost    = rawCost.size();
+
+		// If cost is empty, no dialog needed — go straight to execution
+		if (totalCost == 0) {
+			executePriming(card, slotIdx, new ArrayList<>(), new ArrayList<>());
+			return;
+		}
+
+		JDialog dlg = new JDialog(frame, "Prime: " + card.name(), true);
+		dlg.setResizable(false);
+		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+		List<CardData> hand = gameState.getP1Hand();
+
+		Map<String, Integer> bankCpByElem = new LinkedHashMap<>(costByElem);
+		for (String k : bankCpByElem.keySet()) bankCpByElem.put(k, 0);
+
+		List<Integer> selectedBackups  = new ArrayList<>();
+		List<Integer> selectedDiscards = new ArrayList<>();
+
+		List<Integer> eligibleBackupSlots = new ArrayList<>();
+		for (int i = 0; i < p1BackupCards.length; i++) {
+			if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.NORMAL
+					&& (genericNeeded > 0 || matchesAnyElement(p1BackupCards[i], elems)))
+				eligibleBackupSlots.add(i);
+		}
+
+		JLabel cpLabel = new JLabel();
+		cpLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		cpLabel.setHorizontalAlignment(SwingConstants.CENTER);
+
+		JButton confirmBtn = new JButton("Confirm (Prime)");
+		confirmBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+
+		List<JLabel>   backupLbls  = new ArrayList<>();
+		List<Integer>  backupSlots = new ArrayList<>();
+		List<JLabel>   discardLbls = new ArrayList<>();
+		List<Integer>  discardIdxs = new ArrayList<>();
+
+		boolean[] canAddDiscard = {false};
+		Runnable updateAll = () -> {
+			Map<String, Integer> cpByElem = new LinkedHashMap<>(bankCpByElem);
+			int extraCp = 0;
+			for (int slot : selectedBackups) {
+				if (matchesAnyElement(p1BackupCards[slot], elems))
+					cpByElem.merge(contributingElement(p1BackupCards[slot], elems, cpByElem, costByElem), 1, Integer::sum);
+				else extraCp++;
+			}
+			for (int idx : selectedDiscards) {
+				if (matchesAnyElement(hand.get(idx), elems))
+					cpByElem.merge(contributingElement(hand.get(idx), elems, cpByElem, costByElem), 2, Integer::sum);
+				else extraCp += 2;
+			}
+			int total      = cpByElem.values().stream().mapToInt(Integer::intValue).sum() + extraCp;
+			int unsatisfied = (int) java.util.stream.IntStream.range(0, elems.length)
+					.filter(ei -> cpByElem.getOrDefault(elems[ei], 0) < costByElem.get(elems[ei])).count();
+			int maxAllowed  = totalCost + elems.length + (totalCost % 2);
+			boolean canAddBackup = total < totalCost;
+			canAddDiscard[0] = (total + 2 <= maxAllowed) && (total < totalCost || unsatisfied > 0);
+			boolean satisfied = cpByElem.entrySet().stream()
+					.allMatch(en -> en.getValue() >= costByElem.getOrDefault(en.getKey(), 0));
+			confirmBtn.setEnabled(total >= totalCost && satisfied);
+
+			StringBuilder sb = new StringBuilder("Prime CP: " + total + " / " + totalCost + "  (");
+			boolean first = true;
+			for (String en : elems) {
+				if (!first) sb.append(", ");
+				sb.append(en).append(": ").append(cpByElem.getOrDefault(en, 0)).append("/").append(costByElem.get(en));
+				first = false;
+			}
+			if (genericNeeded > 0) {
+				if (!first) sb.append(", ");
+				sb.append("any: ").append(Math.min(extraCp, (int) genericNeeded)).append("/").append((int) genericNeeded);
+			}
+			if (first) sb.append("free");
+			sb.append(")");
+			cpLabel.setText(sb.toString());
+
+			for (int i = 0; i < backupLbls.size(); i++) {
+				JLabel lbl = backupLbls.get(i); boolean sel = selectedBackups.contains(backupSlots.get(i));
+				lbl.setBorder(BorderFactory.createLineBorder(sel ? Color.YELLOW : (canAddBackup ? Color.GRAY : new Color(80,80,80)), sel ? 3 : 1));
+				lbl.setBackground(sel || canAddBackup ? Color.DARK_GRAY : new Color(50,50,50));
+				lbl.setCursor(sel || canAddBackup ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+			}
+			for (int i = 0; i < discardLbls.size(); i++) {
+				JLabel lbl = discardLbls.get(i); boolean sel = selectedDiscards.contains(discardIdxs.get(i));
+				lbl.setBorder(BorderFactory.createLineBorder(sel ? Color.YELLOW : (canAddDiscard[0] ? Color.GRAY : new Color(80,80,80)), sel ? 3 : 1));
+				lbl.setBackground(sel || canAddDiscard[0] ? Color.DARK_GRAY : new Color(50,50,50));
+				lbl.setCursor(sel || canAddDiscard[0] ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+			}
+		};
+		updateAll.run();
+
+		JPanel centerPanel = new JPanel();
+		centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+
+		if (!eligibleBackupSlots.isEmpty()) {
+			JLabel hdr = new JLabel("Backups — dull for 1 CP each:");
+			hdr.setFont(new Font("Pixel NES", Font.PLAIN, 9)); hdr.setAlignmentX(Component.LEFT_ALIGNMENT);
+			JPanel bp = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6)); bp.setAlignmentX(Component.LEFT_ALIGNMENT);
+			for (int slot : eligibleBackupSlots) {
+				JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+				lbl.setPreferredSize(new Dimension(CARD_W, CARD_H)); lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+				lbl.setOpaque(true); lbl.setBackground(Color.DARK_GRAY); lbl.setForeground(Color.WHITE);
+				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10)); lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
+				lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+				final String url = p1BackupUrls[slot];
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mousePressed(MouseEvent ev) {
+						int tot = bankCpByElem.values().stream().mapToInt(Integer::intValue).sum() + selectedBackups.size() + selectedDiscards.size() * 2;
+						if (selectedBackups.remove(Integer.valueOf(slot))) { /* deselect */ } else if (tot < totalCost) selectedBackups.add(slot);
+						updateAll.run();
+					}
+					@Override public void mouseEntered(MouseEvent ev) { if (lbl.getIcon() != null) showZoomAt(url, lbl); }
+					@Override public void mouseExited(MouseEvent ev)  { hideZoom(); }
+				});
+				new SwingWorker<ImageIcon, Void>() {
+					@Override protected ImageIcon doInBackground() throws Exception {
+						Image img = ImageCache.load(url);
+						return img == null ? null : new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+					}
+					@Override protected void done() {
+						try { ImageIcon ic = get(); if (ic != null) { lbl.setIcon(ic); lbl.setText(null); } }
+						catch (InterruptedException | ExecutionException ignored) {}
+					}
+				}.execute();
+				backupLbls.add(lbl); backupSlots.add(slot); bp.add(lbl);
+			}
+			centerPanel.add(hdr); centerPanel.add(bp);
+		}
+
+		JLabel discardHdr = new JLabel("Hand — discard for 2 CP each:");
+		discardHdr.setFont(new Font("Pixel NES", Font.PLAIN, 9)); discardHdr.setAlignmentX(Component.LEFT_ALIGNMENT);
+		JPanel dp = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6)); dp.setAlignmentX(Component.LEFT_ALIGNMENT);
+		for (int i = 0; i < hand.size(); i++) {
+			final int hi = i; CardData hc = hand.get(i); boolean payable = !hc.isLightOrDark();
+			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H)); lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+			lbl.setOpaque(true); lbl.setBackground(payable ? Color.DARK_GRAY : new Color(50,50,50));
+			lbl.setForeground(Color.WHITE); lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+			lbl.setBorder(BorderFactory.createLineBorder(payable ? Color.GRAY : new Color(80,80,80), 1));
+			lbl.setCursor(payable ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+			final String imgUrl = hc.imageUrl();
+			if (payable) {
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mousePressed(MouseEvent ev) {
+						if (!selectedDiscards.remove(Integer.valueOf(hi)) && canAddDiscard[0]) selectedDiscards.add(hi);
+						updateAll.run();
+					}
+					@Override public void mouseEntered(MouseEvent ev) { if (lbl.getIcon() != null) showZoomAt(imgUrl, lbl); }
+					@Override public void mouseExited(MouseEvent ev)  { hideZoom(); }
+				});
+				discardLbls.add(lbl); discardIdxs.add(hi);
+			} else {
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mouseEntered(MouseEvent ev) { if (lbl.getIcon() != null) showZoomAt(imgUrl, lbl); }
+					@Override public void mouseExited(MouseEvent ev)  { hideZoom(); }
+				});
+			}
+			new SwingWorker<ImageIcon, Void>() {
+				@Override protected ImageIcon doInBackground() throws Exception {
+					Image img = ImageCache.load(imgUrl);
+					return img == null ? null : new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+				}
+				@Override protected void done() {
+					try { ImageIcon ic = get(); if (ic != null) { lbl.setIcon(ic); lbl.setText(null); } }
+					catch (InterruptedException | ExecutionException ignored) {}
+				}
+			}.execute();
+			dp.add(lbl);
+		}
+		centerPanel.add(discardHdr); centerPanel.add(dp);
+
+		JButton cancelBtn = new JButton("Cancel");
+		cancelBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		cancelBtn.addActionListener(ev -> dlg.dispose());
+		confirmBtn.addActionListener(ev -> {
+			dlg.dispose();
+			executePriming(card, slotIdx, new ArrayList<>(selectedDiscards), new ArrayList<>(selectedBackups));
+		});
+
+		JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
+		buttonPanel.add(confirmBtn); buttonPanel.add(cancelBtn);
+
+		StringBuilder costDesc = new StringBuilder();
+		boolean f = true;
+		for (Map.Entry<String, Integer> en : costByElem.entrySet()) {
+			if (!f) costDesc.append(" + ");
+			costDesc.append(en.getValue()).append(" ").append(en.getKey()).append(" CP"); f = false;
+		}
+		if (genericNeeded > 0) { if (!f) costDesc.append(" + "); costDesc.append((int) genericNeeded).append(" any CP"); }
+		JLabel titleLabel = new JLabel(
+				"Priming cost for: " + card.name() + "  (" + (costDesc.length() > 0 ? costDesc : "free") + ")",
+				SwingConstants.CENTER);
+		titleLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+
+		JPanel topPanel = new JPanel(new BorderLayout(0, 4));
+		topPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
+		topPanel.add(titleLabel, BorderLayout.NORTH); topPanel.add(cpLabel, BorderLayout.CENTER);
+
+		JPanel mainPanel = new JPanel(new BorderLayout(0, 4));
+		mainPanel.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 8));
+		mainPanel.add(new JScrollPane(centerPanel), BorderLayout.CENTER);
+		mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+		dlg.getContentPane().setLayout(new BorderLayout());
+		dlg.getContentPane().add(topPanel, BorderLayout.NORTH);
+		dlg.getContentPane().add(mainPanel, BorderLayout.CENTER);
+		dlg.pack(); dlg.setLocationRelativeTo(frame); dlg.setVisible(true);
+	}
+
+	/**
+	 * Pays the Priming cost, searches the main deck for the target card, and if
+	 * found places it as the top card of the primed forward.  The deck is shuffled
+	 * after the search regardless of whether the card was found.
+	 */
+	private void executePriming(CardData card, int slotIdx,
+			List<Integer> discardIndices, List<Integer> backupDullIndices) {
+		List<String> rawCost = card.primingCost();
+		LinkedHashMap<String, Integer> costByElem = new LinkedHashMap<>();
+		for (String e : rawCost) if (!e.isEmpty()) costByElem.merge(e, 1, Integer::sum);
+		String[] elems = costByElem.keySet().toArray(String[]::new);
+
+		// Pay cost
+		for (int bi : backupDullIndices) {
+			p1BackupStates[bi] = CardState.DULLED;
+			animateDullBackup(bi, true);
+			String cpElem = matchesAnyElement(p1BackupCards[bi], elems)
+					? contributingElement(p1BackupCards[bi], elems) : (elems.length > 0 ? elems[0] : "");
+			if (!cpElem.isEmpty()) gameState.addP1Cp(cpElem, 1);
+		}
+		discardIndices.sort(Collections.reverseOrder());
+		for (int di : discardIndices) {
+			CardData discarded = gameState.getP1Hand().get(di);
+			String cpElem = matchesAnyElement(discarded, elems)
+					? contributingElement(discarded, elems) : (elems.length > 0 ? elems[0] : "");
+			if (!cpElem.isEmpty()) gameState.addP1Cp(cpElem, 2);
+			gameState.breakFromHand(di);
+		}
+		for (String e : elems) { gameState.spendP1Cp(e, gameState.getP1CpForElement(e)); gameState.clearP1Cp(e); }
+
+		// Search deck
+		String target = card.primingTarget();
+		CardData found = gameState.searchAndRemoveFromP1MainDeck(target);
+
+		// Shuffle after search regardless of result
+		List<CardData> deckList = new ArrayList<>(gameState.getP1MainDeck());
+		Collections.shuffle(deckList);
+		gameState.getP1MainDeck().clear();
+		gameState.getP1MainDeck().addAll(deckList);
+		refreshP1DeckLabel();
+
+		if (found == null) {
+			logEntry("Priming: \"" + target + "\" not found in deck — no card placed");
+		} else {
+			p1ForwardPrimedTop.set(slotIdx, found);
+			logEntry("Primed: \"" + card.name() + "\" topped with \"" + found.name() + "\"");
+			refreshP1ForwardSlot(slotIdx);
+		}
+
+		refreshP1HandLabel();
+		refreshP1BreakLabel();
 	}
 
 	private JPanel buildBackupZonePanel(JLabel[] labelStorage) {
