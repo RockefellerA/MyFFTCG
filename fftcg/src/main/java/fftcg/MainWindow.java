@@ -83,12 +83,17 @@ public class MainWindow {
 	// Side info panel dimensions.
 	// The panel is sized to the native card-image width on the first hover;
 	// these are just the fallback values used before any image loads.
-	private static final int SIDE_MARGIN   = 4;                   // px between card and panel edge
-	private static final double PREVIEW_SCALE = 0.8;
+	private static final int    SIDE_MARGIN    = 4;                   // px between card and panel edge
+	private static final double PREVIEW_SCALE  = 0.8;
+	private static final int    RESIZE_HANDLE_W = 5;                 // draggable sidebar divider width
 	private int sidePanelW = (int)(3 * CARD_W * PREVIEW_SCALE);   // updated on first image load
 	private int previewH   =
 			(int)(sidePanelW * (double) CARD_H / CARD_W);         // updated on first image load
 	private boolean previewSized = false;
+	private int nativeImgW   = 0;   // native card image dimensions (set on first hover)
+	private int nativeImgH   = 0;
+	private int minSidePanelW = 0;  // resize clamp bounds (set on first hover)
+	private int maxSidePanelW = 0;
 
 	// P1 zone labels that change during gameplay
 	private JLabel p1DeckLabel;
@@ -111,6 +116,8 @@ public class MainWindow {
 	private MultiplayerMenu multiplayerMenu;
 	// Side info panel (card preview + Next button + game log)
 	private JPanel        sidePanel;
+	private JPanel        sideWrapper;        // contains resizeHandle + sidePanel
+	private JPanel        resizeHandle;       // draggable divider between board and sidebar
 	private JPanel        cardPreviewPanel;   // custom-painted card preview
 	private BufferedImage previewImage;       // current card to draw (null = empty)
 	private float         previewAlpha  = 0f; // 0 = transparent, 1 = fully opaque
@@ -699,6 +706,29 @@ public class MainWindow {
 		sidePanel.add(logWithChat,  BorderLayout.CENTER);
 		sidePanel.add(handPanel,    BorderLayout.SOUTH);
 
+		// Draggable divider between game board and side panel
+		resizeHandle = new JPanel();
+		resizeHandle.setPreferredSize(new Dimension(RESIZE_HANDLE_W, 0));
+		resizeHandle.setBackground(Color.LIGHT_GRAY);
+		MouseAdapter sideResizer = new MouseAdapter() {
+			private int pressScreenX;
+			private int pressW;
+			@Override public void mousePressed(MouseEvent e) {
+				pressScreenX = e.getXOnScreen();
+				pressW = sidePanel.getWidth();
+			}
+			@Override public void mouseDragged(MouseEvent e) {
+				if (nativeImgW == 0) return;
+				int dx = e.getXOnScreen() - pressScreenX;
+				boolean right = "right".equals(AppSettings.getSidePanelSide());
+				int newW = right ? pressW - dx : pressW + dx;
+				newW = Math.max(minSidePanelW, Math.min(maxSidePanelW, newW));
+				setSidePanelWidth(newW);
+			}
+		};
+		resizeHandle.addMouseListener(sideResizer);
+		resizeHandle.addMouseMotionListener(sideResizer);
+
 		// --- Main game area (wraps both player zones + board so the side panel
 		//     spans the full frame height rather than just the centre strip) ---
 		JPanel mainArea = new JPanel(new BorderLayout());
@@ -724,11 +754,21 @@ public class MainWindow {
 	 */
 	private void applySidePanelSide(String side) {
 		if (sidePanel == null) return;
-		frame.getContentPane().remove(sidePanel);
+		if (sideWrapper != null) frame.getContentPane().remove(sideWrapper);
 		boolean right = "right".equals(side);
-		sidePanel.setBorder(BorderFactory.createMatteBorder(
-				0, right ? 1 : 0, 0, right ? 0 : 1, Color.LIGHT_GRAY));
-		frame.getContentPane().add(sidePanel, right ? BorderLayout.EAST : BorderLayout.WEST);
+		sidePanel.setBorder(null);
+		resizeHandle.setCursor(Cursor.getPredefinedCursor(
+				right ? Cursor.W_RESIZE_CURSOR : Cursor.E_RESIZE_CURSOR));
+		sideWrapper = new JPanel(new BorderLayout());
+		sideWrapper.setPreferredSize(new Dimension(sidePanelW + RESIZE_HANDLE_W, 0));
+		if (right) {
+			sideWrapper.add(resizeHandle, BorderLayout.WEST);
+			sideWrapper.add(sidePanel,    BorderLayout.CENTER);
+		} else {
+			sideWrapper.add(sidePanel,    BorderLayout.CENTER);
+			sideWrapper.add(resizeHandle, BorderLayout.EAST);
+		}
+		frame.getContentPane().add(sideWrapper, right ? BorderLayout.EAST : BorderLayout.WEST);
 		frame.revalidate();
 		frame.repaint();
 	}
@@ -2464,22 +2504,35 @@ public class MainWindow {
 	}
 
 	/**
-	 * On the first call, resizes the side panel and preview panel so the panel
-	 * is exactly {@code imgW + SIDE_MARGIN} pixels wide and {@code imgH} pixels tall.
-	 * Subsequent calls are no-ops.
+	 * On the first call, resizes the side panel and preview panel to the card's
+	 * native image dimensions scaled by PREVIEW_SCALE, and establishes the min/max
+	 * bounds for user-driven sidebar resizing. Subsequent calls are no-ops.
 	 */
 	private void sizePreviewPanel(int imgW, int imgH) {
 		if (previewSized) return;
-		previewSized = true;
-		sidePanelW = (int)(imgW * PREVIEW_SCALE) + SIDE_MARGIN;
-		previewH   = (int)(imgH * PREVIEW_SCALE);
-		cardPreviewPanel.setPreferredSize(new Dimension(sidePanelW, previewH));
-		cardPreviewPanel.setMinimumSize  (new Dimension(sidePanelW, previewH));
-		cardPreviewPanel.setMaximumSize  (new Dimension(sidePanelW, previewH));
-		sidePanel.setPreferredSize(new Dimension(sidePanelW, 0));
-		handPanel.setPreferredSize(new Dimension(sidePanelW, CARD_H));
+		previewSized  = true;
+		nativeImgW    = imgW;
+		nativeImgH    = imgH;
+		minSidePanelW = (int)(imgW * 0.75) + SIDE_MARGIN;
+		maxSidePanelW = imgW + SIDE_MARGIN;
+		setSidePanelWidth((int)(imgW * PREVIEW_SCALE) + SIDE_MARGIN);
+	}
+
+	private void setSidePanelWidth(int w) {
+		sidePanelW = w;
+		previewH = nativeImgH > 0
+				? (int)((w - SIDE_MARGIN) * (double) nativeImgH / nativeImgW)
+				: (int)(w * (double) CARD_H / CARD_W);
+		cardPreviewPanel.setPreferredSize(new Dimension(w, previewH));
+		cardPreviewPanel.setMinimumSize  (new Dimension(w, previewH));
+		cardPreviewPanel.setMaximumSize  (new Dimension(w, previewH));
+		sidePanel.setPreferredSize(new Dimension(w, 0));
+		handPanel.setPreferredSize(new Dimension(w, CARD_H));
+		if (sideWrapper != null)
+			sideWrapper.setPreferredSize(new Dimension(w + RESIZE_HANDLE_W, 0));
 		refreshHandPanel();
 		frame.revalidate();
+		frame.repaint();
 	}
 
 	// -------------------------------------------------------------------------
