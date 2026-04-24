@@ -14,12 +14,23 @@ import java.util.Map;
  */
 public class GameState {
 
+    /** A card sitting in the Removed-From-Play zone via the Warp trait, with its remaining counter. */
+    public static class WarpEntry {
+        public final CardData card;
+        public int counters;
+        public WarpEntry(CardData card, int counters) {
+            this.card     = card;
+            this.counters = counters;
+        }
+    }
+
     // --- P1 ---
     private final Deque<CardData>          p1MainDeck   = new ArrayDeque<>();
     private final List<CardData>           p1LbDeck     = new ArrayList<>();
     private final List<CardData>           p1Hand       = new ArrayList<>();
     private final List<CardData>           p1BreakZone  = new ArrayList<>();
     private final List<CardData>           p1DamageZone = new ArrayList<>();
+    private final List<WarpEntry>          p1WarpZone   = new ArrayList<>();
     private final Map<String, Integer>     p1CpByElement = new HashMap<>();
     private boolean p1OpeningHandPending  = false;
     private boolean p1MulliganUsed        = false;
@@ -54,6 +65,7 @@ public class GameState {
         p1Hand.clear();
         p1BreakZone.clear();
         p1DamageZone.clear();
+        p1WarpZone.clear();
         p1CpByElement.clear();
         p1OpeningHandPending = false;
         p1MulliganUsed       = false;
@@ -68,6 +80,38 @@ public class GameState {
         currentPhase  = null;
         turnNumber    = 0;
         currentPlayer = Player.P1;
+    }
+
+    // -------------------------------------------------------------------------
+    // Warp zone
+    // -------------------------------------------------------------------------
+
+    /** Moves a card into P1's Removed-From-Play zone with {@code counters} Warp counters. */
+    public void addToP1WarpZone(CardData card, int counters) {
+        p1WarpZone.add(new WarpEntry(card, counters));
+    }
+
+    /** Returns an unmodifiable view of P1's Warp zone. */
+    public List<WarpEntry> getP1WarpZone() {
+        return Collections.unmodifiableList(p1WarpZone);
+    }
+
+    /**
+     * Decrements the Warp counter of every card in P1's Warp zone by 1.
+     * Removes and returns any cards whose counter reached zero.
+     */
+    public List<CardData> tickP1WarpCounters() {
+        List<CardData> resolved = new ArrayList<>();
+        java.util.Iterator<WarpEntry> it = p1WarpZone.iterator();
+        while (it.hasNext()) {
+            WarpEntry entry = it.next();
+            entry.counters--;
+            if (entry.counters <= 0) {
+                resolved.add(entry.card);
+                it.remove();
+            }
+        }
+        return resolved;
     }
 
     /**

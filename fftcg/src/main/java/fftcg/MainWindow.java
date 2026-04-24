@@ -646,7 +646,7 @@ public class MainWindow {
 		gameLog.setEditable(false);
 		gameLog.setLineWrap(true);
 		gameLog.setWrapStyleWord(true);
-		gameLog.setFont(loadLatinia(12));
+		gameLog.setFont(new Font("Courier New", Font.PLAIN, 12));
 		gameLog.setBackground(Color.WHITE);
 		gameLog.setForeground(Color.BLACK);
 		gameLog.setMargin(new Insets(4, 4, 4, 4));
@@ -826,7 +826,8 @@ public class MainWindow {
 				for (DeckCardDetail card : p1Cards) {
 					CardData cd = new CardData(card.imageUrl(), card.name(), card.element(),
 							card.cost(), card.power(), card.type(), card.isLb(), card.lbCost(), card.exBurst(),
-							card.multicard(), CardData.parseTraits(card.textEn()));
+							card.multicard(), CardData.parseTraits(card.textEn()),
+							CardData.parseWarpValue(card.textEn()), CardData.parseWarpCost(card.textEn()));
 					if (card.isLb()) lb.add(cd);
 					else             main.add(cd);
 				}
@@ -841,7 +842,8 @@ public class MainWindow {
 					for (DeckCardDetail card : p2Cards) {
 						CardData cd = new CardData(card.imageUrl(), card.name(), card.element(),
 								card.cost(), card.power(), card.type(), card.isLb(), card.lbCost(), card.exBurst(),
-								card.multicard(), CardData.parseTraits(card.textEn()));
+								card.multicard(), CardData.parseTraits(card.textEn()),
+								CardData.parseWarpValue(card.textEn()), CardData.parseWarpCost(card.textEn()));
 						if (card.isLb()) p2Lb.add(cd);
 						else             p2Main.add(cd);
 					}
@@ -1192,6 +1194,7 @@ public class MainWindow {
 			case DRAW:
 				gameState.advancePhase();   // DRAW → MAIN_1
 				logEntry("Main Phase 1");
+				processWarpCounters();
 				break;
 
 			case MAIN_1:
@@ -1466,34 +1469,126 @@ public class MainWindow {
 	}
 
 	private void refreshRemoveButtons() {
-		if (p1RemoveButton != null) p1RemoveButton.setEnabled(p1RemoveLabel != null && p1RemoveLabel.getUrl() != null);
-		if (p2RemoveButton != null) p2RemoveButton.setEnabled(p2RemoveLabel != null && p2RemoveLabel.getUrl() != null);
+		if (p1RemoveButton != null)
+			p1RemoveButton.setEnabled(!gameState.getP1WarpZone().isEmpty());
+		if (p2RemoveButton != null)
+			p2RemoveButton.setEnabled(p2RemoveLabel != null && p2RemoveLabel.getUrl() != null);
 	}
 
-	private void showRemovedFromPlayDialog(GrayscaleLabel removeLabel, String player) {
-		String url = removeLabel.getUrl();
-		if (url == null) return;
-		JDialog dlg = new JDialog(frame, player + " — Removed From Play", true);
-		dlg.setResizable(false);
-		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-		JLabel card = new JLabel("...", SwingConstants.CENTER);
-		card.setPreferredSize(new Dimension(CARD_W, CARD_H));
-		card.setOpaque(true);
-		card.setBackground(Color.DARK_GRAY);
+	/** Updates the P1 RFP label to show the most-recently-warped card (or clears it). */
+	private void refreshP1WarpZoneUI() {
+		List<GameState.WarpEntry> zone = gameState.getP1WarpZone();
+		if (zone.isEmpty()) {
+			p1RemoveLabel.setIcon(null);
+			p1RemoveLabel.setUrl(null);
+			refreshRemoveButtons();
+			return;
+		}
+		String url = zone.get(zone.size() - 1).card.imageUrl();
+		p1RemoveLabel.setUrl(url);
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image img = ImageCache.load(url);
-				return img == null ? null : new ImageIcon(
-						img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+				return img == null ? null
+						: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
 			}
 			@Override protected void done() {
-				try { ImageIcon ic = get(); if (ic != null) { card.setIcon(ic); card.setText(null); } }
+				try { ImageIcon ic = get(); if (ic != null) { p1RemoveLabel.setIcon(ic); } }
 				catch (InterruptedException | ExecutionException ignored) {}
 			}
 		}.execute();
-		JPanel wrap = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 8));
-		wrap.add(card);
-		dlg.getContentPane().add(wrap);
+		refreshRemoveButtons();
+	}
+
+	/**
+	 * Decrements Warp counters on every card in P1's warp zone at the start of Main Phase 1.
+	 * Cards whose counter hits 0 are pushed onto the Stack as auto-abilities and resolved
+	 * to the field.
+	 */
+	private void processWarpCounters() {
+		List<GameState.WarpEntry> zone = gameState.getP1WarpZone();
+		if (zone.isEmpty()) return;
+
+		// Log the decrement for every card before we tick (zone is a live view)
+		for (GameState.WarpEntry entry : zone) {
+			int before = entry.counters;
+			int after  = before - 1;
+			logEntry("Warp: \"" + entry.card.name() + "\" counter " + before + " → " + after
+					+ (after == 0 ? " (resolving!)" : ""));
+		}
+
+		List<CardData> resolved = gameState.tickP1WarpCounters();
+		for (CardData card : resolved) {
+			logEntry("Warp: \"" + card.name() + "\" enters play (auto-ability)");
+			gameState.pushStack(card);
+			gameState.popStack();
+			if (card.isForward()) {
+				placeCardInForwardZone(card);
+			} else if (card.isBackup()) {
+				if (hasAvailableBackupSlot()) placeCardInFirstBackupSlot(card);
+				else {
+					gameState.getP1BreakZone().add(card);
+					logEntry("  No backup slot — \"" + card.name() + "\" → Break Zone");
+				}
+			} else if (card.isMonster()) {
+				placeCardInMonsterZone(card);
+			}
+		}
+		if (!resolved.isEmpty()) refreshP1BreakLabel();
+		refreshP1WarpZoneUI();
+	}
+
+	private void showRemovedFromPlayDialog(GrayscaleLabel removeLabel, String player) {
+		List<GameState.WarpEntry> zone = gameState.getP1WarpZone();
+		if (zone.isEmpty()) return;
+
+		JDialog dlg = new JDialog(frame, player + " — Removed From Play (" + zone.size() + " card"
+				+ (zone.size() != 1 ? "s" : "") + ")", true);
+		dlg.setResizable(false);
+		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+		JPanel cardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+
+		for (GameState.WarpEntry entry : zone) {
+			JPanel wrapper = new JPanel(new BorderLayout(0, 4));
+			wrapper.setBackground(cardsPanel.getBackground());
+
+			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
+			lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+			lbl.setOpaque(true);
+			lbl.setBackground(Color.DARK_GRAY);
+			lbl.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1));
+			lbl.addMouseListener(new MouseAdapter() {
+				@Override public void mouseEntered(MouseEvent e) {
+					if (lbl.getIcon() != null) showZoomAt(entry.card.imageUrl(), lbl);
+				}
+				@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+			});
+
+			new SwingWorker<ImageIcon, Void>() {
+				@Override protected ImageIcon doInBackground() throws Exception {
+					Image img = ImageCache.load(entry.card.imageUrl());
+					return img == null ? null : new ImageIcon(
+							img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+				}
+				@Override protected void done() {
+					try { ImageIcon ic = get(); if (ic != null) { lbl.setIcon(ic); lbl.setText(null); } }
+					catch (InterruptedException | ExecutionException ignored) {}
+				}
+			}.execute();
+
+			JLabel infoLabel = new JLabel(entry.card.name() + "  [" + entry.counters + "]",
+					SwingConstants.CENTER);
+			infoLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			infoLabel.setPreferredSize(new Dimension(CARD_W, 18));
+
+			wrapper.add(lbl,       BorderLayout.CENTER);
+			wrapper.add(infoLabel, BorderLayout.SOUTH);
+			cardsPanel.add(wrapper);
+		}
+
+		dlg.getContentPane().add(new JScrollPane(cardsPanel));
 		dlg.pack();
 		dlg.setLocationRelativeTo(frame);
 		dlg.setVisible(true);
@@ -2659,6 +2754,17 @@ public class MainWindow {
 		});
 		menu.add(playItem);
 
+		if (card.hasWarp()) {
+			JMenuItem warpItem = new JMenuItem("Play (Warp " + card.warpValue() + ")");
+			warpItem.setEnabled(isMainPhase && canAffordWarpCost(card, handIdx));
+			warpItem.addActionListener(ae -> {
+				hideZoom();
+				if (handPopup != null) { handPopup.dispose(); handPopup = null; }
+				showWarpPaymentDialog(card, handIdx);
+			});
+			menu.add(warpItem);
+		}
+
 		menu.addPopupMenuListener(new PopupMenuListener() {
 			@Override public void popupMenuWillBecomeVisible(PopupMenuEvent e) {}
 			@Override public void popupMenuCanceled(PopupMenuEvent e) {
@@ -2743,6 +2849,27 @@ public class MainWindow {
 		return playedElems[0];
 	}
 
+	/**
+	 * Returns the element of {@code source} that has the largest remaining deficit
+	 * ({@code required - alreadyPaid}), so multi-element payment cards fill whichever
+	 * requirement is still most needed rather than always defaulting to the first match.
+	 */
+	private String contributingElement(CardData source, String[] playedElems,
+			Map<String, Integer> cpByElem, Map<String, Integer> costByElem) {
+		String best = null;
+		int maxDeficit = Integer.MIN_VALUE;
+		for (String pe : playedElems) {
+			if (source.containsElement(pe)) {
+				int deficit = costByElem.getOrDefault(pe, 0) - cpByElem.getOrDefault(pe, 0);
+				if (deficit > maxDeficit) {
+					maxDeficit = deficit;
+					best = pe;
+				}
+			}
+		}
+		return best != null ? best : playedElems[0];
+	}
+
 	/** Returns true if {@code source} contains any element from {@code playedElems}. */
 	private boolean matchesAnyElement(CardData source, String[] playedElems) {
 		for (String pe : playedElems)
@@ -2798,6 +2925,375 @@ public class MainWindow {
 		}
 		for (boolean hs : hasElemSource) if (!hs) return false;
 		return totalExisting + totalGenerate >= card.cost();
+	}
+
+	/**
+	 * Returns true if the player can afford the Warp alternate cost of {@code card}.
+	 * Warp cost is a list of element CP requirements (e.g. ["Lightning"] = 1 Lightning CP).
+	 */
+	private boolean canAffordWarpCost(CardData card, int handIdx) {
+		List<String> warpCost = card.warpCost();
+		if (warpCost.isEmpty()) return true;
+
+		// Separate element-specific requirements from generic CP (empty-string entries)
+		boolean hasGeneric = warpCost.contains("");
+		LinkedHashMap<String, Integer> needed = new LinkedHashMap<>();
+		for (String e : warpCost) if (!e.isEmpty()) needed.merge(e, 1, Integer::sum);
+		String[] elems = needed.keySet().toArray(String[]::new);
+		int total = warpCost.size();
+
+		boolean[] hasSrc = new boolean[elems.length];
+		int available = 0;
+
+		// Banked CP (element-specific)
+		for (int ei = 0; ei < elems.length; ei++) {
+			int b = gameState.getP1CpForElement(elems[ei]);
+			available += b;
+			if (b > 0) hasSrc[ei] = true;
+		}
+		// Banked CP of any element counts toward generic
+		if (hasGeneric) {
+			available += gameState.getP1CpByElement().values().stream().mapToInt(Integer::intValue).sum();
+			for (int ei = 0; ei < elems.length; ei++)
+				available -= gameState.getP1CpForElement(elems[ei]); // avoid double-counting
+		}
+
+		// Undulled backups: matching backups satisfy element requirements;
+		// any backup can cover generic CP
+		for (int i = 0; i < p1BackupCards.length; i++) {
+			if (p1BackupCards[i] == null || p1BackupStates[i] != CardState.NORMAL) continue;
+			boolean matched = false;
+			for (int ei = 0; ei < elems.length; ei++) {
+				if (p1BackupCards[i].containsElement(elems[ei])) {
+					available++;
+					hasSrc[ei] = true;
+					matched = true;
+					break;
+				}
+			}
+			if (!matched && hasGeneric) available++;
+		}
+
+		// Non-L/D hand cards always contribute 2 CP toward total
+		List<CardData> hand = gameState.getP1Hand();
+		for (int i = 0; i < hand.size(); i++) {
+			if (i == handIdx) continue;
+			CardData h = hand.get(i);
+			if (h.isLightOrDark()) continue;
+			available += 2;
+			for (int ei = 0; ei < elems.length; ei++) {
+				if (h.containsElement(elems[ei])) hasSrc[ei] = true;
+			}
+		}
+
+		for (boolean s : hasSrc) if (!s) return false;
+		return available >= total;
+	}
+
+	/**
+	 * Opens a payment dialog for the Warp alternate cost and, on confirm,
+	 * moves the card from hand to the Removed-From-Play zone with Warp counters.
+	 */
+	private void showWarpPaymentDialog(CardData card, int handIdx) {
+		List<String> rawCost = card.warpCost();
+		// Generic CP (empty-string entries) don't go into the per-element cost map
+		long genericNeeded = rawCost.stream().filter(String::isEmpty).count();
+		LinkedHashMap<String, Integer> costByElem = new LinkedHashMap<>();
+		for (String e : rawCost) if (!e.isEmpty()) costByElem.merge(e, 1, Integer::sum);
+		String[] elems = costByElem.keySet().toArray(String[]::new);
+		int totalCost  = rawCost.size();  // includes generic entries
+
+		JDialog dlg = new JDialog(frame, "Warp: " + card.name(), true);
+		dlg.setResizable(false);
+		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+		List<CardData> hand = gameState.getP1Hand();
+
+		Map<String, Integer> bankCpByElem = new LinkedHashMap<>(costByElem);
+		for (String k : bankCpByElem.keySet()) bankCpByElem.put(k, 0);
+
+		List<Integer> selectedBackups  = new ArrayList<>();
+		List<Integer> selectedDiscards = new ArrayList<>();
+
+		List<Integer> eligibleBackupSlots = new ArrayList<>();
+		for (int i = 0; i < p1BackupCards.length; i++) {
+			// When there is generic CP in the cost, any undulled backup is eligible
+			if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.NORMAL
+					&& (genericNeeded > 0 || matchesAnyElement(p1BackupCards[i], elems)))
+				eligibleBackupSlots.add(i);
+		}
+
+		JLabel cpLabel = new JLabel();
+		cpLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		cpLabel.setHorizontalAlignment(SwingConstants.CENTER);
+
+		JButton confirmBtn = new JButton("Confirm Warp");
+		confirmBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+
+		List<JLabel>   backupLbls   = new ArrayList<>();
+		List<Integer>  backupSlots  = new ArrayList<>();
+		List<JLabel>   discardLbls  = new ArrayList<>();
+		List<Integer>  discardIdxs  = new ArrayList<>();
+
+		boolean[] canAddDiscard = {false};
+		Runnable updateAll = () -> {
+			Map<String, Integer> cpByElem = new LinkedHashMap<>(bankCpByElem);
+			int extraCp = 0;
+			for (int slot : selectedBackups) {
+				if (matchesAnyElement(p1BackupCards[slot], elems))
+					cpByElem.merge(contributingElement(p1BackupCards[slot], elems, cpByElem, costByElem), 1, Integer::sum);
+				else
+					extraCp++;
+			}
+			for (int idx : selectedDiscards) {
+				if (matchesAnyElement(hand.get(idx), elems))
+					cpByElem.merge(contributingElement(hand.get(idx), elems, cpByElem, costByElem), 2, Integer::sum);
+				else
+					extraCp += 2;
+			}
+			int total = cpByElem.values().stream().mapToInt(Integer::intValue).sum() + extraCp;
+			int unsatisfied = (int) java.util.stream.IntStream.range(0, elems.length)
+					.filter(ei -> cpByElem.getOrDefault(elems[ei], 0) < costByElem.get(elems[ei]))
+					.count();
+			// Max allowed total CP = cost + one overpay slot per distinct specific element +
+			// one extra slot when the cost is odd (unavoidable when paying via 2-CP discards).
+			int maxAllowed = totalCost + elems.length + (totalCost % 2);
+			boolean canAddBackup = total < totalCost;
+			// A discard may only be added if it keeps us within the overpay budget
+			// AND we still need more total CP or have at least one unsatisfied element.
+			canAddDiscard[0] = (total + 2 <= maxAllowed) && (total < totalCost || unsatisfied > 0);
+			boolean satisfied    = cpByElem.entrySet().stream()
+					.allMatch(e -> e.getValue() >= costByElem.getOrDefault(e.getKey(), 0));
+			confirmBtn.setEnabled(total >= totalCost && satisfied);
+
+			StringBuilder sb = new StringBuilder("Warp CP: " + total + " / " + totalCost + "  (");
+			boolean first = true;
+			for (String e : elems) {
+				if (!first) sb.append(", ");
+				sb.append(e).append(": ").append(cpByElem.getOrDefault(e, 0))
+				  .append("/").append(costByElem.get(e));
+				first = false;
+			}
+			if (genericNeeded > 0) {
+				if (!first) sb.append(", ");
+				sb.append("any: ").append(Math.min(extraCp, (int) genericNeeded))
+				  .append("/").append((int) genericNeeded);
+				first = false;
+			}
+			if (first) sb.append("free");  // pure 0-cost warp
+			sb.append(")");
+			cpLabel.setText(sb.toString());
+
+			for (int i = 0; i < backupLbls.size(); i++) {
+				JLabel lbl = backupLbls.get(i);
+				boolean sel = selectedBackups.contains(backupSlots.get(i));
+				lbl.setBorder(BorderFactory.createLineBorder(
+						sel ? Color.YELLOW : (canAddBackup ? Color.GRAY : new Color(80, 80, 80)), sel ? 3 : 1));
+				lbl.setBackground(sel || canAddBackup ? Color.DARK_GRAY : new Color(50, 50, 50));
+				lbl.setCursor(sel || canAddBackup
+						? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+			}
+			for (int i = 0; i < discardLbls.size(); i++) {
+				JLabel lbl = discardLbls.get(i);
+				boolean sel = selectedDiscards.contains(discardIdxs.get(i));
+				lbl.setBorder(BorderFactory.createLineBorder(
+						sel ? Color.YELLOW : (canAddDiscard[0] ? Color.GRAY : new Color(80, 80, 80)), sel ? 3 : 1));
+				lbl.setBackground(sel || canAddDiscard[0] ? Color.DARK_GRAY : new Color(50, 50, 50));
+				lbl.setCursor(sel || canAddDiscard[0]
+						? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+			}
+		};
+		updateAll.run();
+
+		JPanel centerPanel = new JPanel();
+		centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
+
+		if (!eligibleBackupSlots.isEmpty()) {
+			JLabel hdr = new JLabel("Backups — dull for 1 CP each:");
+			hdr.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			hdr.setAlignmentX(Component.LEFT_ALIGNMENT);
+			JPanel backupCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+			backupCardsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+			for (int slot : eligibleBackupSlots) {
+				JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+				lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
+				lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+				lbl.setOpaque(true);
+				lbl.setBackground(Color.DARK_GRAY);
+				lbl.setForeground(Color.WHITE);
+				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+				lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
+				lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+				final String url = p1BackupUrls[slot];
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mousePressed(MouseEvent e) {
+						int tot = bankCpByElem.values().stream().mapToInt(Integer::intValue).sum()
+								+ selectedBackups.size() + selectedDiscards.size() * 2;
+						if (selectedBackups.remove(Integer.valueOf(slot))) { /* deselect ok */ }
+						else if (tot < totalCost) selectedBackups.add(slot);
+						updateAll.run();
+					}
+					@Override public void mouseEntered(MouseEvent e) { if (lbl.getIcon() != null) showZoomAt(url, lbl); }
+					@Override public void mouseExited(MouseEvent e)  { hideZoom(); }
+				});
+				new SwingWorker<ImageIcon, Void>() {
+					@Override protected ImageIcon doInBackground() throws Exception {
+						Image img = ImageCache.load(url);
+						return img == null ? null
+								: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+					}
+					@Override protected void done() {
+						try { ImageIcon ic = get(); if (ic != null) { lbl.setIcon(ic); lbl.setText(null); } }
+						catch (InterruptedException | ExecutionException ignored) {}
+					}
+				}.execute();
+				backupLbls.add(lbl);
+				backupSlots.add(slot);
+				backupCardsPanel.add(lbl);
+			}
+			centerPanel.add(hdr);
+			centerPanel.add(backupCardsPanel);
+		}
+
+		JLabel discardHdr = new JLabel("Hand — discard for 2 CP each:");
+		discardHdr.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+		discardHdr.setAlignmentX(Component.LEFT_ALIGNMENT);
+		JPanel discardCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+		discardCardsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+		for (int i = 0; i < hand.size(); i++) {
+			if (i == handIdx) continue;
+			final int hi = i;
+			CardData hc  = hand.get(i);
+			boolean payable = !hc.isLightOrDark();
+			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
+			lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+			lbl.setOpaque(true);
+			lbl.setBackground(payable ? Color.DARK_GRAY : new Color(50, 50, 50));
+			lbl.setForeground(Color.WHITE);
+			lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+			lbl.setBorder(BorderFactory.createLineBorder(payable ? Color.GRAY : new Color(80, 80, 80), 1));
+			lbl.setCursor(payable ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+			final String imgUrl = hc.imageUrl();
+			if (payable) {
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mousePressed(MouseEvent e) {
+						if (!selectedDiscards.remove(Integer.valueOf(hi)) && canAddDiscard[0])
+							selectedDiscards.add(hi);
+						updateAll.run();
+					}
+					@Override public void mouseEntered(MouseEvent e) { if (lbl.getIcon() != null) showZoomAt(imgUrl, lbl); }
+					@Override public void mouseExited(MouseEvent e)  { hideZoom(); }
+				});
+				discardLbls.add(lbl);
+				discardIdxs.add(hi);
+			} else {
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mouseEntered(MouseEvent e) { if (lbl.getIcon() != null) showZoomAt(imgUrl, lbl); }
+					@Override public void mouseExited(MouseEvent e)  { hideZoom(); }
+				});
+			}
+			new SwingWorker<ImageIcon, Void>() {
+				@Override protected ImageIcon doInBackground() throws Exception {
+					Image img = ImageCache.load(imgUrl);
+					return img == null ? null
+							: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+				}
+				@Override protected void done() {
+					try { ImageIcon ic = get(); if (ic != null) { lbl.setIcon(ic); lbl.setText(null); } }
+					catch (InterruptedException | ExecutionException ignored) {}
+				}
+			}.execute();
+			discardCardsPanel.add(lbl);
+		}
+		centerPanel.add(discardHdr);
+		centerPanel.add(discardCardsPanel);
+
+		JButton cancelBtn = new JButton("Cancel");
+		cancelBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		cancelBtn.addActionListener(e -> dlg.dispose());
+		confirmBtn.addActionListener(e -> {
+			dlg.dispose();
+			executeWarpPlay(card, handIdx, new ArrayList<>(selectedDiscards), new ArrayList<>(selectedBackups));
+		});
+
+		JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
+		buttonPanel.add(confirmBtn);
+		buttonPanel.add(cancelBtn);
+
+		StringBuilder costDesc = new StringBuilder();
+		boolean f = true;
+		for (Map.Entry<String, Integer> en : costByElem.entrySet()) {
+			if (!f) costDesc.append(" + ");
+			costDesc.append(en.getValue()).append(" ").append(en.getKey()).append(" CP");
+			f = false;
+		}
+		if (genericNeeded > 0) {
+			if (!f) costDesc.append(" + ");
+			costDesc.append((int) genericNeeded).append(" any CP");
+		}
+		JLabel titleLabel = new JLabel(
+				"Warp cost for: " + card.name() + "  (" + (costDesc.length() > 0 ? costDesc : "free") + ")",
+				SwingConstants.CENTER);
+		titleLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+
+		JPanel topPanel = new JPanel(new BorderLayout(0, 4));
+		topPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
+		topPanel.add(titleLabel, BorderLayout.NORTH);
+		topPanel.add(cpLabel,   BorderLayout.CENTER);
+
+		JPanel mainPanel = new JPanel(new BorderLayout(0, 4));
+		mainPanel.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 8));
+		mainPanel.add(new JScrollPane(centerPanel), BorderLayout.CENTER);
+		mainPanel.add(buttonPanel,                  BorderLayout.SOUTH);
+
+		dlg.getContentPane().setLayout(new BorderLayout());
+		dlg.getContentPane().add(topPanel,  BorderLayout.NORTH);
+		dlg.getContentPane().add(mainPanel, BorderLayout.CENTER);
+		dlg.pack();
+		dlg.setLocationRelativeTo(frame);
+		dlg.setVisible(true);
+	}
+
+	/**
+	 * Pays the Warp alternate cost (dulls backups, discards hand cards), removes the card
+	 * from hand, and places it in the Removed-From-Play zone with Warp counters.
+	 */
+	private void executeWarpPlay(CardData card, int cardHandIdx,
+			List<Integer> discardIndices, List<Integer> backupDullIndices) {
+		List<String> rawCost = card.warpCost();
+		LinkedHashMap<String, Integer> costByElem = new LinkedHashMap<>();
+		for (String e : rawCost) costByElem.merge(e, 1, Integer::sum);
+		String[] elems = costByElem.keySet().toArray(String[]::new);
+
+		for (int bi : backupDullIndices) {
+			p1BackupStates[bi] = CardState.DULLED;
+			animateDullBackup(bi, true);
+			String cpElem = matchesAnyElement(p1BackupCards[bi], elems)
+					? contributingElement(p1BackupCards[bi], elems) : elems[0];
+			gameState.addP1Cp(cpElem, 1);
+		}
+		discardIndices.sort(Collections.reverseOrder());
+		for (int di : discardIndices) {
+			CardData discarded = gameState.getP1Hand().get(di);
+			String cpElem = matchesAnyElement(discarded, elems)
+					? contributingElement(discarded, elems) : elems[0];
+			gameState.addP1Cp(cpElem, 2);
+			gameState.breakFromHand(di);
+			if (di < cardHandIdx) cardHandIdx--;
+		}
+		for (String e : elems) {
+			gameState.spendP1Cp(e, gameState.getP1CpForElement(e));
+			gameState.clearP1Cp(e);
+		}
+		gameState.removeFromHand(cardHandIdx);
+
+		gameState.addToP1WarpZone(card, card.warpValue());
+		logEntry("Played \"" + card.name() + "\" via Warp — " + card.warpValue()
+				+ " counter" + (card.warpValue() != 1 ? "s" : "") + " → Removed From Play");
+		refreshP1HandLabel();
+		refreshP1BreakLabel();
+		refreshP1WarpZoneUI();
 	}
 
 	/** Returns true if at least one P1 backup slot is currently empty. */
@@ -4874,6 +5370,7 @@ public class MainWindow {
 			logEntry("Draw Phase — Drew " + drawn.size() + " card(s)");
 			gameState.advancePhase(); // DRAW → MAIN_1
 			logEntry("Main Phase 1");
+			processWarpCounters();
 			nextPhaseButton.setEnabled(true);
 		}
 
