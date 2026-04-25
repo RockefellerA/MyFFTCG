@@ -24,6 +24,10 @@ public class GameState {
         }
     }
 
+    // --- Crystals (persistent resource; does not expire like CP) ---
+    private int p1Crystals = 0;
+    private int p2Crystals = 0;
+
     // --- P1 ---
     private final Deque<CardData>          p1MainDeck        = new ArrayDeque<>();
     private final List<CardData>           p1LbDeck          = new ArrayList<>();
@@ -59,6 +63,20 @@ public class GameState {
     // Lifecycle
     // -------------------------------------------------------------------------
 
+    // -------------------------------------------------------------------------
+    // Crystals
+    // -------------------------------------------------------------------------
+
+    public int  getP1Crystals()           { return p1Crystals; }
+    public void addP1Crystals(int n)      { p1Crystals += n; }
+    public boolean spendP1Crystals(int n) { if (p1Crystals < n) return false; p1Crystals -= n; return true; }
+
+    public int  getP2Crystals()           { return p2Crystals; }
+    public void addP2Crystals(int n)      { p2Crystals += n; }
+    public boolean spendP2Crystals(int n) { if (p2Crystals < n) return false; p2Crystals -= n; return true; }
+
+    // -------------------------------------------------------------------------
+
     /** Resets all state for a new game. */
     public void reset() {
         p1MainDeck.clear();
@@ -69,6 +87,8 @@ public class GameState {
         p1WarpZone.clear();
         p1PermanentRfp.clear();
         p1CpByElement.clear();
+        p1Crystals    = 0;
+        p2Crystals    = 0;
         p1OpeningHandPending = false;
         p1MulliganUsed       = false;
         p1GameOver           = false;
