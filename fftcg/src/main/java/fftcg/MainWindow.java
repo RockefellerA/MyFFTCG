@@ -148,6 +148,9 @@ public class MainWindow {
 	private final List<CardData>  p1ForwardPrimedTop   = new ArrayList<>();
 	private JPanel p1ForwardPanel;
 
+	/** Turn number on which each backup slot was last filled (0 = empty/unknown). */
+	private final int[] p1BackupPlayedOnTurn = new int[5];
+
 	private final List<JLabel>   p1MonsterLabels      = new ArrayList<>();
 	private final List<String>   p1MonsterUrls        = new ArrayList<>();
 	private final List<CardData> p1MonsterCards       = new ArrayList<>();
@@ -661,12 +664,12 @@ public class MainWindow {
 
 		// ── Chat bar ─────────────────────────────────────────────────────────
 		chatInput = new JTextField();
-		chatInput.setFont(loadLatinia(11));
+		chatInput.setFont(new Font("Serif", Font.PLAIN, 11));
 		chatInput.setEnabled(false);
 		chatInput.setToolTipText("Connect to multiplayer to chat");
 
 		chatSendBtn = new JButton("Send");
-		chatSendBtn.setFont(loadLatinia(11));
+		chatSendBtn.setFont(new Font("Serif", Font.PLAIN, 11));
 		chatSendBtn.setEnabled(false);
 
 		Runnable sendChat = () -> {
@@ -831,7 +834,8 @@ public class MainWindow {
 							card.cost(), card.power(), card.type(), card.isLb(), card.lbCost(), card.exBurst(),
 							card.multicard(), CardData.parseTraits(tx),
 							CardData.parseWarpValue(tx), CardData.parseWarpCost(tx),
-							CardData.parsePrimingTarget(tx), CardData.parsePrimingCost(tx));
+							CardData.parsePrimingTarget(tx), CardData.parsePrimingCost(tx),
+							CardData.parseActionAbilities(tx));
 					if (card.isLb()) lb.add(cd);
 					else             main.add(cd);
 				}
@@ -849,7 +853,8 @@ public class MainWindow {
 								card.cost(), card.power(), card.type(), card.isLb(), card.lbCost(), card.exBurst(),
 								card.multicard(), CardData.parseTraits(tx),
 								CardData.parseWarpValue(tx), CardData.parseWarpCost(tx),
-								CardData.parsePrimingTarget(tx), CardData.parsePrimingCost(tx));
+								CardData.parsePrimingTarget(tx), CardData.parsePrimingCost(tx),
+								CardData.parseActionAbilities(tx));
 						if (card.isLb()) p2Lb.add(cd);
 						else             p2Main.add(cd);
 					}
@@ -1071,19 +1076,6 @@ public class MainWindow {
 		handPanel.repaint();
 	}
 
-	private static Font loadLatinia(float size) {
-		try (java.io.InputStream is = MainWindow.class.getResourceAsStream("/resources/Latinia.ttf")) {
-			if (is != null) {
-				Font font = Font.createFont(Font.TRUETYPE_FONT, is).deriveFont(size);
-				java.awt.GraphicsEnvironment.getLocalGraphicsEnvironment().registerFont(font);
-				return font;
-			}
-			System.err.println("[Font] Latinia.ttf not found in resources — falling back to Serif");
-		} catch (Exception e) {
-			System.err.println("[Font] Failed to load Latinia.ttf: " + e.getMessage());
-		}
-		return new Font("Serif", Font.PLAIN, (int) size);
-	}
 
 	private void refreshP1DeckLabel() {
 		int count = gameState.getP1MainDeck().size();
@@ -1240,6 +1232,7 @@ public class MainWindow {
 		p1ForwardDamage.clear();
 		p1ForwardPrimedTop.clear();
 		p1AttackSelection.clear();
+		java.util.Arrays.fill(p1BackupPlayedOnTurn, 0);
 
 		// Monster zone
 		if (p1MonsterPanel != null) {
@@ -4015,9 +4008,10 @@ public class MainWindow {
 		if (p1BackupLabels == null) return;
 		for (int i = 0; i < p1BackupLabels.length; i++) {
 			if (p1BackupLabels[i] == null || p1BackupLabels[i].getIcon() != null) continue;
-			p1BackupUrls[i]   = card.imageUrl();
-			p1BackupCards[i]  = card;
-			p1BackupStates[i] = CardState.DULLED;
+			p1BackupUrls[i]          = card.imageUrl();
+			p1BackupCards[i]         = card;
+			p1BackupStates[i]        = CardState.DULLED;
+			p1BackupPlayedOnTurn[i]  = gameState.getTurnNumber();
 			refreshP1BackupSlot(i);
 			break;
 		}
@@ -4331,28 +4325,448 @@ public class MainWindow {
 	 * Shows a debug context menu for a P1 backup slot.
 	 * Only visible when Debug Mode is enabled.
 	 */
+	// -------------------------------------------------------------------------
+	// Action Ability helpers
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Returns a display label for an action ability menu item, e.g.
+	 * {@code "[Mug] Wind, Dull, S → ...effect..."} (truncated to 60 chars).
+	 */
+	private String buildAbilityMenuLabel(ActionAbility ability) {
+		StringBuilder sb = new StringBuilder();
+		if (ability.isSpecial() && !ability.abilityName().isEmpty())
+			sb.append("[").append(ability.abilityName()).append("] ");
+		sb.append("[");
+		boolean first = true;
+		if (ability.requiresDull())  { sb.append("Dull");      first = false; }
+		if (ability.isSpecial())     { if (!first) sb.append(", "); sb.append("S"); first = false; }
+		for (String e : ability.cpCost()) {
+			if (!first) sb.append(", ");
+			sb.append(e.isEmpty() ? "any" : e);
+			first = false;
+		}
+		sb.append("] → ");
+		String fx = ability.effectText();
+		sb.append(fx.length() > 55 ? fx.substring(0, 52) + "..." : fx);
+		return sb.toString();
+	}
+
+	/**
+	 * Returns {@code true} if the player can afford the CP portion of an action
+	 * ability's cost (element and generic CP only; Dull/S requirements are checked
+	 * separately in the context-menu enable logic).
+	 */
+	private boolean canAffordAbilityCost(ActionAbility ability) {
+		List<String> cost = ability.cpCost();
+		if (cost.isEmpty()) return true;
+
+		boolean hasGeneric = cost.contains("");
+		LinkedHashMap<String, Integer> needed = new LinkedHashMap<>();
+		for (String e : cost) if (!e.isEmpty()) needed.merge(e, 1, Integer::sum);
+		String[] elems = needed.keySet().toArray(String[]::new);
+		int total = cost.size();
+
+		boolean[] hasSrc = new boolean[elems.length];
+		int available = 0;
+
+		for (int ei = 0; ei < elems.length; ei++) {
+			int b = gameState.getP1CpForElement(elems[ei]);
+			available += b;
+			if (b > 0) hasSrc[ei] = true;
+		}
+		if (hasGeneric) {
+			available += gameState.getP1CpByElement().values().stream().mapToInt(Integer::intValue).sum();
+			for (int ei = 0; ei < elems.length; ei++) available -= gameState.getP1CpForElement(elems[ei]);
+		}
+		for (int i = 0; i < p1BackupCards.length; i++) {
+			if (p1BackupCards[i] == null || p1BackupStates[i] != CardState.NORMAL) continue;
+			boolean matched = false;
+			for (int ei = 0; ei < elems.length; ei++) {
+				if (p1BackupCards[i].containsElement(elems[ei])) { available++; hasSrc[ei] = true; matched = true; break; }
+			}
+			if (!matched && hasGeneric) available++;
+		}
+		List<CardData> hand = gameState.getP1Hand();
+		for (CardData h : hand) {
+			if (h.isLightOrDark()) continue;
+			available += 2;
+			for (int ei = 0; ei < elems.length; ei++) if (h.containsElement(elems[ei])) hasSrc[ei] = true;
+		}
+		for (boolean s : hasSrc) if (!s) return false;
+		return available >= total;
+	}
+
+	/**
+	 * Returns {@code true} if the player has at least one card named {@code name}
+	 * in hand (needed for Special Ability payment).
+	 */
+	private boolean hasSameNameInHand(String name) {
+		for (CardData c : gameState.getP1Hand())
+			if (name.equalsIgnoreCase(c.name())) return true;
+		return false;
+	}
+
+	/**
+	 * Returns {@code true} if {@code ability} can currently be activated by the
+	 * card at the given slot.
+	 *
+	 * @param state       current card state (NORMAL / DULLED / FROZEN / BRAVE_ATTACKED)
+	 * @param playedTurn  turn the card entered the field (0 = unknown)
+	 * @param sourceName  card name, needed for special-ability hand check
+	 */
+	private boolean canActivateAbility(ActionAbility ability, CardState state,
+			int playedTurn, String sourceName) {
+		// Frozen cards cannot activate any ability
+		if (state == CardState.FROZEN) return false;
+		// Abilities with Dull cost require the card to be in NORMAL state
+		// and not played this turn (summoning restriction)
+		if (ability.requiresDull()) {
+			if (state != CardState.NORMAL) return false;
+			if (playedTurn == gameState.getTurnNumber()) return false;
+		}
+		// Special abilities require a same-name card in hand
+		if (ability.isSpecial() && !hasSameNameInHand(sourceName)) return false;
+		return canAffordAbilityCost(ability);
+	}
+
+	/**
+	 * Adds an action-ability section to {@code menu} for all abilities on {@code card}.
+	 * Each item is enabled only when the ability is currently activatable.
+	 *
+	 * @param card        the card whose abilities to list
+	 * @param state       current field state of the card
+	 * @param playedTurn  turn the card entered the field
+	 * @param applyDull   called on confirm if the ability has a Dull cost (dulls the card)
+	 */
+	private void addAbilityMenuItems(JPopupMenu menu, CardData card, CardState state,
+			int playedTurn, Runnable applyDull) {
+		List<ActionAbility> abilities = card.actionAbilities();
+		if (abilities.isEmpty()) return;
+
+		GameState.GamePhase phase = gameState.getCurrentPhase();
+		boolean isMainPhase = phase == GameState.GamePhase.MAIN_1 || phase == GameState.GamePhase.MAIN_2;
+
+		for (ActionAbility ability : abilities) {
+			JMenuItem item = new JMenuItem(buildAbilityMenuLabel(ability));
+			item.setEnabled(isMainPhase && canActivateAbility(ability, state, playedTurn, card.name()));
+			item.addActionListener(ae ->
+					showActionAbilityPaymentDialog(ability, card, applyDull));
+			menu.add(item);
+		}
+	}
+
+	/**
+	 * Payment dialog for an action ability.  Mirrors the Priming payment dialog
+	 * but also handles Dull cost (dulls the source card) and Special cost (discards
+	 * a same-name card from hand).  On successful payment calls
+	 * {@link ActionResolver#resolve}.
+	 */
+	private void showActionAbilityPaymentDialog(ActionAbility ability, CardData source,
+			Runnable applyDull) {
+		List<String> rawCost = ability.cpCost();
+		long genericNeeded   = rawCost.stream().filter(String::isEmpty).count();
+		LinkedHashMap<String, Integer> costByElem = new LinkedHashMap<>();
+		for (String e : rawCost) if (!e.isEmpty()) costByElem.merge(e, 1, Integer::sum);
+		String[] elems  = costByElem.keySet().toArray(String[]::new);
+		int      totalCost = rawCost.size();
+
+		// If zero CP cost and only Dull/Special, confirm immediately
+		if (totalCost == 0) {
+			executeAbilityPayment(ability, source, applyDull, new ArrayList<>(), new ArrayList<>());
+			return;
+		}
+
+		JDialog dlg = new JDialog(frame, "Activate: " + source.name(), true);
+		dlg.setResizable(false);
+		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+		List<CardData> hand = gameState.getP1Hand();
+		Map<String, Integer> bankCpByElem = new LinkedHashMap<>(costByElem);
+		for (String k : bankCpByElem.keySet()) bankCpByElem.put(k, 0);
+
+		List<Integer> selectedBackups  = new ArrayList<>();
+		List<Integer> selectedDiscards = new ArrayList<>();
+
+		List<Integer> eligibleBackupSlots = new ArrayList<>();
+		for (int i = 0; i < p1BackupCards.length; i++) {
+			if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.NORMAL
+					&& (genericNeeded > 0 || matchesAnyElement(p1BackupCards[i], elems)))
+				eligibleBackupSlots.add(i);
+		}
+
+		JLabel cpLabel     = new JLabel();
+		cpLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		cpLabel.setHorizontalAlignment(SwingConstants.CENTER);
+
+		JButton confirmBtn = new JButton("Confirm");
+		confirmBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+
+		List<JLabel>  backupLbls  = new ArrayList<>();
+		List<Integer> backupSlots = new ArrayList<>();
+		List<JLabel>  discardLbls = new ArrayList<>();
+		List<Integer> discardIdxs = new ArrayList<>();
+
+		boolean[] canAddDiscard = {false};
+		Runnable updateAll = () -> {
+			Map<String, Integer> cpByElem = new LinkedHashMap<>(bankCpByElem);
+			int extraCp = 0;
+			for (int slot : selectedBackups) {
+				if (matchesAnyElement(p1BackupCards[slot], elems))
+					cpByElem.merge(contributingElement(p1BackupCards[slot], elems, cpByElem, costByElem), 1, Integer::sum);
+				else extraCp++;
+			}
+			for (int idx : selectedDiscards) {
+				if (matchesAnyElement(hand.get(idx), elems))
+					cpByElem.merge(contributingElement(hand.get(idx), elems, cpByElem, costByElem), 2, Integer::sum);
+				else extraCp += 2;
+			}
+			int total       = cpByElem.values().stream().mapToInt(Integer::intValue).sum() + extraCp;
+			int unsatisfied = (int) java.util.stream.IntStream.range(0, elems.length)
+					.filter(ei -> cpByElem.getOrDefault(elems[ei], 0) < costByElem.get(elems[ei])).count();
+			int maxAllowed  = totalCost + elems.length + (totalCost % 2);
+			boolean canAddBackup = total < totalCost;
+			canAddDiscard[0]     = (total + 2 <= maxAllowed) && (total < totalCost || unsatisfied > 0);
+			boolean satisfied    = cpByElem.entrySet().stream()
+					.allMatch(en -> en.getValue() >= costByElem.getOrDefault(en.getKey(), 0));
+			confirmBtn.setEnabled(total >= totalCost && satisfied);
+
+			StringBuilder sb = new StringBuilder("CP: " + total + " / " + totalCost + "  (");
+			boolean first = true;
+			for (String en : elems) {
+				if (!first) sb.append(", ");
+				sb.append(en).append(": ").append(cpByElem.getOrDefault(en, 0)).append("/").append(costByElem.get(en));
+				first = false;
+			}
+			if (genericNeeded > 0) {
+				if (!first) sb.append(", ");
+				sb.append("any: ").append(Math.min(extraCp, (int) genericNeeded)).append("/").append((int) genericNeeded);
+			}
+			if (first) sb.append("free");
+			sb.append(")");
+			cpLabel.setText(sb.toString());
+
+			for (int i = 0; i < backupLbls.size(); i++) {
+				JLabel lbl = backupLbls.get(i); boolean sel = selectedBackups.contains(backupSlots.get(i));
+				lbl.setBorder(BorderFactory.createLineBorder(sel ? Color.YELLOW : (canAddBackup ? Color.GRAY : new Color(80,80,80)), sel?3:1));
+				lbl.setBackground(sel || canAddBackup ? Color.DARK_GRAY : new Color(50,50,50));
+				lbl.setCursor(sel || canAddBackup ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+			}
+			for (int i = 0; i < discardLbls.size(); i++) {
+				JLabel lbl = discardLbls.get(i); boolean sel = selectedDiscards.contains(discardIdxs.get(i));
+				lbl.setBorder(BorderFactory.createLineBorder(sel ? Color.YELLOW : (canAddDiscard[0] ? Color.GRAY : new Color(80,80,80)), sel?3:1));
+				lbl.setBackground(sel || canAddDiscard[0] ? Color.DARK_GRAY : new Color(50,50,50));
+				lbl.setCursor(sel || canAddDiscard[0] ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+			}
+		};
+		updateAll.run();
+
+		JPanel center = new JPanel();
+		center.setLayout(new BoxLayout(center, BoxLayout.Y_AXIS));
+
+		if (!eligibleBackupSlots.isEmpty()) {
+			JLabel hdr = new JLabel("Backups — dull for 1 CP each:");
+			hdr.setFont(new Font("Pixel NES", Font.PLAIN, 9)); hdr.setAlignmentX(Component.LEFT_ALIGNMENT);
+			JPanel bp = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6)); bp.setAlignmentX(Component.LEFT_ALIGNMENT);
+			for (int slot : eligibleBackupSlots) {
+				JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+				lbl.setPreferredSize(new Dimension(CARD_W, CARD_H)); lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+				lbl.setOpaque(true); lbl.setBackground(Color.DARK_GRAY); lbl.setForeground(Color.WHITE);
+				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10)); lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
+				lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+				final String url = p1BackupUrls[slot];
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mousePressed(MouseEvent ev) {
+						int tot = bankCpByElem.values().stream().mapToInt(Integer::intValue).sum() + selectedBackups.size() + selectedDiscards.size() * 2;
+						if (selectedBackups.remove(Integer.valueOf(slot))) { /* deselect */ } else if (tot < totalCost) selectedBackups.add(slot);
+						updateAll.run();
+					}
+					@Override public void mouseEntered(MouseEvent ev) { if (lbl.getIcon() != null) showZoomAt(url, lbl); }
+					@Override public void mouseExited(MouseEvent ev)  { hideZoom(); }
+				});
+				new SwingWorker<ImageIcon, Void>() {
+					@Override protected ImageIcon doInBackground() throws Exception {
+						Image img = ImageCache.load(url);
+						return img == null ? null : new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+					}
+					@Override protected void done() {
+						try { ImageIcon ic = get(); if (ic != null) { lbl.setIcon(ic); lbl.setText(null); } }
+						catch (InterruptedException | ExecutionException ignored) {}
+					}
+				}.execute();
+				backupLbls.add(lbl); backupSlots.add(slot); bp.add(lbl);
+			}
+			center.add(hdr); center.add(bp);
+		}
+
+		JLabel discHdr = new JLabel("Hand — discard for 2 CP each:");
+		discHdr.setFont(new Font("Pixel NES", Font.PLAIN, 9)); discHdr.setAlignmentX(Component.LEFT_ALIGNMENT);
+		JPanel dp = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6)); dp.setAlignmentX(Component.LEFT_ALIGNMENT);
+		for (int i = 0; i < hand.size(); i++) {
+			final int hi = i; CardData hc = hand.get(i); boolean payable = !hc.isLightOrDark();
+			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H)); lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+			lbl.setOpaque(true); lbl.setBackground(payable ? Color.DARK_GRAY : new Color(50,50,50));
+			lbl.setForeground(Color.WHITE); lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+			lbl.setBorder(BorderFactory.createLineBorder(payable ? Color.GRAY : new Color(80,80,80), 1));
+			lbl.setCursor(payable ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+			final String imgUrl = hc.imageUrl();
+			if (payable) {
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mousePressed(MouseEvent ev) {
+						if (!selectedDiscards.remove(Integer.valueOf(hi)) && canAddDiscard[0]) selectedDiscards.add(hi);
+						updateAll.run();
+					}
+					@Override public void mouseEntered(MouseEvent ev) { if (lbl.getIcon() != null) showZoomAt(imgUrl, lbl); }
+					@Override public void mouseExited(MouseEvent ev)  { hideZoom(); }
+				});
+				discardLbls.add(lbl); discardIdxs.add(hi);
+			} else {
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mouseEntered(MouseEvent ev) { if (lbl.getIcon() != null) showZoomAt(imgUrl, lbl); }
+					@Override public void mouseExited(MouseEvent ev)  { hideZoom(); }
+				});
+			}
+			new SwingWorker<ImageIcon, Void>() {
+				@Override protected ImageIcon doInBackground() throws Exception {
+					Image img = ImageCache.load(imgUrl);
+					return img == null ? null : new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+				}
+				@Override protected void done() {
+					try { ImageIcon ic = get(); if (ic != null) { lbl.setIcon(ic); lbl.setText(null); } }
+					catch (InterruptedException | ExecutionException ignored) {}
+				}
+			}.execute();
+			dp.add(lbl);
+		}
+		center.add(discHdr); center.add(dp);
+
+		JButton cancelBtn = new JButton("Cancel");
+		cancelBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		cancelBtn.addActionListener(ev -> dlg.dispose());
+		confirmBtn.addActionListener(ev -> {
+			dlg.dispose();
+			executeAbilityPayment(ability, source, applyDull,
+					new ArrayList<>(selectedDiscards), new ArrayList<>(selectedBackups));
+		});
+
+		JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
+		buttonPanel.add(confirmBtn); buttonPanel.add(cancelBtn);
+
+		// Build cost summary for title
+		StringBuilder costDesc = new StringBuilder();
+		boolean cf = true;
+		if (ability.requiresDull()) { costDesc.append("Dull"); cf = false; }
+		if (ability.isSpecial())    { if (!cf) costDesc.append(" + "); costDesc.append("S (discard ").append(source.name()).append(")"); cf = false; }
+		for (Map.Entry<String, Integer> en : costByElem.entrySet()) {
+			if (!cf) costDesc.append(" + ");
+			costDesc.append(en.getValue()).append(" ").append(en.getKey()).append(" CP"); cf = false;
+		}
+		if (genericNeeded > 0) { if (!cf) costDesc.append(" + "); costDesc.append((int) genericNeeded).append(" any CP"); }
+
+		JLabel titleLabel = new JLabel(
+				"<html><center>" + source.name() + " — " + (costDesc.length() > 0 ? costDesc : "free") + "</center></html>",
+				SwingConstants.CENTER);
+		titleLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+
+		JPanel topPanel = new JPanel(new BorderLayout(0, 4));
+		topPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
+		topPanel.add(titleLabel, BorderLayout.NORTH);
+		topPanel.add(cpLabel,   BorderLayout.CENTER);
+
+		JPanel mainPanel = new JPanel(new BorderLayout(0, 4));
+		mainPanel.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 8));
+		mainPanel.add(new JScrollPane(center), BorderLayout.CENTER);
+		mainPanel.add(buttonPanel,             BorderLayout.SOUTH);
+
+		dlg.getContentPane().setLayout(new BorderLayout());
+		dlg.getContentPane().add(topPanel,  BorderLayout.NORTH);
+		dlg.getContentPane().add(mainPanel, BorderLayout.CENTER);
+		dlg.pack(); dlg.setLocationRelativeTo(frame); dlg.setVisible(true);
+	}
+
+	/**
+	 * Executes the full payment for an action ability: dulls selected backups,
+	 * discards hand cards for CP, optionally dulls the source card, optionally
+	 * discards a same-name card (Special), then calls {@link ActionResolver#resolve}.
+	 */
+	private void executeAbilityPayment(ActionAbility ability, CardData source,
+			Runnable applyDull, List<Integer> discardIndices, List<Integer> backupDullIndices) {
+		List<String> rawCost = ability.cpCost();
+		LinkedHashMap<String, Integer> costByElem = new LinkedHashMap<>();
+		for (String e : rawCost) if (!e.isEmpty()) costByElem.merge(e, 1, Integer::sum);
+		String[] elems = costByElem.keySet().toArray(String[]::new);
+
+		for (int bi : backupDullIndices) {
+			p1BackupStates[bi] = CardState.DULLED;
+			animateDullBackup(bi, true);
+			String cpElem = matchesAnyElement(p1BackupCards[bi], elems)
+					? contributingElement(p1BackupCards[bi], elems) : (elems.length > 0 ? elems[0] : "");
+			if (!cpElem.isEmpty()) gameState.addP1Cp(cpElem, 1);
+		}
+		discardIndices.sort(Collections.reverseOrder());
+		for (int di : discardIndices) {
+			CardData discarded = gameState.getP1Hand().get(di);
+			String cpElem = matchesAnyElement(discarded, elems)
+					? contributingElement(discarded, elems) : (elems.length > 0 ? elems[0] : "");
+			if (!cpElem.isEmpty()) gameState.addP1Cp(cpElem, 2);
+			gameState.breakFromHand(di);
+		}
+		for (String e : elems) { gameState.spendP1Cp(e, gameState.getP1CpForElement(e)); gameState.clearP1Cp(e); }
+
+		// Dull source card
+		if (ability.requiresDull()) applyDull.run();
+
+		// Special: discard first same-name card from hand
+		if (ability.isSpecial()) {
+			List<CardData> hand = gameState.getP1Hand();
+			for (int i = 0; i < hand.size(); i++) {
+				if (source.name().equalsIgnoreCase(hand.get(i).name())) {
+					gameState.breakFromHand(i);
+					logEntry("Special: discarded \"" + source.name() + "\" from hand");
+					break;
+				}
+			}
+		}
+
+		logEntry("\"" + source.name() + "\" activated ability");
+		ActionResolver.resolve(ability, source, gameState);
+		refreshP1HandLabel();
+		refreshP1BreakLabel();
+	}
+
+	// -------------------------------------------------------------------------
+
 	private void showBackupContextMenu(int idx, JLabel slot, MouseEvent e) {
-		if (!AppSettings.isDebugMode()) return;
 		JPopupMenu menu = new JPopupMenu();
 
-		JMenuItem dullItem = new JMenuItem("Debug: Dull");
-		dullItem.addActionListener(ae -> {
-			boolean dulling = p1BackupStates[idx] != CardState.DULLED;
-			p1BackupStates[idx] = dulling ? CardState.DULLED : CardState.NORMAL;
-			animateDullBackup(idx, dulling);
-		});
-		menu.add(dullItem);
+		CardData card = p1BackupCards[idx];
+		if (card != null) {
+			addAbilityMenuItems(menu, card, p1BackupStates[idx], p1BackupPlayedOnTurn[idx],
+					() -> { p1BackupStates[idx] = CardState.DULLED; animateDullBackup(idx, true); });
+		}
 
-		JMenuItem freezeItem = new JMenuItem("Debug: Freeze");
-		freezeItem.addActionListener(ae -> {
-			boolean freezing = p1BackupStates[idx] != CardState.FROZEN;
-			CardState prevState = p1BackupStates[idx];
-			p1BackupStates[idx] = freezing ? CardState.FROZEN : CardState.NORMAL;
-			animateFreezeBackup(idx, freezing, prevState);
-		});
-		menu.add(freezeItem);
+		if (AppSettings.isDebugMode()) {
+			if (menu.getComponentCount() > 0) menu.addSeparator();
+			JMenuItem dullItem = new JMenuItem("Debug: Dull");
+			dullItem.addActionListener(ae -> {
+				boolean dulling = p1BackupStates[idx] != CardState.DULLED;
+				p1BackupStates[idx] = dulling ? CardState.DULLED : CardState.NORMAL;
+				animateDullBackup(idx, dulling);
+			});
+			menu.add(dullItem);
 
-		menu.show(slot, e.getX(), e.getY());
+			JMenuItem freezeItem = new JMenuItem("Debug: Freeze");
+			freezeItem.addActionListener(ae -> {
+				boolean freezing = p1BackupStates[idx] != CardState.FROZEN;
+				CardState prevState = p1BackupStates[idx];
+				p1BackupStates[idx] = freezing ? CardState.FROZEN : CardState.NORMAL;
+				animateFreezeBackup(idx, freezing, prevState);
+			});
+			menu.add(freezeItem);
+		}
+
+		if (menu.getComponentCount() > 0) menu.show(slot, e.getX(), e.getY());
 	}
 
 
@@ -4535,6 +4949,11 @@ public class MainWindow {
 	/** Shows a context menu for a P1 monster slot. */
 	private void showMonsterContextMenu(int idx, JLabel slot, MouseEvent e) {
 		JPopupMenu menu = new JPopupMenu();
+
+		// Action abilities
+		addAbilityMenuItems(menu, p1MonsterCards.get(idx), p1MonsterStates.get(idx),
+				p1MonsterPlayedOnTurn.get(idx),
+				() -> { p1MonsterStates.set(idx, CardState.DULLED); refreshP1MonsterSlot(idx); });
 
 		if (AppSettings.isDebugMode()) {
 			JMenuItem dullItem = new JMenuItem("Debug: Dull");
@@ -4754,6 +5173,13 @@ public class MainWindow {
 	/** Shows a context menu for a P1 forward slot. */
 	private void showForwardContextMenu(int idx, JLabel slot, MouseEvent e) {
 		JPopupMenu menu = new JPopupMenu();
+
+		// Action abilities (use effective card — top card when primed)
+		CardData effectiveFwd = p1ForwardPrimedTop.get(idx) != null
+				? p1ForwardPrimedTop.get(idx) : p1ForwardCards.get(idx);
+		addAbilityMenuItems(menu, effectiveFwd, p1ForwardStates.get(idx),
+				p1ForwardPlayedOnTurn.get(idx),
+				() -> { p1ForwardStates.set(idx, CardState.DULLED); refreshP1ForwardSlot(idx); });
 
 		// Prime — visible whenever the forward has the Priming trait
 		CardData fwd = p1ForwardCards.get(idx);

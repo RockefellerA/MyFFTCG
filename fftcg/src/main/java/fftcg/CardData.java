@@ -28,7 +28,8 @@ public record CardData(
         int    warpValue,
         List<String> warpCost,
         String primingTarget,
-        List<String> primingCost
+        List<String> primingCost,
+        List<ActionAbility> actionAbilities
 ) {
 
     public Set<Trait> getTraits() {
@@ -45,9 +46,10 @@ public record CardData(
 
     /** Defensive copy — collection fields are always immutable after construction. */
     public CardData {
-        traits     = Set.copyOf(traits);
-        warpCost   = List.copyOf(warpCost);
-        primingCost = List.copyOf(primingCost);
+        traits          = Set.copyOf(traits);
+        warpCost        = List.copyOf(warpCost);
+        primingCost     = List.copyOf(primingCost);
+        actionAbilities = List.copyOf(actionAbilities);
     }
 
     // Haste: start with [[br]] or (This descriptor, middle [[br]]…[[br]], or paired with other keywords
@@ -155,6 +157,72 @@ public record CardData(
             } else {
                 result.add(ELEM_SYM.getOrDefault(sym.toUpperCase(), sym));
             }
+        }
+        return List.copyOf(result);
+    }
+
+    // -------------------------------------------------------------------------
+    // Action / Special Ability parsing
+    // -------------------------------------------------------------------------
+
+    /**
+     * Matches action abilities in card text.  The groups are:
+     * <ol>
+     *   <li>Special ability name (optional) — content of {@code [[s]]…[[/]]}</li>
+     *   <li>Raw cost section — one or more {@code 《token》} sequences</li>
+     *   <li>Effect text — everything after {@code :} up to the next markup tag or end</li>
+     * </ol>
+     * The leading {@code [[s]]name[[/]]} is optional so that regular (unnamed)
+     * action abilities are matched by the same pattern.
+     */
+    private static final Pattern ACTION_ABILITY_PATTERN = Pattern.compile(
+        "(?:(?i)\\[\\[s\\]\\]\\s*([^\\[]+?)\\s*\\[\\[/\\]\\]\\s*)?" + // optional [[s]]Name[[/]]
+        "((?:《[^》]*》\\s*)+)"                                        + // one or more 《cost》 tokens
+        ":\\s*"                                                        + // colon separator
+        "([^\\[]*)"                                                      // effect text (up to next markup)
+    );
+
+    /**
+     * Parses all Action and Special Abilities from {@code textEn}.
+     *
+     * <p>Each ability follows the format {@code [[[s]]Name[[/]]] CostTokens: EffectText}.
+     * {@code 《Dull》} tokens set {@link ActionAbility#requiresDull()};
+     * {@code 《S》} tokens and the presence of {@code [[s]]…[[/]]} set
+     * {@link ActionAbility#isSpecial()}.
+     * All other tokens are mapped to element names via {@link #ELEM_SYM}, with numeric
+     * tokens expanding to that many generic {@code ""} entries in {@link ActionAbility#cpCost()}.
+     */
+    public static List<ActionAbility> parseActionAbilities(String textEn) {
+        if (textEn == null || textEn.isBlank()) return List.of();
+        List<ActionAbility> result = new ArrayList<>();
+        Matcher m = ACTION_ABILITY_PATTERN.matcher(textEn);
+        while (m.find()) {
+            String rawName   = m.group(1);
+            String costPart  = m.group(2);
+            String effectRaw = m.group(3).trim();
+            if (effectRaw.isEmpty()) continue;  // cost with no effect — skip (e.g. trait lines)
+
+            String  abilityName  = rawName != null ? rawName.trim() : "";
+            boolean isSpecial    = !abilityName.isEmpty();
+            boolean requiresDull = false;
+            List<String> cpCost  = new ArrayList<>();
+
+            Matcher cpM = CP_TOKEN.matcher(costPart);
+            while (cpM.find()) {
+                String sym = cpM.group(1).trim();
+                if ("Dull".equalsIgnoreCase(sym)) {
+                    requiresDull = true;
+                } else if ("S".equalsIgnoreCase(sym)) {
+                    isSpecial = true;
+                } else if (sym.matches("\\d+")) {
+                    int n = Integer.parseInt(sym);
+                    for (int i = 0; i < n; i++) cpCost.add("");
+                } else {
+                    cpCost.add(ELEM_SYM.getOrDefault(sym.toUpperCase(), sym));
+                }
+            }
+
+            result.add(new ActionAbility(abilityName, requiresDull, isSpecial, cpCost, effectRaw));
         }
         return List.copyOf(result);
     }
