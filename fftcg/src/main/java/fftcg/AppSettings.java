@@ -93,4 +93,19 @@ public final class AppSettings {
     public static void setSidePanelSide(String side) {
         props.setProperty("side.panel.side", side);
     }
+
+    /**
+     * Returns the saved side-panel pixel width, or {@code defaultW} if no value
+     * has been persisted yet.
+     */
+    public static int getSidePanelWidth(int defaultW) {
+        String v = props.getProperty("side.panel.width");
+        if (v == null) return defaultW;
+        try { return Integer.parseInt(v); } catch (NumberFormatException e) { return defaultW; }
+    }
+
+    /** Saves the side-panel pixel width (call {@link #save()} to persist). */
+    public static void setSidePanelWidth(int w) {
+        props.setProperty("side.panel.width", String.valueOf(w));
+    }
 }

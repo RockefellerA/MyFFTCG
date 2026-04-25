@@ -224,6 +224,12 @@ public class MainWindow {
 		frame.setLocationRelativeTo(null);
 		frame.setResizable(false);
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		frame.addWindowListener(new java.awt.event.WindowAdapter() {
+			@Override public void windowClosing(java.awt.event.WindowEvent e) {
+				AppSettings.setSidePanelWidth(sidePanelW);
+				AppSettings.save();
+			}
+		});
 		frame.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 		frame.getContentPane().setLayout(new BorderLayout());
 
@@ -2644,7 +2650,11 @@ public class MainWindow {
 		nativeImgH    = imgH;
 		minSidePanelW = (int)(imgW * 0.75) + SIDE_MARGIN;
 		maxSidePanelW = imgW + SIDE_MARGIN;
-		setSidePanelWidth((int)(imgW * PREVIEW_SCALE) + SIDE_MARGIN);
+		int defaultW  = (int)(imgW * PREVIEW_SCALE) + SIDE_MARGIN;
+		int savedW    = AppSettings.getSidePanelWidth(defaultW);
+		// Clamp to valid range; fall back to default if saved value is out of bounds
+		int initialW  = (savedW >= minSidePanelW && savedW <= maxSidePanelW) ? savedW : defaultW;
+		setSidePanelWidth(initialW);
 	}
 
 	private void setSidePanelWidth(int w) {

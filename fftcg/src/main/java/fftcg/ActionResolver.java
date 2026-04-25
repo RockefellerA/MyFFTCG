@@ -35,7 +35,7 @@ public class ActionResolver {
     private static final Pattern DEAL_DAMAGE_TO_FORWARDS = Pattern.compile(
         "(?i)Deal\\s+(?<amount>\\d+)\\s+damage\\s+to\\s+all(?:\\s+the)?\\s+" +
         "(?:(?<condition>damaged|dull(?:ed)?)\\s+)?" +
-        "Forwards?(?:\\s+(?<opponent>your\\s+opponent\\s+controls))?"
+        "Forwards?(?:\\s+(?<opponent>opponent\\s+controls))?"
     );
 
     // -------------------------------------------------------------------------
