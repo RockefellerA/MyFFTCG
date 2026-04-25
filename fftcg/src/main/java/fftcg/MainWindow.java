@@ -4730,7 +4730,47 @@ public class MainWindow {
 		}
 
 		logEntry("\"" + source.name() + "\" activated ability");
-		ActionResolver.resolve(ability, source, gameState);
+
+		// Build a GameContext so ActionResolver can apply field effects without
+		// direct access to MainWindow's private fields.
+		GameContext ctx = new GameContext() {
+			@Override public void logEntry(String msg) { MainWindow.this.logEntry(msg); }
+
+			@Override public int p1ForwardCount()                    { return p1ForwardCards.size(); }
+			@Override public CardData p1Forward(int idx) {
+				CardData top = p1ForwardPrimedTop.get(idx);
+				return top != null ? top : p1ForwardCards.get(idx);
+			}
+			@Override public int       p1ForwardCurrentDamage(int idx) { return p1ForwardDamage.get(idx); }
+			@Override public CardState p1ForwardState(int idx)          { return p1ForwardStates.get(idx); }
+			@Override public void damageP1Forward(int idx, int amount) {
+				if (idx >= p1ForwardCards.size()) return;
+				int dmg = p1ForwardDamage.get(idx) + amount;
+				p1ForwardDamage.set(idx, dmg);
+				CardData eff = p1Forward(idx);
+				logEntry(eff.name() + " takes " + amount + " damage"
+						+ (eff.power() > 0 ? " (" + (eff.power() - dmg) + " remaining)" : ""));
+				if (eff.power() > 0 && dmg >= eff.power()) breakP1Forward(idx);
+				else refreshP1ForwardSlot(idx);
+			}
+
+			@Override public int p2ForwardCount()                    { return p2ForwardCards.size(); }
+			@Override public CardData p2Forward(int idx)             { return p2ForwardCards.get(idx); }
+			@Override public int       p2ForwardCurrentDamage(int idx) { return p2ForwardDamage.get(idx); }
+			@Override public CardState p2ForwardState(int idx)          { return p2ForwardStates.get(idx); }
+			@Override public void damageP2Forward(int idx, int amount) {
+				if (idx >= p2ForwardCards.size()) return;
+				int dmg = p2ForwardDamage.get(idx) + amount;
+				p2ForwardDamage.set(idx, dmg);
+				CardData card = p2ForwardCards.get(idx);
+				logEntry("[P2] " + card.name() + " takes " + amount + " damage"
+						+ (card.power() > 0 ? " (" + (card.power() - dmg) + " remaining)" : ""));
+				if (card.power() > 0 && dmg >= card.power()) breakP2Forward(idx);
+				else refreshP2ForwardSlot(idx);
+			}
+		};
+
+		ActionResolver.resolve(ability, source, gameState, ctx);
 		refreshP1HandLabel();
 		refreshP1BreakLabel();
 	}
