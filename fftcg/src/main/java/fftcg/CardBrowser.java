@@ -20,7 +20,6 @@ import scraper.CardScraper;
 
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
-import javax.swing.JWindow;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
@@ -56,6 +55,9 @@ public class CardBrowser extends JDialog {
     private static final Color LB_BG = new Color(50, 50, 50);
     private static final Color LB_FG = new Color(0xFF, 0xD7, 0x00);
 
+    private static final int PREVIEW_W = 429;
+    private static final int PREVIEW_H = 600;
+
     /** Sorts serials numerically on the set prefix (e.g. "9-001C" before "10-001H"). */
     private static final java.util.Comparator<Object> SERIAL_ORDER = (a, b) -> {
         String sa = a == null ? "" : a.toString();
@@ -71,19 +73,15 @@ public class CardBrowser extends JDialog {
         return sa.compareTo(sb);
     };
 
-    private static final int ZOOM_POSITION_OFFSET = 6;
-
     private final DefaultTableModel tableModel;
     private final JLabel cardImageLabel;
     private final JLabel countLabel;
     private TableRowSorter<DefaultTableModel> sorter;
     private final Set<String> lbSerials = new HashSet<>();
-    private JWindow zoomPopup;
-    private String currentImageUrl;
 
     public CardBrowser(JFrame parent) {
         super(parent, "Card Browser", true);
-        setSize(1200, 700);
+        setSize(960 + PREVIEW_W, PREVIEW_H + 100);
         setLocationRelativeTo(parent);
         setLayout(new BorderLayout());
 
@@ -120,6 +118,14 @@ public class CardBrowser extends JDialog {
         cardTable.setRowSorter(sorter);
         // Hide the Card Text column from the view (still searchable via model index 10)
         cardTable.removeColumn(cardTable.getColumnModel().getColumn(10));
+
+        // Narrow the Cost (4), Power (5), and Rarity (6) columns to roughly half their default width
+        cardTable.getColumnModel().getColumn(4).setPreferredWidth(50);
+        cardTable.getColumnModel().getColumn(4).setMaxWidth(60);
+        cardTable.getColumnModel().getColumn(5).setPreferredWidth(60);
+        cardTable.getColumnModel().getColumn(5).setMaxWidth(70);
+        cardTable.getColumnModel().getColumn(6).setPreferredWidth(55);
+        cardTable.getColumnModel().getColumn(6).setMaxWidth(65);
 
         // Grey out empty cells in Job (7), Category 1 (8), Category 2 (9)
         DefaultTableCellRenderer greyIfEmpty = new DefaultTableCellRenderer() {
@@ -160,7 +166,7 @@ public class CardBrowser extends JDialog {
 
         JComboBox<String> columnDropdown = new JComboBox<>(columnChoices);
         JTextField searchField = new JTextField(20);
-        JButton searchButton = new JButton("\uD83D\uDD0D"); // 🔍
+        JButton searchButton = new JButton("🔍"); // 🔍
         JButton clearButton  = new JButton("✕");
 
         searchButton.addActionListener(e -> applyFilter(searchField.getText(), columnDropdown.getSelectedIndex()));
@@ -169,7 +175,6 @@ public class CardBrowser extends JDialog {
             sorter.setRowFilter(null);
             updateCount();
         });
-        // Also trigger search on Enter in the text field
         searchField.addActionListener(e -> applyFilter(searchField.getText(), columnDropdown.getSelectedIndex()));
 
         // --- Update button + spinner ---
@@ -199,20 +204,16 @@ public class CardBrowser extends JDialog {
         searchPanel.add(updateButton);
         searchPanel.add(spinner);
 
-        // --- Card image preview ---
+        // --- Full-size card image preview ---
         cardImageLabel = new JLabel("Select a card to preview", SwingConstants.CENTER);
-        cardImageLabel.setPreferredSize(new Dimension(220, 309));
+        cardImageLabel.setPreferredSize(new Dimension(PREVIEW_W, PREVIEW_H));
         cardImageLabel.setBorder(BorderFactory.createEtchedBorder());
-        cardImageLabel.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override public void mouseEntered(java.awt.event.MouseEvent e) { showZoom(); }
-            @Override public void mouseExited(java.awt.event.MouseEvent e)  { hideZoom(); }
-        });
 
         JPanel imagePanel = new JPanel(new BorderLayout());
-        imagePanel.setPreferredSize(new Dimension(240, 309));
+        imagePanel.setPreferredSize(new Dimension(PREVIEW_W + 10, PREVIEW_H));
         imagePanel.add(cardImageLabel, BorderLayout.CENTER);
 
-        // Show card image when a row is selected
+        // Update preview on row selection (mouse click or keyboard navigation)
         cardTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 int row = cardTable.getSelectedRow();
@@ -236,12 +237,9 @@ public class CardBrowser extends JDialog {
         add(southPanel, BorderLayout.SOUTH);
 
         getRootPane().registerKeyboardAction(
-                e -> { hideZoom(); dispose(); },
+                e -> dispose(),
                 KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
                 JComponent.WHEN_IN_FOCUSED_WINDOW);
-        addWindowListener(new java.awt.event.WindowAdapter() {
-            @Override public void windowClosing(java.awt.event.WindowEvent e) { hideZoom(); }
-        });
 
         SwingWorker<Void, Void> initWorker = new SwingWorker<Void, Void>() {
             @Override
@@ -293,10 +291,8 @@ public class CardBrowser extends JDialog {
         } else {
             String regex = "(?i)" + Pattern.quote(text.trim());
             if (columnDropdownIndex == 0) {
-                // All columns
                 sorter.setRowFilter(RowFilter.regexFilter(regex));
             } else {
-                // Specific column (dropdown index 1 = COLUMNS index 0)
                 sorter.setRowFilter(RowFilter.regexFilter(regex, columnDropdownIndex - 1));
             }
         }
@@ -341,59 +337,11 @@ public class CardBrowser extends JDialog {
         updateCount();
     }
 
-    private void showZoom() {
-        if (currentImageUrl == null) return;
-        final String urlToFetch = currentImageUrl;
-
-        if (zoomPopup == null) zoomPopup = new JWindow(this);
-
-        new SwingWorker<ImageIcon, Void>() {
-            @Override
-            protected ImageIcon doInBackground() throws Exception {
-                Image img = ImageCache.load(urlToFetch);
-                return img != null ? new ImageIcon(img) : null;
-            }
-            @Override
-            protected void done() {
-                // Abort if the user already moused out or switched cards
-                if (!urlToFetch.equals(currentImageUrl) || zoomPopup == null) return;
-                try {
-                    ImageIcon icon = get();
-                    if (icon == null) return;
-
-                    JLabel zoomLabel = new JLabel(icon);
-                    zoomLabel.setBorder(BorderFactory.createRaisedBevelBorder());
-
-                    zoomPopup.getContentPane().removeAll();
-                    zoomPopup.getContentPane().add(zoomLabel);
-                    zoomPopup.pack();
-
-                    int w = icon.getIconWidth();
-                    int h = icon.getIconHeight();
-                    java.awt.Point loc = cardImageLabel.getLocationOnScreen();
-                    int x = loc.x - w - ZOOM_POSITION_OFFSET;
-                    int y = loc.y + (cardImageLabel.getHeight() - h) / 2;
-                    java.awt.Dimension screen = java.awt.Toolkit.getDefaultToolkit().getScreenSize();
-                    y = Math.max(0, Math.min(y, screen.height - h));
-                    zoomPopup.setLocation(x, y);
-                    zoomPopup.setVisible(true);
-                } catch (InterruptedException | ExecutionException ignored) {}
-            }
-        }.execute();
-    }
-
-    private void hideZoom() {
-        if (zoomPopup != null) zoomPopup.setVisible(false);
-    }
-
     private void loadCardImageAsync(String serial) {
         cardImageLabel.setIcon(null);
         cardImageLabel.setText("Loading…");
-        currentImageUrl = null;
 
         new SwingWorker<ImageIcon, Void>() {
-            private String fetchedUrl;
-
             @Override
             protected ImageIcon doInBackground() throws Exception {
                 try (Connection conn = DriverManager.getConnection(DB_URL);
@@ -402,11 +350,12 @@ public class CardBrowser extends JDialog {
                     ps.setString(1, serial);
                     try (ResultSet rs = ps.executeQuery()) {
                         if (rs.next()) {
-                            fetchedUrl = rs.getString("image_url");
-                            if (fetchedUrl != null && !fetchedUrl.isBlank()) {
-                                Image img = ImageCache.load(fetchedUrl);
+                            String url = rs.getString("image_url");
+                            if (url != null && !url.isBlank()) {
+                                Image img = ImageCache.load(url);
                                 if (img != null) {
-                                    return new ImageIcon(img.getScaledInstance(220, 309, Image.SCALE_SMOOTH));
+                                    return new ImageIcon(
+                                            img.getScaledInstance(PREVIEW_W, PREVIEW_H, Image.SCALE_SMOOTH));
                                 }
                             }
                         }
@@ -420,11 +369,9 @@ public class CardBrowser extends JDialog {
                 try {
                     ImageIcon icon = get();
                     if (icon != null) {
-                        currentImageUrl = fetchedUrl;
                         cardImageLabel.setIcon(icon);
                         cardImageLabel.setText(null);
                     } else {
-                        currentImageUrl = null;
                         cardImageLabel.setIcon(null);
                         cardImageLabel.setText("No image available");
                     }
