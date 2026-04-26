@@ -82,4 +82,10 @@ public interface GameContext {
 
     /** Dulls P2's forward at {@code idx} and refreshes its slot. */
     void dullP2Forward(int idx);
+
+    /** Freezes P1's forward at {@code idx} (blue tint; skips activation next Active Phase). */
+    void freezeP1Forward(int idx);
+
+    /** Freezes P2's forward at {@code idx} (blue tint; skips activation next Active Phase). */
+    void freezeP2Forward(int idx);
 }

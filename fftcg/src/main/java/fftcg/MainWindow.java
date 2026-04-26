@@ -147,7 +147,12 @@ public class MainWindow {
 	private final List<Integer>   p1ForwardPlayedOnTurn = new ArrayList<>();
 	private final List<Integer>   p1ForwardDamage       = new ArrayList<>();
 	/** Top card of a Primed stack; {@code null} at each index means not primed. */
-	private final List<CardData>  p1ForwardPrimedTop   = new ArrayList<>();
+	private final List<CardData>  p1ForwardPrimedTop      = new ArrayList<>();
+	/** Per-slot state saved before a Freeze was applied; {@code null} = not frozen via ability. */
+	private final List<CardState> p1ForwardPreFreezeState = new ArrayList<>();
+	private final List<CardState> p2ForwardPreFreezeState = new ArrayList<>();
+	private final CardState[]     p1BackupPreFreezeState  = new CardState[5];
+	private final CardState[]     p2BackupPreFreezeState  = new CardState[5];
 	private JPanel p1ForwardPanel;
 
 	/** Turn number on which each backup slot was last filled (0 = empty/unknown). */
@@ -1268,8 +1273,10 @@ public class MainWindow {
 		p1ForwardPlayedOnTurn.clear();
 		p1ForwardDamage.clear();
 		p1ForwardPrimedTop.clear();
+		p1ForwardPreFreezeState.clear();
 		p1AttackSelection.clear();
 		java.util.Arrays.fill(p1BackupPlayedOnTurn, 0);
+		java.util.Arrays.fill(p1BackupPreFreezeState, null);
 
 		// Monster zone
 		if (p1MonsterPanel != null) {
@@ -1322,9 +1329,10 @@ public class MainWindow {
 				p2BackupLabels[i].setIcon(null);
 				p2BackupLabels[i].setText(null);
 			}
-			p2BackupUrls[i]   = null;
-			p2BackupCards[i]  = null;
-			p2BackupStates[i] = CardState.NORMAL;
+			p2BackupUrls[i]              = null;
+			p2BackupCards[i]             = null;
+			p2BackupStates[i]            = CardState.NORMAL;
+			p2BackupPreFreezeState[i]    = null;
 		}
 
 		// P2 forward zone
@@ -1339,6 +1347,8 @@ public class MainWindow {
 		p2ForwardStates.clear();
 		p2ForwardPlayedOnTurn.clear();
 		p2ForwardDamage.clear();
+		p2ForwardPreFreezeState.clear();
+		java.util.Arrays.fill(p2BackupPreFreezeState, null);
 
 		// Reset P2 damage zone display
 		p2DamageCount = 0;
@@ -1803,6 +1813,7 @@ public class MainWindow {
 		p1ForwardPlayedOnTurn.remove(idx);
 		p1ForwardDamage.remove(idx);
 		p1ForwardPrimedTop.remove(idx);
+		p1ForwardPreFreezeState.remove(idx);
 		p1ForwardLabels.remove(idx);
 
 		if (p1ForwardPanel != null) {
@@ -1856,6 +1867,7 @@ public class MainWindow {
 		p2ForwardStates.remove(idx);
 		p2ForwardPlayedOnTurn.remove(idx);
 		p2ForwardDamage.remove(idx);
+		p2ForwardPreFreezeState.remove(idx);
 		p2ForwardLabels.remove(idx);
 
 		if (p2ForwardPanel != null) {
@@ -3454,7 +3466,12 @@ public class MainWindow {
 			int total = cpByElem.values().stream().mapToInt(Integer::intValue).sum() + extraCp;
 			int unsatisfiedElems = isLD ? 0 : (int) cpByElem.values().stream().filter(v -> v < 1).count();
 			boolean canAddBackup  = total < cost;
-			canAddDiscard[0] = total < cost + unsatisfiedElems;
+			// Max total CP = cost + one overpay slot per distinct element + one if odd cost.
+			// For L/D cards any element is accepted so only require total < cost.
+			int maxAllowed = isLD ? cost : cost + elems.length + (cost % 2);
+			canAddDiscard[0] = isLD
+					? total < cost
+					: (total + 2 <= maxAllowed) && (total < cost || unsatisfiedElems > 0);
 			boolean allElemsPresent = isLD || cpByElem.values().stream().allMatch(v -> v >= 1);
 			confirmBtn.setEnabled(total >= cost && allElemsPresent);
 			if (elems.length == 1) {
@@ -3791,7 +3808,12 @@ public class MainWindow {
 			int total = cpByElem.values().stream().mapToInt(Integer::intValue).sum() + extraCp;
 			int unsatisfiedElems = isLD ? 0 : (int) cpByElem.values().stream().filter(v -> v < 1).count();
 			boolean canAddBackup  = total < cost;
-			canAddDiscard[0] = total < cost + unsatisfiedElems;
+			// Max total CP = cost + one overpay slot per distinct element + one if odd cost.
+			// For L/D cards any element is accepted so only require total < cost.
+			int maxAllowed = isLD ? cost : cost + elems.length + (cost % 2);
+			canAddDiscard[0] = isLD
+					? total < cost
+					: (total + 2 <= maxAllowed) && (total < cost || unsatisfiedElems > 0);
 			boolean allElemsPresent = isLD || cpByElem.values().stream().allMatch(v -> v >= 1);
 			confirmBtn.setEnabled(total >= cost && allElemsPresent);
 			if (elems.length == 1) {
@@ -4284,8 +4306,7 @@ public class MainWindow {
 				g.drawImage(rotated, 0, CARD_H - CARD_W, null);   // pinned to bottom-left
 			}
 			case CardState.FROZEN -> {
-				BufferedImage flipped = rotate180(card);
-				g.drawImage(applyBlueTint(flipped), 0, 0, null);  // pinned to top-left
+				g.drawImage(applyBlueTint(card), 0, 0, null);  // blue tint only, no rotation
 			}
 			default -> g.drawImage(card, 0, 0, null);             // pinned to top-left
 		}
@@ -4847,6 +4868,22 @@ public class MainWindow {
 				logEntry("[P2] " + p2ForwardCards.get(idx).name() + " is dulled");
 				refreshP2ForwardSlot(idx);
 			}
+
+			@Override public void freezeP1Forward(int idx) {
+				if (idx >= p1ForwardStates.size()) return;
+				p1ForwardPreFreezeState.set(idx, p1ForwardStates.get(idx));
+				p1ForwardStates.set(idx, CardState.FROZEN);
+				logEntry(p1Forward(idx).name() + " is frozen");
+				refreshP1ForwardSlot(idx);
+			}
+
+			@Override public void freezeP2Forward(int idx) {
+				if (idx >= p2ForwardStates.size()) return;
+				p2ForwardPreFreezeState.set(idx, p2ForwardStates.get(idx));
+				p2ForwardStates.set(idx, CardState.FROZEN);
+				logEntry("[P2] " + p2ForwardCards.get(idx).name() + " is frozen");
+				refreshP2ForwardSlot(idx);
+			}
 		};
 
 		ActionResolver.resolve(ability, source, gameState, ctx);
@@ -5095,6 +5132,7 @@ public class MainWindow {
 		p1ForwardPlayedOnTurn.add(gameState.getTurnNumber());
 		p1ForwardDamage.add(0);
 		p1ForwardPrimedTop.add(null);
+		p1ForwardPreFreezeState.add(null);
 		p1ForwardLabels.add(lbl);
 
 		p1ForwardPanel.add(lbl);
@@ -6108,7 +6146,7 @@ public class MainWindow {
 			setMinimumSize(new java.awt.Dimension(CARD_W, CRYSTAL_H));
 			setMaximumSize(new java.awt.Dimension(CARD_W, CRYSTAL_H));
 			setOpaque(false);
-			setToolTipText("Crystals — click to change element colour");
+			setToolTipText("Crystals — click to change element color");
 			addMouseListener(new java.awt.event.MouseAdapter() {
 				@Override public void mousePressed(java.awt.event.MouseEvent e) {
 					colorIndex = (colorIndex + 1) % ElementColor.values().length;
@@ -6242,6 +6280,7 @@ public class MainWindow {
 		p2ForwardStates.add(CardState.NORMAL);
 		p2ForwardPlayedOnTurn.add(gameState.getTurnNumber());
 		p2ForwardDamage.add(0);
+		p2ForwardPreFreezeState.add(null);
 		p2ForwardLabels.add(lbl);
 
 		p2ForwardPanel.add(lbl);
@@ -6335,28 +6374,40 @@ public class MainWindow {
 
 		private void doActivePhase() {
 			int activated = 0, thawed = 0;
+
+			// Pass 1: activate DULLED/BRAVE_ATTACKED cards; frozen cards are skipped
 			for (int i = 0; i < p2BackupStates.length; i++) {
 				if (p2BackupCards[i] == null) continue;
-				switch (p2BackupStates[i]) {
-					case FROZEN -> { p2BackupStates[i] = CardState.DULLED;  refreshP2BackupSlot(i); thawed++;    }
-					case DULLED -> { p2BackupStates[i] = CardState.NORMAL;  refreshP2BackupSlot(i); activated++; }
-					default -> {}
+				if (p2BackupStates[i] == CardState.DULLED) {
+					p2BackupStates[i] = CardState.NORMAL;  refreshP2BackupSlot(i); activated++;
 				}
 			}
 			for (int i = 0; i < p2ForwardStates.size(); i++) {
 				p2ForwardDamage.set(i, 0);
-				switch (p2ForwardStates.get(i)) {
-					case FROZEN -> {
-						p2ForwardStates.set(i, CardState.DULLED);
-						refreshP2ForwardSlot(i);
-						thawed++;
-					}
-					case DULLED, BRAVE_ATTACKED -> {
-						p2ForwardStates.set(i, CardState.NORMAL);
-						refreshP2ForwardSlot(i);
-						activated++;
-					}
-					default -> refreshP2ForwardSlot(i);
+				CardState fs = p2ForwardStates.get(i);
+				if (fs == CardState.DULLED || fs == CardState.BRAVE_ATTACKED) {
+					p2ForwardStates.set(i, CardState.NORMAL); refreshP2ForwardSlot(i); activated++;
+				} else {
+					refreshP2ForwardSlot(i);
+				}
+			}
+
+			// Pass 2: remove freeze — restore each card to its pre-freeze state
+			for (int i = 0; i < p2BackupStates.length; i++) {
+				if (p2BackupCards[i] == null) continue;
+				if (p2BackupStates[i] == CardState.FROZEN) {
+					CardState restore = p2BackupPreFreezeState[i];
+					p2BackupStates[i] = restore != null ? restore : CardState.DULLED;
+					p2BackupPreFreezeState[i] = null;
+					refreshP2BackupSlot(i); thawed++;
+				}
+			}
+			for (int i = 0; i < p2ForwardStates.size(); i++) {
+				if (p2ForwardStates.get(i) == CardState.FROZEN) {
+					CardState restore = p2ForwardPreFreezeState.get(i);
+					p2ForwardStates.set(i, restore != null ? restore : CardState.DULLED);
+					p2ForwardPreFreezeState.set(i, null);
+					refreshP2ForwardSlot(i); thawed++;
 				}
 			}
 			StringBuilder msg = new StringBuilder("Turn " + gameState.getTurnNumber() + " — P2 Active Phase");
@@ -6508,27 +6559,35 @@ public class MainWindow {
 
 		private void startP1Turn() {
 			int activated = 0, thawed = 0;
+
+			// Pass 1: activate DULLED/BRAVE_ATTACKED cards; frozen cards are skipped
 			for (int i = 0; i < p1BackupStates.length; i++) {
-				if (p1BackupStates[i] == CardState.FROZEN) {
-					p1BackupStates[i] = CardState.DULLED;
-					refreshP1BackupSlot(i);
-					thawed++;
-				} else if (p1BackupStates[i] == CardState.DULLED) {
-					p1BackupStates[i] = CardState.NORMAL;
-					refreshP1BackupSlot(i);
-					activated++;
+				if (p1BackupStates[i] == CardState.DULLED) {
+					p1BackupStates[i] = CardState.NORMAL; refreshP1BackupSlot(i); activated++;
 				}
 			}
 			for (int i = 0; i < p1ForwardStates.size(); i++) {
 				CardState fs = p1ForwardStates.get(i);
-				if (fs == CardState.FROZEN) {
-					p1ForwardStates.set(i, CardState.DULLED);
-					refreshP1ForwardSlot(i);
-					thawed++;
-				} else if (fs == CardState.DULLED || fs == CardState.BRAVE_ATTACKED) {
-					p1ForwardStates.set(i, CardState.NORMAL);
-					refreshP1ForwardSlot(i);
-					activated++;
+				if (fs == CardState.DULLED || fs == CardState.BRAVE_ATTACKED) {
+					p1ForwardStates.set(i, CardState.NORMAL); refreshP1ForwardSlot(i); activated++;
+				}
+			}
+
+			// Pass 2: remove freeze — restore each card to its pre-freeze state
+			for (int i = 0; i < p1BackupStates.length; i++) {
+				if (p1BackupStates[i] == CardState.FROZEN) {
+					CardState restore = p1BackupPreFreezeState[i];
+					p1BackupStates[i] = restore != null ? restore : CardState.DULLED;
+					p1BackupPreFreezeState[i] = null;
+					refreshP1BackupSlot(i); thawed++;
+				}
+			}
+			for (int i = 0; i < p1ForwardStates.size(); i++) {
+				if (p1ForwardStates.get(i) == CardState.FROZEN) {
+					CardState restore = p1ForwardPreFreezeState.get(i);
+					p1ForwardStates.set(i, restore != null ? restore : CardState.DULLED);
+					p1ForwardPreFreezeState.set(i, null);
+					refreshP1ForwardSlot(i); thawed++;
 				}
 			}
 			StringBuilder msg = new StringBuilder("Turn " + gameState.getTurnNumber() + " — Active Phase");

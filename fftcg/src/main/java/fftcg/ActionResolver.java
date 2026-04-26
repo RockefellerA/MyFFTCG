@@ -54,6 +54,17 @@ public class ActionResolver {
         "(?i)dull\\s+(?:it|them)"
     );
 
+    /** Matches "freeze it" or "freeze them". */
+    private static final Pattern FOLLOWUP_FREEZE = Pattern.compile(
+        "(?i)freeze\\s+(?:it|them)"
+    );
+
+    /** Matches "dull it and freeze it" / "dull them and freeze them" (order-insensitive). */
+    private static final Pattern FOLLOWUP_DULL_AND_FREEZE = Pattern.compile(
+        "(?i)(?:dull\\s+(?:it|them)\\s+and\\s+freeze\\s+(?:it|them)" +
+            "|freeze\\s+(?:it|them)\\s+and\\s+dull\\s+(?:it|them))"
+    );
+
     /**
      * Matches: "Deal X damage to all [the] [condition] Forwards[.] [your opponent controls]"
      * <ul>
@@ -242,7 +253,8 @@ public class ActionResolver {
         }
 
         // --- Dull followup ---
-        if (FOLLOWUP_DULL.matcher(followup).find()) {
+        if (FOLLOWUP_DULL.matcher(followup).find()
+                && !FOLLOWUP_DULL_AND_FREEZE.matcher(followup).find()) {
             return ctx -> {
                 ctx.logEntry("Choose " + (upTo ? "up to " : "") + maxCount
                         + (condition != null ? " " + condition : "") + " Forward(s)"
@@ -255,6 +267,40 @@ public class ActionResolver {
                 targets.stream().filter(t -> !t.isP1())
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> ctx.dullP2Forward(t.idx()));
+            };
+        }
+
+        // --- Dull + Freeze followup ---
+        if (FOLLOWUP_DULL_AND_FREEZE.matcher(followup).find()) {
+            return ctx -> {
+                ctx.logEntry("Choose " + (upTo ? "up to " : "") + maxCount
+                        + (condition != null ? " " + condition : "") + " Forward(s)"
+                        + (opponentOnly ? " (opponent)" : "") + " — Dull & Freeze");
+                List<ForwardTarget> targets =
+                        ctx.selectForwards(maxCount, upTo, opponentOnly, condition);
+                targets.stream().filter(ForwardTarget::isP1)
+                        .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
+                        .forEach(t -> { ctx.dullP1Forward(t.idx()); ctx.freezeP1Forward(t.idx()); });
+                targets.stream().filter(t -> !t.isP1())
+                        .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
+                        .forEach(t -> { ctx.dullP2Forward(t.idx()); ctx.freezeP2Forward(t.idx()); });
+            };
+        }
+
+        // --- Freeze followup ---
+        if (FOLLOWUP_FREEZE.matcher(followup).find()) {
+            return ctx -> {
+                ctx.logEntry("Choose " + (upTo ? "up to " : "") + maxCount
+                        + (condition != null ? " " + condition : "") + " Forward(s)"
+                        + (opponentOnly ? " (opponent)" : "") + " — Freeze");
+                List<ForwardTarget> targets =
+                        ctx.selectForwards(maxCount, upTo, opponentOnly, condition);
+                targets.stream().filter(ForwardTarget::isP1)
+                        .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
+                        .forEach(t -> ctx.freezeP1Forward(t.idx()));
+                targets.stream().filter(t -> !t.isP1())
+                        .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
+                        .forEach(t -> ctx.freezeP2Forward(t.idx()));
             };
         }
 
