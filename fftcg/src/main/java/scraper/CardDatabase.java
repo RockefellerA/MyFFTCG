@@ -117,7 +117,7 @@ public class CardDatabase implements AutoCloseable {
             if (card.power != null) ps.setInt (6, card.power);
             else                    ps.setNull(6, Types.INTEGER);
             ps.setString(7,  card.rarity);
-            ps.setString(8,  card.jobEn == null ? null : card.jobEn.replace("Warrrior", "Warrior"));
+            ps.setString(8,  card.jobEn == null ? null : card.jobEn.replace("Warrrior", "Warrior").replace("―", ""));
             ps.setString(9,  card.category1);
             ps.setString(10, card.category2);
             ps.setInt   (11, card.exBurst  ? 1 : 0);

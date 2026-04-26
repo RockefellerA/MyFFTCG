@@ -4812,11 +4812,143 @@ public class MainWindow {
 				if (card.power() > 0 && dmg >= card.power()) breakP2Forward(idx);
 				else refreshP2ForwardSlot(idx);
 			}
+
+			@Override
+			public java.util.List<ForwardTarget> selectForwards(
+					int maxCount, boolean upTo, boolean opponentOnly, String condition) {
+				java.util.List<ForwardTarget> eligible = new ArrayList<>();
+				if (!opponentOnly) {
+					for (int i = 0; i < p1ForwardCards.size(); i++) {
+						if (meetsTargetCondition(p1ForwardStates.get(i), p1ForwardDamage.get(i), condition))
+							eligible.add(new ForwardTarget(true, i));
+					}
+				}
+				for (int i = 0; i < p2ForwardCards.size(); i++) {
+					if (meetsTargetCondition(p2ForwardStates.get(i), p2ForwardDamage.get(i), condition))
+						eligible.add(new ForwardTarget(false, i));
+				}
+				String title = "Choose " + (upTo ? "up to " : "") + maxCount
+						+ (condition != null ? " " + condition : "")
+						+ " Forward" + (maxCount != 1 ? "s" : "")
+						+ (opponentOnly ? " (opponent)" : "");
+				return showForwardSelectDialog(eligible, maxCount, upTo, title);
+			}
+
+			@Override public void dullP1Forward(int idx) {
+				if (idx >= p1ForwardStates.size()) return;
+				p1ForwardStates.set(idx, CardState.DULLED);
+				logEntry(p1Forward(idx).name() + " is dulled");
+				refreshP1ForwardSlot(idx);
+			}
+
+			@Override public void dullP2Forward(int idx) {
+				if (idx >= p2ForwardStates.size()) return;
+				p2ForwardStates.set(idx, CardState.DULLED);
+				logEntry("[P2] " + p2ForwardCards.get(idx).name() + " is dulled");
+				refreshP2ForwardSlot(idx);
+			}
 		};
 
 		ActionResolver.resolve(ability, source, gameState, ctx);
 		refreshP1HandLabel();
 		refreshP1BreakLabel();
+	}
+
+	// -------------------------------------------------------------------------
+	// Forward target selection helpers (used by GameContext.selectForwards)
+	// -------------------------------------------------------------------------
+
+	private static boolean meetsTargetCondition(CardState state, int damage, String condition) {
+		if (condition == null) return true;
+		return switch (condition.toLowerCase()) {
+			case "dull", "dulled" -> state == CardState.DULLED;
+			case "damaged"        -> damage > 0;
+			default               -> true;
+		};
+	}
+
+	/**
+	 * Shows a modal dialog for P1 to pick targeted forwards from {@code eligible}.
+	 * Auto-selects all when the eligible count does not exceed {@code maxCount} and
+	 * {@code upTo} is false.  Returns immediately with an empty list when there are
+	 * no eligible targets.
+	 */
+	private java.util.List<ForwardTarget> showForwardSelectDialog(
+			java.util.List<ForwardTarget> eligible, int maxCount, boolean upTo, String title) {
+		if (eligible.isEmpty()) { logEntry("Choose: no eligible targets"); return java.util.List.of(); }
+		if (!upTo && eligible.size() <= maxCount) return java.util.List.copyOf(eligible);
+
+		JDialog dlg = new JDialog(frame, title, true);
+		dlg.setResizable(false);
+		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+		java.util.List<ForwardTarget> chosen = new ArrayList<>();
+		java.util.Set<Integer> sel = new java.util.LinkedHashSet<>();
+
+		JPanel btnsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 4));
+		JButton[] btns = new JButton[eligible.size()];
+
+		JButton confirmBtn = new JButton("Confirm");
+		confirmBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		confirmBtn.setEnabled(upTo); // enabled immediately for "up to", otherwise waits for maxCount
+
+		for (int i = 0; i < eligible.size(); i++) {
+			ForwardTarget target = eligible.get(i);
+			CardData card = target.isP1()
+					? (p1ForwardPrimedTop.get(target.idx()) != null
+							? p1ForwardPrimedTop.get(target.idx()) : p1ForwardCards.get(target.idx()))
+					: p2ForwardCards.get(target.idx());
+			final int fi = i;
+			JButton btn = new JButton("<html><center>"
+					+ (target.isP1() ? "[You] " : "[P2] ")
+					+ card.name() + "<br>(" + card.power() + ")</center></html>");
+			btn.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			btn.setPreferredSize(new Dimension(130, 56));
+			btn.addActionListener(ae -> {
+				if (sel.contains(fi)) {
+					sel.remove(fi);
+					btn.setBackground(null);
+				} else {
+					if (sel.size() >= maxCount) return;
+					sel.add(fi);
+					btn.setBackground(Color.YELLOW);
+					if (!upTo && sel.size() == maxCount) {
+						for (int si : sel) chosen.add(eligible.get(si));
+						dlg.dispose();
+						return;
+					}
+				}
+				confirmBtn.setEnabled(upTo || sel.size() == maxCount);
+			});
+			btns[i] = btn;
+			btnsPanel.add(btn);
+		}
+
+		confirmBtn.addActionListener(ae -> {
+			for (int si : sel) chosen.add(eligible.get(si));
+			dlg.dispose();
+		});
+		JPanel south = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 4));
+		south.add(confirmBtn);
+		if (upTo) {
+			JButton skipBtn = new JButton("Skip");
+			skipBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+			skipBtn.addActionListener(ae -> dlg.dispose());
+			south.add(skipBtn);
+		}
+
+		JLabel hdr = new JLabel(title, SwingConstants.CENTER);
+		hdr.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		hdr.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
+
+		dlg.getContentPane().setLayout(new BorderLayout(0, 4));
+		dlg.getContentPane().add(hdr,      BorderLayout.NORTH);
+		dlg.getContentPane().add(btnsPanel, BorderLayout.CENTER);
+		dlg.getContentPane().add(south,     BorderLayout.SOUTH);
+		dlg.pack();
+		dlg.setLocationRelativeTo(frame);
+		dlg.setVisible(true);
+		return java.util.List.copyOf(chosen);
 	}
 
 	// -------------------------------------------------------------------------

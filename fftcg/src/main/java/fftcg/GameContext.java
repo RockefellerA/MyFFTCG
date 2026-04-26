@@ -1,5 +1,7 @@
 package fftcg;
 
+import java.util.List;
+
 /**
  * Bridge interface that gives {@link ActionResolver} controlled access to the
  * live game state without coupling it directly to {@code MainWindow}'s private
@@ -56,4 +58,28 @@ public interface GameContext {
      * the slot, and breaks the forward if its remaining power reaches zero.
      */
     void damageP2Forward(int idx, int amount);
+
+    // ---- Targeted selection -------------------------------------------------
+
+    /**
+     * Shows a modal dialog letting P1 choose up to {@code maxCount} eligible
+     * forwards and returns their targets.
+     *
+     * @param maxCount     maximum number of forwards the player may select
+     * @param upTo         if {@code true} the player may confirm with fewer than {@code maxCount}
+     * @param opponentOnly if {@code true} only P2's forwards are offered as targets
+     * @param condition    optional eligibility filter: {@code "dull"}, {@code "dulled"},
+     *                     {@code "damaged"}, or {@code null} for any forward
+     * @return the list of chosen {@link ForwardTarget}s (may be empty if no eligible targets
+     *         exist or the player skips)
+     */
+    List<ForwardTarget> selectForwards(int maxCount, boolean upTo, boolean opponentOnly, String condition);
+
+    // ---- Dull effects -------------------------------------------------------
+
+    /** Dulls P1's forward at {@code idx} and refreshes its slot. */
+    void dullP1Forward(int idx);
+
+    /** Dulls P2's forward at {@code idx} and refreshes its slot. */
+    void dullP2Forward(int idx);
 }

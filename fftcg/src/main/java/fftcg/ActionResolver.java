@@ -25,6 +25,36 @@ public class ActionResolver {
     // -------------------------------------------------------------------------
 
     /**
+     * Matches the "Choose" targeted effect header:
+     * "Choose [up to] N [condition] Forward[s] [opponent controls] [separator] followup"
+     * <ul>
+     *   <li>Group {@code upto}      — present when "up to" precedes the count</li>
+     *   <li>Group {@code count}     — number of forwards to choose</li>
+     *   <li>Group {@code condition} — optional: "dull", "dulled", or "damaged"</li>
+     *   <li>Group {@code opponent}  — present when "opponent controls" appears</li>
+     *   <li>Group {@code followup}  — the action to apply to chosen targets</li>
+     * </ul>
+     */
+    private static final Pattern CHOOSE_FORWARDS_PATTERN = Pattern.compile(
+        "(?i)Choose\\s+(?<upto>up\\s+to\\s+)?(?<count>\\d+)\\s+" +
+        "(?:(?<condition>dull(?:ed)?|damaged)\\s+)?" +
+        "Forwards?" +
+        "(?:\\s+(?<opponent>(?:your\\s+)?opponent\\s+controls))?" +
+        "(?:[.]\\s*|\\s+and\\s+|,\\s*)" +
+        "(?<followup>.+)"
+    );
+
+    /** Matches "deal [it|them] N damage" or "deal N damage to [it|them]". */
+    private static final Pattern FOLLOWUP_DAMAGE = Pattern.compile(
+        "(?i)deal(?:\\s+(?:it|them))?\\s+(\\d+)\\s+damage(?:\\s+to\\s+(?:it|them))?"
+    );
+
+    /** Matches "dull it" or "dull them". */
+    private static final Pattern FOLLOWUP_DULL = Pattern.compile(
+        "(?i)dull\\s+(?:it|them)"
+    );
+
+    /**
      * Matches: "Deal X damage to all [the] [condition] Forwards[.] [your opponent controls]"
      * <ul>
      *   <li>Group {@code amount}    — numeric damage value</li>
@@ -52,6 +82,9 @@ public class ActionResolver {
         Consumer<GameContext> result;
 
         result = tryParseDealDamageToForwards(effectText);
+        if (result != null) return result;
+
+        result = tryParseChooseForwards(effectText);
         if (result != null) return result;
 
         // TODO: add more effect parsers here as they are implemented
@@ -163,5 +196,70 @@ public class ActionResolver {
             case "damaged"        -> currentDamage > 0;
             default               -> true;
         };
+    }
+
+    // -------------------------------------------------------------------------
+    // Choose-forwards effect parser
+    // -------------------------------------------------------------------------
+
+    /**
+     * Parses "Choose [up to] N [condition] Forward[s] [opponent controls] [sep] followup".
+     *
+     * <p>Supported followup actions:
+     * <ul>
+     *   <li>"Deal [it|them] N damage" / "Deal N damage to [it|them]" — damages each chosen forward</li>
+     *   <li>"Dull it" / "Dull them" — dulls each chosen forward</li>
+     * </ul>
+     */
+    private static Consumer<GameContext> tryParseChooseForwards(String text) {
+        Matcher m = CHOOSE_FORWARDS_PATTERN.matcher(text);
+        if (!m.find()) return null;
+
+        boolean upTo       = m.group("upto") != null;
+        int     maxCount   = Integer.parseInt(m.group("count"));
+        String  condition  = m.group("condition");   // nullable
+        boolean opponentOnly = m.group("opponent") != null;
+        String  followup   = m.group("followup").trim();
+
+        // --- Damage followup ---
+        Matcher dmgM = FOLLOWUP_DAMAGE.matcher(followup);
+        if (dmgM.find()) {
+            int damage = Integer.parseInt(dmgM.group(1));
+            return ctx -> {
+                ctx.logEntry("Choose " + (upTo ? "up to " : "") + maxCount
+                        + (condition != null ? " " + condition : "") + " Forward(s)"
+                        + (opponentOnly ? " (opponent)" : "") + " — Deal " + damage + " damage");
+                List<ForwardTarget> targets =
+                        ctx.selectForwards(maxCount, upTo, opponentOnly, condition);
+                // Apply damage in reverse-index order within each player to keep indices stable
+                targets.stream().filter(ForwardTarget::isP1)
+                        .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
+                        .forEach(t -> ctx.damageP1Forward(t.idx(), damage));
+                targets.stream().filter(t -> !t.isP1())
+                        .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
+                        .forEach(t -> ctx.damageP2Forward(t.idx(), damage));
+            };
+        }
+
+        // --- Dull followup ---
+        if (FOLLOWUP_DULL.matcher(followup).find()) {
+            return ctx -> {
+                ctx.logEntry("Choose " + (upTo ? "up to " : "") + maxCount
+                        + (condition != null ? " " + condition : "") + " Forward(s)"
+                        + (opponentOnly ? " (opponent)" : "") + " — Dull");
+                List<ForwardTarget> targets =
+                        ctx.selectForwards(maxCount, upTo, opponentOnly, condition);
+                targets.stream().filter(ForwardTarget::isP1)
+                        .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
+                        .forEach(t -> ctx.dullP1Forward(t.idx()));
+                targets.stream().filter(t -> !t.isP1())
+                        .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
+                        .forEach(t -> ctx.dullP2Forward(t.idx()));
+            };
+        }
+
+        // Recognised "Choose" header but followup not yet implemented
+        return ctx -> ctx.logEntry(
+                "[ActionResolver] Choose effect — followup not yet implemented: " + followup);
     }
 }
