@@ -44,9 +44,9 @@ public class ActionResolver {
         "(?<followup>.+)"
     );
 
-    /** Matches "deal [it|them] N damage" or "deal N damage to [it|them]". */
+    /** Matches "deal it/them N damage". */
     private static final Pattern FOLLOWUP_DAMAGE = Pattern.compile(
-        "(?i)deal(?:\\s+(?:it|them))?\\s+(\\d+)\\s+damage(?:\\s+to\\s+(?:it|them))?"
+        "(?i)deal\\s+(?:it|them)\\s+(\\d+)\\s+damage"
     );
 
     /** Matches "dull it" or "dull them". */
@@ -59,18 +59,27 @@ public class ActionResolver {
         "(?i)freeze\\s+(?:it|them)"
     );
 
-    /** Matches "dull it and freeze it" / "dull them and freeze them" (order-insensitive). */
+    /** Matches "dull it/them and freeze it/them". */
     private static final Pattern FOLLOWUP_DULL_AND_FREEZE = Pattern.compile(
-        "(?i)(?:dull\\s+(?:it|them)\\s+and\\s+freeze\\s+(?:it|them)" +
-            "|freeze\\s+(?:it|them)\\s+and\\s+dull\\s+(?:it|them))"
+        "(?i)dull\\s+(?:it|them)\\s+and\\s+freeze\\s+(?:it|them)"
+    );
+
+    /** Matches "Break it" or "Break them". */
+    private static final Pattern FOLLOWUP_BREAK = Pattern.compile(
+        "(?i)Break\\s+(?:it|them)"
+    );
+
+    /** Matches "Remove it/them from the game". */
+    private static final Pattern FOLLOWUP_REMOVE_FROM_GAME = Pattern.compile(
+        "(?i)Remove\\s+(?:it|them)\\s+from\\s+(?:the\\s+)?game"
     );
 
     /**
-     * Matches: "Deal X damage to all [the] [condition] Forwards[.] [your opponent controls]"
+     * Matches: "Deal X damage to all [the] [condition] Forwards[.] [opponent controls]"
      * <ul>
      *   <li>Group {@code amount}    — numeric damage value</li>
      *   <li>Group {@code condition} — optional "damaged" or "dull/dulled"</li>
-     *   <li>Group {@code opponent}  — present when "your opponent controls" appears</li>
+     *   <li>Group {@code opponent}  — present when "opponent controls" appears</li>
      * </ul>
      */
     private static final Pattern DEAL_DAMAGE_TO_FORWARDS = Pattern.compile(
@@ -301,6 +310,40 @@ public class ActionResolver {
                 targets.stream().filter(t -> !t.isP1())
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> ctx.freezeP2Forward(t.idx()));
+            };
+        }
+
+        // --- Break followup ---
+        if (FOLLOWUP_BREAK.matcher(followup).find()) {
+            return ctx -> {
+                ctx.logEntry("Choose " + (upTo ? "up to " : "") + maxCount
+                        + (condition != null ? " " + condition : "") + " Forward(s)"
+                        + (opponentOnly ? " (opponent)" : "") + " — Break");
+                List<ForwardTarget> targets =
+                        ctx.selectForwards(maxCount, upTo, opponentOnly, condition);
+                targets.stream().filter(ForwardTarget::isP1)
+                        .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
+                        .forEach(t -> ctx.breakP1Forward(t.idx()));
+                targets.stream().filter(t -> !t.isP1())
+                        .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
+                        .forEach(t -> ctx.breakP2Forward(t.idx()));
+            };
+        }
+
+        // --- Remove from game followup ---
+        if (FOLLOWUP_REMOVE_FROM_GAME.matcher(followup).find()) {
+            return ctx -> {
+                ctx.logEntry("Choose " + (upTo ? "up to " : "") + maxCount
+                        + (condition != null ? " " + condition : "") + " Forward(s)"
+                        + (opponentOnly ? " (opponent)" : "") + " — Remove From Game");
+                List<ForwardTarget> targets =
+                        ctx.selectForwards(maxCount, upTo, opponentOnly, condition);
+                targets.stream().filter(ForwardTarget::isP1)
+                        .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
+                        .forEach(t -> ctx.removeP1ForwardFromGame(t.idx()));
+                targets.stream().filter(t -> !t.isP1())
+                        .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
+                        .forEach(t -> ctx.removeP2ForwardFromGame(t.idx()));
             };
         }
 

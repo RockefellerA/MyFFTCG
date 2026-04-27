@@ -88,4 +88,24 @@ public interface GameContext {
 
     /** Freezes P2's forward at {@code idx} (blue tint; skips activation next Active Phase). */
     void freezeP2Forward(int idx);
+
+    // ---- Break / Remove-from-game effects -----------------------------------
+
+    /** Breaks P1's forward at {@code idx} (sends to P1's Break Zone). */
+    void breakP1Forward(int idx);
+
+    /** Breaks P2's forward at {@code idx} (sends to P2's Break Zone). */
+    void breakP2Forward(int idx);
+
+    /**
+     * Removes P1's forward at {@code idx} from the game permanently
+     * (sends to P1's Removed-From-Game zone, not the Break Zone).
+     */
+    void removeP1ForwardFromGame(int idx);
+
+    /**
+     * Removes P2's forward at {@code idx} from the game permanently
+     * (sends to P2's Removed-From-Game zone, not the Break Zone).
+     */
+    void removeP2ForwardFromGame(int idx);
 }

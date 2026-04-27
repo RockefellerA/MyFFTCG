@@ -4803,6 +4803,39 @@ public class MainWindow {
 				logEntry("[P2] " + p2ForwardCards.get(idx).name() + " is frozen");
 				refreshP2ForwardSlot(idx);
 			}
+
+			@Override public void breakP1Forward(int idx) {
+				MainWindow.this.breakP1Forward(idx);
+			}
+
+			@Override public void breakP2Forward(int idx) {
+				MainWindow.this.breakP2Forward(idx);
+			}
+
+			@Override public void removeP1ForwardFromGame(int idx) {
+				if (idx >= p1ForwardCards.size()) return;
+				logEntry(p1Forward(idx).name() + " → Removed From Game");
+				List<CardData> bz = gameState.getP1BreakZone();
+				int before = bz.size();
+				MainWindow.this.breakP1Forward(idx);
+				// Redirect anything breakP1Forward sent to the break zone → permanent RFP
+				while (bz.size() > before)
+					gameState.addToP1PermanentRfp(bz.remove(bz.size() - 1));
+				refreshP1BreakLabel();
+				refreshP1WarpZoneUI();
+			}
+
+			@Override public void removeP2ForwardFromGame(int idx) {
+				if (idx >= p2ForwardCards.size()) return;
+				logEntry("[P2] " + p2ForwardCards.get(idx).name() + " → Removed From Game");
+				List<CardData> bz = gameState.getP2BreakZone();
+				int before = bz.size();
+				MainWindow.this.breakP2Forward(idx);
+				// Redirect anything breakP2Forward sent to the break zone → P2 permanent RFP
+				while (bz.size() > before)
+					gameState.addToP2PermanentRfp(bz.remove(bz.size() - 1));
+				refreshP2BreakLabel();
+			}
 		};
 
 		ActionResolver.resolve(ability, source, gameState, ctx);

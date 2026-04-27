@@ -36,6 +36,7 @@ public class GameState {
     private final List<CardData>           p1DamageZone      = new ArrayList<>();
     private final List<WarpEntry>          p1WarpZone        = new ArrayList<>();
     private final List<CardData>           p1PermanentRfp    = new ArrayList<>();
+    private final List<CardData>           p2PermanentRfp    = new ArrayList<>();
     private final Map<String, Integer>     p1CpByElement     = new HashMap<>();
     private boolean p1OpeningHandPending  = false;
     private boolean p1MulliganUsed        = false;
@@ -86,6 +87,7 @@ public class GameState {
         p1DamageZone.clear();
         p1WarpZone.clear();
         p1PermanentRfp.clear();
+        p2PermanentRfp.clear();
         p1CpByElement.clear();
         p1Crystals    = 0;
         p2Crystals    = 0;
@@ -141,13 +143,19 @@ public class GameState {
     // -------------------------------------------------------------------------
 
     /** Permanently removes a card from the game (not Warp — no counter, never returns). */
-    public void addToP1PermanentRfp(CardData card) {
-        p1PermanentRfp.add(card);
-    }
+    public void addToP1PermanentRfp(CardData card) { p1PermanentRfp.add(card); }
 
     /** Returns an unmodifiable view of P1's permanently removed cards. */
     public List<CardData> getP1PermanentRfp() {
         return Collections.unmodifiableList(p1PermanentRfp);
+    }
+
+    /** Permanently removes a P2 card from the game. */
+    public void addToP2PermanentRfp(CardData card) { p2PermanentRfp.add(card); }
+
+    /** Returns an unmodifiable view of P2's permanently removed cards. */
+    public List<CardData> getP2PermanentRfp() {
+        return Collections.unmodifiableList(p2PermanentRfp);
     }
 
     // -------------------------------------------------------------------------
