@@ -1258,7 +1258,7 @@ public class MainWindow {
 			}
 			p1BackupUrls[i]   = null;
 			p1BackupCards[i]  = null;
-			p1BackupStates[i] = CardState.NORMAL;
+			p1BackupStates[i] = CardState.ACTIVE;
 		}
 
 		// Forward zone
@@ -1333,7 +1333,7 @@ public class MainWindow {
 			}
 			p2BackupUrls[i]    = null;
 			p2BackupCards[i]   = null;
-			p2BackupStates[i]  = CardState.NORMAL;
+			p2BackupStates[i]  = CardState.ACTIVE;
 			p2BackupFrozen[i]  = false;
 		}
 
@@ -1969,7 +1969,7 @@ public class MainWindow {
 	private int p2ChooseBlocker(CardData attacker) {
 		int bestIdx = -1, bestPower = -1;
 		for (int i = 0; i < p2ForwardStates.size(); i++) {
-			if (p2ForwardStates.get(i) != CardState.NORMAL) continue;
+			if (p2ForwardStates.get(i) != CardState.ACTIVE) continue;
 			CardData c = p2ForwardCards.get(i);
 			if (c.power() >= attacker.power() && c.power() > bestPower) {
 				bestPower = c.power();
@@ -2001,7 +2001,7 @@ public class MainWindow {
 			CardState s = p1ForwardStates.get(i);
 			// NORMAL forwards can always block; BRAVE_ATTACKED forwards can block because
 			// Brave allows acting again even after attacking
-			if (s == CardState.NORMAL || s == CardState.BRAVE_ATTACKED) eligible.add(i);
+			if (s == CardState.ACTIVE || s == CardState.BRAVE_ATTACKED) eligible.add(i);
 		}
 		if (eligible.isEmpty()) {
 			p1TakeDamage();
@@ -2948,7 +2948,7 @@ public class MainWindow {
 				if (!hand.get(i).isLightOrDark()) totalGenerate += 2;
 			}
 			for (int i = 0; i < p1BackupCards.length; i++) {
-				if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.NORMAL)
+				if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.ACTIVE)
 					totalGenerate += 1;
 			}
 			return totalExisting + totalGenerate >= card.cost();
@@ -2971,7 +2971,7 @@ public class MainWindow {
 			}
 		}
 		for (int i = 0; i < p1BackupCards.length; i++) {
-			if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.NORMAL) {
+			if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.ACTIVE) {
 				for (int ei = 0; ei < elems.length; ei++) {
 					if (p1BackupCards[i].containsElement(elems[ei])) {
 						totalGenerate += 1;
@@ -3019,7 +3019,7 @@ public class MainWindow {
 		// Undulled backups: matching backups satisfy element requirements;
 		// any backup can cover generic CP
 		for (int i = 0; i < p1BackupCards.length; i++) {
-			if (p1BackupCards[i] == null || p1BackupStates[i] != CardState.NORMAL) continue;
+			if (p1BackupCards[i] == null || p1BackupStates[i] != CardState.ACTIVE) continue;
 			boolean matched = false;
 			for (int ei = 0; ei < elems.length; ei++) {
 				if (p1BackupCards[i].containsElement(elems[ei])) {
@@ -3076,7 +3076,7 @@ public class MainWindow {
 		List<Integer> eligibleBackupSlots = new ArrayList<>();
 		for (int i = 0; i < p1BackupCards.length; i++) {
 			// When there is generic CP in the cost, any undulled backup is eligible
-			if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.NORMAL
+			if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.ACTIVE
 					&& (genericNeeded > 0 || matchesAnyElement(p1BackupCards[i], elems)))
 				eligibleBackupSlots.add(i);
 		}
@@ -3428,7 +3428,7 @@ public class MainWindow {
 		// L/D cards: any undulled backup is eligible. Others: must match an element.
 		List<Integer> eligibleBackupSlots = new ArrayList<>();
 		for (int i = 0; i < p1BackupCards.length; i++) {
-			if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.NORMAL
+			if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.ACTIVE
 					&& (isLD || matchesAnyElement(p1BackupCards[i], elems)))
 				eligibleBackupSlots.add(i);
 		}
@@ -3770,7 +3770,7 @@ public class MainWindow {
 
 		List<Integer> eligibleBackupSlots = new ArrayList<>();
 		for (int i = 0; i < p1BackupCards.length; i++) {
-			if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.NORMAL
+			if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.ACTIVE
 					&& (isLD || matchesAnyElement(p1BackupCards[i], elems)))
 				eligibleBackupSlots.add(i);
 		}
@@ -4368,7 +4368,7 @@ public class MainWindow {
 			for (int ei = 0; ei < elems.length; ei++) available -= gameState.getP1CpForElement(elems[ei]);
 		}
 		for (int i = 0; i < p1BackupCards.length; i++) {
-			if (p1BackupCards[i] == null || p1BackupStates[i] != CardState.NORMAL) continue;
+			if (p1BackupCards[i] == null || p1BackupStates[i] != CardState.ACTIVE) continue;
 			boolean matched = false;
 			for (int ei = 0; ei < elems.length; ei++) {
 				if (p1BackupCards[i].containsElement(elems[ei])) { available++; hasSrc[ei] = true; matched = true; break; }
@@ -4408,7 +4408,7 @@ public class MainWindow {
 		// Abilities with Dull cost require the card to be in NORMAL state
 		// and not played this turn (summoning restriction)
 		if (ability.requiresDull()) {
-			if (state != CardState.NORMAL) return false;
+			if (state != CardState.ACTIVE) return false;
 			if (playedTurn == gameState.getTurnNumber()) return false;
 		}
 		// Special abilities require a same-name card in hand
@@ -4476,7 +4476,7 @@ public class MainWindow {
 
 		List<Integer> eligibleBackupSlots = new ArrayList<>();
 		for (int i = 0; i < p1BackupCards.length; i++) {
-			if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.NORMAL
+			if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.ACTIVE
 					&& (genericNeeded > 0 || matchesAnyElement(p1BackupCards[i], elems)))
 				eligibleBackupSlots.add(i);
 		}
@@ -4968,7 +4968,7 @@ public class MainWindow {
 			JMenuItem dullItem = new JMenuItem("Debug: Dull");
 			dullItem.addActionListener(ae -> {
 				boolean dulling = p1BackupStates[idx] != CardState.DULLED;
-				p1BackupStates[idx] = dulling ? CardState.DULLED : CardState.NORMAL;
+				p1BackupStates[idx] = dulling ? CardState.DULLED : CardState.ACTIVE;
 				animateDullBackup(idx, dulling);
 			});
 			menu.add(dullItem);
@@ -5090,7 +5090,7 @@ public class MainWindow {
 
 		p1ForwardUrls.add(card.imageUrl());
 		p1ForwardCards.add(card);
-		p1ForwardStates.add(CardState.NORMAL);
+		p1ForwardStates.add(CardState.ACTIVE);
 		p1ForwardPlayedOnTurn.add(gameState.getTurnNumber());
 		p1ForwardDamage.add(0);
 		p1ForwardPrimedTop.add(null);
@@ -5128,7 +5128,7 @@ public class MainWindow {
 
 		p1MonsterUrls.add(card.imageUrl());
 		p1MonsterCards.add(card);
-		p1MonsterStates.add(CardState.NORMAL);
+		p1MonsterStates.add(CardState.ACTIVE);
 		p1MonsterPlayedOnTurn.add(gameState.getTurnNumber());
 		p1MonsterFrozen.add(false);
 		p1MonsterLabels.add(lbl);
@@ -5176,7 +5176,7 @@ public class MainWindow {
 			JMenuItem dullItem = new JMenuItem("Debug: Dull");
 			dullItem.addActionListener(ae -> {
 				p1MonsterStates.set(idx,
-						p1MonsterStates.get(idx) == CardState.DULLED ? CardState.NORMAL : CardState.DULLED);
+						p1MonsterStates.get(idx) == CardState.DULLED ? CardState.ACTIVE : CardState.DULLED);
 				refreshP1MonsterSlot(idx);
 			});
 			menu.add(dullItem);
@@ -5204,7 +5204,7 @@ public class MainWindow {
 		boolean hasHaste  = p1ForwardCards.get(idx).hasTrait(CardData.Trait.HASTE)
 				|| (primed && topCard.hasTrait(CardData.Trait.HASTE));
 		boolean canAttack = gameState.getCurrentPhase() == GameState.GamePhase.ATTACK
-				&& state == CardState.NORMAL
+				&& state == CardState.ACTIVE
 				&& (hasHaste || p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber());
 		int damage = p1ForwardDamage.get(idx);
 		int power  = primed ? topCard.power() : p1ForwardCards.get(idx).power();
@@ -5234,7 +5234,7 @@ public class MainWindow {
 	private boolean isForwardSelectable(int idx) {
 		if (gameState.getCurrentPhase() != GameState.GamePhase.ATTACK) return false;
 		if (idx < 0 || idx >= p1ForwardStates.size()) return false;
-		if (p1ForwardStates.get(idx) != CardState.NORMAL) return false;
+		if (p1ForwardStates.get(idx) != CardState.ACTIVE) return false;
 		boolean hasHaste = p1ForwardCards.get(idx).hasTrait(CardData.Trait.HASTE);
 		return hasHaste || p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber();
 	}
@@ -5306,7 +5306,7 @@ public class MainWindow {
 						p1ForwardCards.get(idx).power() - p1ForwardDamage.get(idx));
 		}
 		for (int i = 0; i < p2ForwardStates.size(); i++) {
-			if (p2ForwardStates.get(i) != CardState.NORMAL) continue;
+			if (p2ForwardStates.get(i) != CardState.ACTIVE) continue;
 			int pw = p2ForwardCards.get(i).power();
 			if (pw >= minAttackerPower && pw > bestBlockerPower) {
 				bestBlockerPower = pw;
@@ -5378,7 +5378,7 @@ public class MainWindow {
 	private boolean hasAttackableForward() {
 		int turn = gameState.getTurnNumber();
 		for (int i = 0; i < p1ForwardStates.size(); i++) {
-			if (p1ForwardStates.get(i) == CardState.NORMAL
+			if (p1ForwardStates.get(i) == CardState.ACTIVE
 					&& (p1ForwardCards.get(i).hasTrait(CardData.Trait.HASTE)
 					    || p1ForwardPlayedOnTurn.get(i) != turn))
 				return true;
@@ -5413,7 +5413,7 @@ public class MainWindow {
 			JMenuItem dullItem = new JMenuItem("Debug: Dull");
 			dullItem.addActionListener(ae -> {
 				p1ForwardStates.set(idx,
-						p1ForwardStates.get(idx) == CardState.DULLED ? CardState.NORMAL : CardState.DULLED);
+						p1ForwardStates.get(idx) == CardState.DULLED ? CardState.ACTIVE : CardState.DULLED);
 				refreshP1ForwardSlot(idx);
 			});
 			menu.add(dullItem);
@@ -5453,7 +5453,7 @@ public class MainWindow {
 			for (int ei = 0; ei < elems.length; ei++) available -= gameState.getP1CpForElement(elems[ei]);
 		}
 		for (int i = 0; i < p1BackupCards.length; i++) {
-			if (p1BackupCards[i] == null || p1BackupStates[i] != CardState.NORMAL) continue;
+			if (p1BackupCards[i] == null || p1BackupStates[i] != CardState.ACTIVE) continue;
 			boolean matched = false;
 			for (int ei = 0; ei < elems.length; ei++) {
 				if (p1BackupCards[i].containsElement(elems[ei])) { available++; hasSrc[ei] = true; matched = true; break; }
@@ -5502,7 +5502,7 @@ public class MainWindow {
 
 		List<Integer> eligibleBackupSlots = new ArrayList<>();
 		for (int i = 0; i < p1BackupCards.length; i++) {
-			if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.NORMAL
+			if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.ACTIVE
 					&& (genericNeeded > 0 || matchesAnyElement(p1BackupCards[i], elems)))
 				eligibleBackupSlots.add(i);
 		}
@@ -6237,7 +6237,7 @@ public class MainWindow {
 
 		p2ForwardUrls.add(card.imageUrl());
 		p2ForwardCards.add(card);
-		p2ForwardStates.add(CardState.NORMAL);
+		p2ForwardStates.add(CardState.ACTIVE);
 		p2ForwardPlayedOnTurn.add(gameState.getTurnNumber());
 		p2ForwardDamage.add(0);
 		p2ForwardFrozen.add(false);
@@ -6339,14 +6339,14 @@ public class MainWindow {
 			for (int i = 0; i < p2BackupStates.length; i++) {
 				if (p2BackupCards[i] == null) continue;
 				if (p2BackupStates[i] == CardState.DULLED && !p2BackupFrozen[i]) {
-					p2BackupStates[i] = CardState.NORMAL;  refreshP2BackupSlot(i); activated++;
+					p2BackupStates[i] = CardState.ACTIVE;  refreshP2BackupSlot(i); activated++;
 				}
 			}
 			for (int i = 0; i < p2ForwardStates.size(); i++) {
 				p2ForwardDamage.set(i, 0);
 				CardState fs = p2ForwardStates.get(i);
 				if ((fs == CardState.DULLED || fs == CardState.BRAVE_ATTACKED) && !p2ForwardFrozen.get(i)) {
-					p2ForwardStates.set(i, CardState.NORMAL); refreshP2ForwardSlot(i); activated++;
+					p2ForwardStates.set(i, CardState.ACTIVE); refreshP2ForwardSlot(i); activated++;
 				} else {
 					refreshP2ForwardSlot(i);
 				}
@@ -6513,13 +6513,13 @@ public class MainWindow {
 			// Pass 1: activate DULLED/BRAVE_ATTACKED cards; frozen cards are skipped
 			for (int i = 0; i < p1BackupStates.length; i++) {
 				if (p1BackupStates[i] == CardState.DULLED && !p1BackupFrozen[i]) {
-					p1BackupStates[i] = CardState.NORMAL; refreshP1BackupSlot(i); activated++;
+					p1BackupStates[i] = CardState.ACTIVE; refreshP1BackupSlot(i); activated++;
 				}
 			}
 			for (int i = 0; i < p1ForwardStates.size(); i++) {
 				CardState fs = p1ForwardStates.get(i);
 				if ((fs == CardState.DULLED || fs == CardState.BRAVE_ATTACKED) && !p1ForwardFrozen.get(i)) {
-					p1ForwardStates.set(i, CardState.NORMAL); refreshP1ForwardSlot(i); activated++;
+					p1ForwardStates.set(i, CardState.ACTIVE); refreshP1ForwardSlot(i); activated++;
 				}
 			}
 
@@ -6555,7 +6555,7 @@ public class MainWindow {
 		// ── Helpers ──────────────────────────────────────────────────────────
 
 		private boolean p2ForwardCanAttack(int idx) {
-			return p2ForwardStates.get(idx) == CardState.NORMAL
+			return p2ForwardStates.get(idx) == CardState.ACTIVE
 				&& (p2ForwardCards.get(idx).hasTrait(CardData.Trait.HASTE)
 					|| p2ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber());
 		}

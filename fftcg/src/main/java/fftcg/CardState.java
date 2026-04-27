@@ -1,7 +1,7 @@
 package fftcg;
 
 enum CardState {
-    NORMAL,
-    DULLED,
-    BRAVE_ATTACKED // Brave forward: attacked this turn but stays active
+    ACTIVE,       // card is undulled and can act
+    DULLED,       // card is dulled and cannot act
+    BRAVE_ATTACKED // Brave Forward: attacked this turn but stays active
 }
