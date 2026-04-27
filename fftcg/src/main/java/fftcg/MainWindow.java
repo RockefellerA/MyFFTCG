@@ -1999,7 +1999,7 @@ public class MainWindow {
 		List<Integer> eligible = new ArrayList<>();
 		for (int i = 0; i < p1ForwardStates.size(); i++) {
 			CardState s = p1ForwardStates.get(i);
-			// NORMAL forwards can always block; BRAVE_ATTACKED forwards can block because
+			// ACTIVE forwards can always block; BRAVE_ATTACKED forwards can block because
 			// Brave allows acting again even after attacking
 			if (s == CardState.ACTIVE || s == CardState.BRAVE_ATTACKED) eligible.add(i);
 		}
@@ -4206,8 +4206,8 @@ public class MainWindow {
 	 * Composites a (possibly transformed) card image onto a square
 	 * {@code CARD_H × CARD_H} canvas, respecting the slot alignment rules:
 	 * <ul>
-	 *   <li>Normal / Frozen — upright (or flipped) card pinned to the left edge, top</li>
-	 *   <li>Dulled — card rotated 90° CW ({@code CARD_H × CARD_W}), pinned left + bottom</li>
+	 *   <li>Active - upright card pinned to the left edge, top</li>
+	 *   <li>Dull — card rotated 90° CW ({@code CARD_H × CARD_W}), pinned left + bottom</li>
 	 * </ul>
 	 */
 	private static BufferedImage renderBackupCard(BufferedImage card, CardState state) {
@@ -4399,13 +4399,13 @@ public class MainWindow {
 	 * Returns {@code true} if {@code ability} can currently be activated by the
 	 * card at the given slot.
 	 *
-	 * @param state       current card state (NORMAL / DULLED / BRAVE_ATTACKED)
+	 * @param state       current card state (ACTIVE / DULL / BRAVE_ATTACKED)
 	 * @param playedTurn  turn the card entered the field (0 = unknown)
 	 * @param sourceName  card name, needed for special-ability hand check
 	 */
 	private boolean canActivateAbility(ActionAbility ability, boolean isFrozen, CardState state,
 			int playedTurn, String sourceName) {
-		// Abilities with Dull cost require the card to be in NORMAL state
+		// Abilities with Dull cost require the card to be in ACTIVE state
 		// and not played this turn (summoning restriction)
 		if (ability.requiresDull()) {
 			if (state != CardState.ACTIVE) return false;
@@ -6335,7 +6335,7 @@ public class MainWindow {
 		private void doActivePhase() {
 			int activated = 0, thawed = 0;
 
-			// Pass 1: activate DULLED/BRAVE_ATTACKED cards; frozen cards are skipped
+			// Pass 1: activate DULL/BRAVE_ATTACKED cards; frozen cards are skipped
 			for (int i = 0; i < p2BackupStates.length; i++) {
 				if (p2BackupCards[i] == null) continue;
 				if (p2BackupStates[i] == CardState.DULL && !p2BackupFrozen[i]) {
@@ -6510,7 +6510,7 @@ public class MainWindow {
 		private void startP1Turn() {
 			int activated = 0, thawed = 0;
 
-			// Pass 1: activate DULLED/BRAVE_ATTACKED cards; frozen cards are skipped
+			// Pass 1: activate DULL/BRAVE_ATTACKED cards; frozen cards are skipped
 			for (int i = 0; i < p1BackupStates.length; i++) {
 				if (p1BackupStates[i] == CardState.DULL && !p1BackupFrozen[i]) {
 					p1BackupStates[i] = CardState.ACTIVE; refreshP1BackupSlot(i); activated++;

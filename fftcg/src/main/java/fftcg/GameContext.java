@@ -30,7 +30,7 @@ public interface GameContext {
     /** Accumulated damage on P1's forward at {@code idx}. */
     int p1ForwardCurrentDamage(int idx);
 
-    /** Field state (NORMAL / DULLED / FROZEN / BRAVE_ATTACKED) of P1's forward at {@code idx}. */
+    /** Field state (ACTIVE / DULL / BRAVE_ATTACKED) of P1's forward at {@code idx}. */
     CardState p1ForwardState(int idx);
 
     /**
@@ -68,7 +68,7 @@ public interface GameContext {
      * @param maxCount     maximum number of forwards the player may select
      * @param upTo         if {@code true} the player may confirm with fewer than {@code maxCount}
      * @param opponentOnly if {@code true} only P2's forwards are offered as targets
-     * @param condition    optional eligibility filter: {@code "dull"}, {@code "dulled"},
+     * @param condition    optional eligibility filter: {@code "active"}, {@code "dull"}
      *                     {@code "damaged"}, or {@code null} for any forward
      * @return the list of chosen {@link ForwardTarget}s (may be empty if no eligible targets
      *         exist or the player skips)
