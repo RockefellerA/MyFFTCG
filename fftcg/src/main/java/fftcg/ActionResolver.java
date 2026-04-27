@@ -37,7 +37,7 @@ public class ActionResolver {
      */
     private static final Pattern CHOOSE_FORWARDS_PATTERN = Pattern.compile(
         "(?i)Choose\\s+(?<upto>up\\s+to\\s+)?(?<count>\\d+)\\s+" +
-        "(?:(?<condition>dull(?:ed)?|damaged)\\s+)?" +
+        "(?:(?<condition>dull(?:ed)?|damaged|attacking|blocking)\\s+)?" +
         "Forwards?" +
         "(?:\\s+(?<opponent>(?:your\\s+)?opponent\\s+controls))?" +
         "(?:[.]\\s*|\\s+and\\s+|,\\s*)" +
@@ -84,7 +84,7 @@ public class ActionResolver {
      */
     private static final Pattern DEAL_DAMAGE_TO_FORWARDS = Pattern.compile(
         "(?i)Deal\\s+(?<amount>\\d+)\\s+damage\\s+to\\s+all(?:\\s+the)?\\s+" +
-        "(?:(?<condition>damaged|dull(?:ed)?)\\s+)?" +
+        "(?:(?<condition>damaged|dull(?:ed)?|attacking|blocking)\\s+)?" +
         "Forwards?(?:\\s+(?<opponent>opponent\\s+controls))?"
     );
 
@@ -172,7 +172,8 @@ public class ActionResolver {
             // --- P2 forwards (always included) ---
             List<Integer> p2Targets = new ArrayList<>();
             for (int i = 0; i < ctx.p2ForwardCount(); i++) {
-                if (meetsCondition(ctx.p2ForwardState(i), ctx.p2ForwardCurrentDamage(i), condition))
+                if (meetsCondition(ctx.p2ForwardState(i), ctx.p2ForwardCurrentDamage(i),
+                        ctx.isP2ForwardAttacking(i), ctx.isP2ForwardBlocking(i), condition))
                     p2Targets.add(i);
             }
             for (int i = p2Targets.size() - 1; i >= 0; i--) {
@@ -185,7 +186,8 @@ public class ActionResolver {
             if (!opponentOnly) {
                 List<Integer> p1Targets = new ArrayList<>();
                 for (int i = 0; i < ctx.p1ForwardCount(); i++) {
-                    if (meetsCondition(ctx.p1ForwardState(i), ctx.p1ForwardCurrentDamage(i), condition))
+                    if (meetsCondition(ctx.p1ForwardState(i), ctx.p1ForwardCurrentDamage(i),
+                            ctx.isP1ForwardAttacking(i), ctx.isP1ForwardBlocking(i), condition))
                         p1Targets.add(i);
                 }
                 for (int i = p1Targets.size() - 1; i >= 0; i--) {
@@ -202,18 +204,19 @@ public class ActionResolver {
     // -------------------------------------------------------------------------
 
     /**
-     * Returns {@code true} if a forward with the given state and accumulated
-     * damage satisfies {@code condition}.
+     * Returns {@code true} if a forward satisfies {@code condition}.
      *
      * @param condition {@code "dull"}, {@code "dulled"}, {@code "damaged"},
-     *                  or {@code null} (matches everything)
+     *                  {@code "attacking"}, {@code "blocking"}, or {@code null} (any)
      */
     private static boolean meetsCondition(CardState state, int currentDamage,
-            String condition) {
+            boolean isAttacking, boolean isBlocking, String condition) {
         if (condition == null) return true;
         return switch (condition.toLowerCase()) {
             case "dull", "dulled" -> state == CardState.DULLED;
             case "damaged"        -> currentDamage > 0;
+            case "attacking"      -> isAttacking;
+            case "blocking"       -> isBlocking;
             default               -> true;
         };
     }

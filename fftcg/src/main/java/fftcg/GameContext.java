@@ -89,6 +89,20 @@ public interface GameContext {
     /** Freezes P2's forward at {@code idx} (blue tint; skips activation next Active Phase). */
     void freezeP2Forward(int idx);
 
+    // ---- Attack / block state queries ---------------------------------------
+
+    /** Returns {@code true} if P1's forward at {@code idx} is currently declared as an attacker. */
+    boolean isP1ForwardAttacking(int idx);
+
+    /** Returns {@code true} if P2's forward at {@code idx} is currently declared as an attacker. */
+    boolean isP2ForwardAttacking(int idx);
+
+    /** Returns {@code true} if P1's forward at {@code idx} is currently declared as a blocker. */
+    boolean isP1ForwardBlocking(int idx);
+
+    /** Returns {@code true} if P2's forward at {@code idx} is currently declared as a blocker. */
+    boolean isP2ForwardBlocking(int idx);
+
     // ---- Break / Remove-from-game effects -----------------------------------
 
     /** Breaks P1's forward at {@code idx} (sends to P1's Break Zone). */

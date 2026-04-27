@@ -4761,12 +4761,14 @@ public class MainWindow {
 				java.util.List<ForwardTarget> eligible = new ArrayList<>();
 				if (!opponentOnly) {
 					for (int i = 0; i < p1ForwardCards.size(); i++) {
-						if (meetsTargetCondition(p1ForwardStates.get(i), p1ForwardDamage.get(i), condition))
+						if (meetsTargetCondition(p1ForwardStates.get(i), p1ForwardDamage.get(i),
+								p1AttackSelection.contains(i), false, condition))
 							eligible.add(new ForwardTarget(true, i));
 					}
 				}
 				for (int i = 0; i < p2ForwardCards.size(); i++) {
-					if (meetsTargetCondition(p2ForwardStates.get(i), p2ForwardDamage.get(i), condition))
+					if (meetsTargetCondition(p2ForwardStates.get(i), p2ForwardDamage.get(i),
+						false, false, condition))
 						eligible.add(new ForwardTarget(false, i));
 				}
 				String title = "Choose " + (upTo ? "up to " : "") + maxCount
@@ -4803,6 +4805,13 @@ public class MainWindow {
 				logEntry("[P2] " + p2ForwardCards.get(idx).name() + " is frozen");
 				refreshP2ForwardSlot(idx);
 			}
+
+			// P1 attack selection is tracked; P2 attacking and all blocking states are not
+			// yet persisted outside of momentary combat resolution.
+			@Override public boolean isP1ForwardAttacking(int idx) { return p1AttackSelection.contains(idx); }
+			@Override public boolean isP2ForwardAttacking(int idx) { return false; }
+			@Override public boolean isP1ForwardBlocking(int idx)  { return false; }
+			@Override public boolean isP2ForwardBlocking(int idx)  { return false; }
 
 			@Override public void breakP1Forward(int idx) {
 				MainWindow.this.breakP1Forward(idx);
@@ -4847,11 +4856,14 @@ public class MainWindow {
 	// Forward target selection helpers (used by GameContext.selectForwards)
 	// -------------------------------------------------------------------------
 
-	private static boolean meetsTargetCondition(CardState state, int damage, String condition) {
+	private static boolean meetsTargetCondition(CardState state, int damage,
+			boolean isAttacking, boolean isBlocking, String condition) {
 		if (condition == null) return true;
 		return switch (condition.toLowerCase()) {
 			case "dull", "dulled" -> state == CardState.DULLED;
 			case "damaged"        -> damage > 0;
+			case "attacking"      -> isAttacking;
+			case "blocking"       -> isBlocking;
 			default               -> true;
 		};
 	}
