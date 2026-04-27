@@ -206,14 +206,15 @@ public class ActionResolver {
     /**
      * Returns {@code true} if a forward satisfies {@code condition}.
      *
-     * @param condition {@code "dull"}, {@code "dulled"}, {@code "damaged"},
+     * @param condition {@code "active"}, {@code "dull"}, {@code "damaged"},
      *                  {@code "attacking"}, {@code "blocking"}, or {@code null} (any)
      */
     private static boolean meetsCondition(CardState state, int currentDamage,
             boolean isAttacking, boolean isBlocking, String condition) {
         if (condition == null) return true;
         return switch (condition.toLowerCase()) {
-            case "dull", "dulled" -> state == CardState.DULLED;
+            case "active"         -> state == CardState.ACTIVE;
+            case "dull"           -> state == CardState.DULL;
             case "damaged"        -> currentDamage > 0;
             case "attacking"      -> isAttacking;
             case "blocking"       -> isBlocking;
