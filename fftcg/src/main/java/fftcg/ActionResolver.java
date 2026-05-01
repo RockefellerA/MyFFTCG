@@ -26,12 +26,16 @@ public class ActionResolver {
 
     /**
      * Matches the "Choose" targeted effect header:
-     * "Choose [up to] N [condition] Forward[s] [opponent controls] [separator] followup"
+     * "Choose [up to] N [condition] [element] Forward[s] [control] [zone] [separator] followup"
      * <ul>
      *   <li>Group {@code upto}      — present when "up to" precedes the count</li>
      *   <li>Group {@code count}     — number of forwards to choose</li>
      *   <li>Group {@code condition} — optional: "dull", "damaged", "attacking", "blocking", or "active"</li>
-     *   <li>Group {@code opponent}  — present when "opponent controls" appears</li>
+     *   <li>Group {@code element}   — optional element name, e.g. "Fire", "Earth"</li>
+     *   <li>Group {@code control}   — optional: "opponent controls", "your opponent controls",
+     *                                 or "you control"</li>
+     *   <li>Group {@code zone}      — optional zone, e.g. "in your Break Zone" or
+     *                                 "in your opponent's Break Zone"</li>
      *   <li>Group {@code followup}  — the action to apply to chosen targets</li>
      * </ul>
      */
@@ -41,6 +45,7 @@ public class ActionResolver {
         "(?:(?<element>Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark)\\s+)?" +
         "Forwards?" +
         "(?:\\s+(?<control>(?:your\\s+)?opponent\\s+controls|you\\s+control))?" +
+        "(?:\\s+(?<zone>in\\s+your(?:\\s+opponent(?:'s)?)?\\s+Break\\s+Zone))?" +
         "(?:[.]\\s*|\\s+and\\s+|,\\s*)" +
         "(?<followup>.+)"
     );
@@ -73,6 +78,16 @@ public class ActionResolver {
     /** Matches "Remove it/them from the game". */
     private static final Pattern FOLLOWUP_REMOVE_FROM_GAME = Pattern.compile(
         "(?i)Remove\\s+(?:it|them)\\s+from\\s+(?:the\\s+)?game"
+    );
+
+    /** Matches "Play it onto the field" or "Play them onto the field". */
+    private static final Pattern FOLLOWUP_PLAY_ONTO_FIELD = Pattern.compile(
+        "(?i)Play\\s+(?:it|them)\\s+onto\\s+(?:the\\s+)?field"
+    );
+
+    /** Matches "Add it to your hand" or "Add them to your hand". */
+    private static final Pattern FOLLOWUP_ADD_TO_HAND = Pattern.compile(
+        "(?i)Add\\s+(?:it|them)\\s+to\\s+your\\s+hand"
     );
 
     /**
@@ -228,26 +243,34 @@ public class ActionResolver {
     // -------------------------------------------------------------------------
 
     /**
-     * Parses "Choose [up to] N [condition] Forward[s] [opponent controls] [sep] followup".
+     * Parses "Choose [up to] N [condition] Forward[s] [control] [zone] [sep] followup".
      *
      * <p>Supported followup actions:
      * <ul>
-     *   <li>"Deal [it|them] N damage" / "Deal N damage to [it|them]" — damages each chosen forward</li>
-     *   <li>"Dull it" / "Dull them" — dulls each chosen forward</li>
+     *   <li>"Deal [it|them] N damage"     — damages each chosen forward</li>
+     *   <li>"Dull it/them"                — dulls each chosen forward</li>
+     *   <li>"Freeze it/them"              — freezes each chosen forward</li>
+     *   <li>"Dull it/them and freeze…"    — dulls and freezes each chosen forward</li>
+     *   <li>"Break it/them"               — breaks each chosen forward</li>
+     *   <li>"Remove it/them from the game"— removes each chosen forward from the game</li>
+     *   <li>"Play it/them onto the field" — moves chosen forwards from their zone onto the field</li>
+     *   <li>"Add it/them to your hand"    — moves chosen forwards from their zone to P1's hand</li>
      * </ul>
      */
     private static Consumer<GameContext> tryParseChooseForwards(String text) {
         Matcher m = CHOOSE_FORWARDS_PATTERN.matcher(text);
         if (!m.find()) return null;
 
-        boolean upTo       = m.group("upto") != null;
-        int     maxCount   = Integer.parseInt(m.group("count"));
-        String  condition  = m.group("condition");   // nullable
-        String  element    = m.group("element");     // nullable — e.g. "Earth", "Fire"
-        String  control    = m.group("control");     // nullable — "opponent controls" / "you control"
+        boolean upTo         = m.group("upto") != null;
+        int     maxCount     = Integer.parseInt(m.group("count"));
+        String  condition    = m.group("condition");   // nullable
+        String  element      = m.group("element");     // nullable — e.g. "Earth", "Fire"
+        String  control      = m.group("control");     // nullable — "opponent controls" / "you control"
         boolean opponentOnly = control != null && !control.equalsIgnoreCase("you control");
         boolean selfOnly     = "you control".equalsIgnoreCase(control);
-        String  followup   = m.group("followup").trim();
+        String  zone         = m.group("zone");        // nullable — "in your Break Zone" etc.
+        boolean opponentZone = zone != null && zone.toLowerCase().contains("opponent");
+        String  followup     = m.group("followup").trim();
 
         // --- Damage followup ---
         Matcher dmgM = FOLLOWUP_DAMAGE.matcher(followup);
@@ -257,9 +280,9 @@ public class ActionResolver {
                 ctx.logEntry("Choose " + (upTo ? "up to " : "") + maxCount
                         + (condition != null ? " " + condition : "") + " Forward(s)"
                         + (opponentOnly ? " (opponent)" : "") + " — Deal " + damage + " damage");
-                List<ForwardTarget> targets =
-                        ctx.selectForwards(maxCount, upTo, opponentOnly, selfOnly, condition, element);
-                // Apply damage in reverse-index order within each player to keep indices stable
+                List<ForwardTarget> targets = selectTargets(
+                        ctx, maxCount, upTo, opponentOnly, selfOnly, condition, element,
+                        zone, opponentZone);
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> ctx.damageP1Forward(t.idx(), damage));
@@ -276,8 +299,9 @@ public class ActionResolver {
                 ctx.logEntry("Choose " + (upTo ? "up to " : "") + maxCount
                         + (condition != null ? " " + condition : "") + " Forward(s)"
                         + (opponentOnly ? " (opponent)" : "") + " — Dull");
-                List<ForwardTarget> targets =
-                        ctx.selectForwards(maxCount, upTo, opponentOnly, selfOnly, condition, element);
+                List<ForwardTarget> targets = selectTargets(
+                        ctx, maxCount, upTo, opponentOnly, selfOnly, condition, element,
+                        zone, opponentZone);
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> ctx.dullP1Forward(t.idx()));
@@ -293,8 +317,9 @@ public class ActionResolver {
                 ctx.logEntry("Choose " + (upTo ? "up to " : "") + maxCount
                         + (condition != null ? " " + condition : "") + " Forward(s)"
                         + (opponentOnly ? " (opponent)" : "") + " — Dull & Freeze");
-                List<ForwardTarget> targets =
-                        ctx.selectForwards(maxCount, upTo, opponentOnly, selfOnly, condition, element);
+                List<ForwardTarget> targets = selectTargets(
+                        ctx, maxCount, upTo, opponentOnly, selfOnly, condition, element,
+                        zone, opponentZone);
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> { ctx.dullP1Forward(t.idx()); ctx.freezeP1Forward(t.idx()); });
@@ -310,8 +335,9 @@ public class ActionResolver {
                 ctx.logEntry("Choose " + (upTo ? "up to " : "") + maxCount
                         + (condition != null ? " " + condition : "") + " Forward(s)"
                         + (opponentOnly ? " (opponent)" : "") + " — Freeze");
-                List<ForwardTarget> targets =
-                        ctx.selectForwards(maxCount, upTo, opponentOnly, selfOnly, condition, element);
+                List<ForwardTarget> targets = selectTargets(
+                        ctx, maxCount, upTo, opponentOnly, selfOnly, condition, element,
+                        zone, opponentZone);
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> ctx.freezeP1Forward(t.idx()));
@@ -327,8 +353,9 @@ public class ActionResolver {
                 ctx.logEntry("Choose " + (upTo ? "up to " : "") + maxCount
                         + (condition != null ? " " + condition : "") + " Forward(s)"
                         + (opponentOnly ? " (opponent)" : "") + " — Break");
-                List<ForwardTarget> targets =
-                        ctx.selectForwards(maxCount, upTo, opponentOnly, selfOnly, condition, element);
+                List<ForwardTarget> targets = selectTargets(
+                        ctx, maxCount, upTo, opponentOnly, selfOnly, condition, element,
+                        zone, opponentZone);
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> ctx.breakP1Forward(t.idx()));
@@ -344,8 +371,9 @@ public class ActionResolver {
                 ctx.logEntry("Choose " + (upTo ? "up to " : "") + maxCount
                         + (condition != null ? " " + condition : "") + " Forward(s)"
                         + (opponentOnly ? " (opponent)" : "") + " — Remove From Game");
-                List<ForwardTarget> targets =
-                        ctx.selectForwards(maxCount, upTo, opponentOnly, selfOnly, condition, element);
+                List<ForwardTarget> targets = selectTargets(
+                        ctx, maxCount, upTo, opponentOnly, selfOnly, condition, element,
+                        zone, opponentZone);
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> ctx.removeP1ForwardFromGame(t.idx()));
@@ -355,8 +383,60 @@ public class ActionResolver {
             };
         }
 
+        // --- Play onto field followup ---
+        if (FOLLOWUP_PLAY_ONTO_FIELD.matcher(followup).find()) {
+            String zoneLabel = zone != null
+                    ? " in " + (opponentZone ? "opponent's" : "your") + " Break Zone" : "";
+            return ctx -> {
+                ctx.logEntry("Choose " + (upTo ? "up to " : "") + maxCount
+                        + (condition != null ? " " + condition : "") + " Forward(s)"
+                        + zoneLabel + " — Play onto Field");
+                List<ForwardTarget> targets = selectTargets(
+                        ctx, maxCount, upTo, opponentOnly, selfOnly, condition, element,
+                        zone, opponentZone);
+                targets.stream().filter(ForwardTarget::isP1)
+                        .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
+                        .forEach(t -> ctx.playP1ForwardFromBreakZoneOntoField(t.idx()));
+                targets.stream().filter(t -> !t.isP1())
+                        .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
+                        .forEach(t -> ctx.playP2ForwardFromBreakZoneOntoField(t.idx()));
+            };
+        }
+
+        // --- Add to hand followup ---
+        if (FOLLOWUP_ADD_TO_HAND.matcher(followup).find()) {
+            String zoneLabel = zone != null
+                    ? " in " + (opponentZone ? "opponent's" : "your") + " Break Zone" : "";
+            return ctx -> {
+                ctx.logEntry("Choose " + (upTo ? "up to " : "") + maxCount
+                        + (condition != null ? " " + condition : "") + " Forward(s)"
+                        + zoneLabel + " — Add to Hand");
+                List<ForwardTarget> targets = selectTargets(
+                        ctx, maxCount, upTo, opponentOnly, selfOnly, condition, element,
+                        zone, opponentZone);
+                targets.stream().filter(ForwardTarget::isP1)
+                        .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
+                        .forEach(t -> ctx.addP1BreakZoneForwardToHand(t.idx()));
+                targets.stream().filter(t -> !t.isP1())
+                        .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
+                        .forEach(t -> ctx.addP2BreakZoneForwardToHand(t.idx()));
+            };
+        }
+
         // Recognised "Choose" header but followup not yet implemented
         return ctx -> ctx.logEntry(
                 "[ActionResolver] Choose effect — followup not yet implemented: " + followup);
+    }
+
+    /**
+     * Routes target selection to either the field or a Break Zone depending on
+     * whether {@code zone} is non-null.
+     */
+    private static List<ForwardTarget> selectTargets(GameContext ctx,
+            int maxCount, boolean upTo, boolean opponentOnly, boolean selfOnly,
+            String condition, String element, String zone, boolean opponentZone) {
+        return zone != null
+                ? ctx.selectForwardsFromBreakZone(maxCount, upTo, opponentZone, condition, element)
+                : ctx.selectForwards(maxCount, upTo, opponentOnly, selfOnly, condition, element);
     }
 }

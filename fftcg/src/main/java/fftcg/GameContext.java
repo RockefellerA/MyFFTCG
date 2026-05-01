@@ -127,4 +127,34 @@ public interface GameContext {
      * (sends to P2's Removed-From-Game zone, not the Break Zone).
      */
     void removeP2ForwardFromGame(int idx);
+
+    // ---- Break-zone selection -----------------------------------------------
+
+    /**
+     * Shows a modal dialog letting P1 choose up to {@code maxCount} eligible
+     * forwards from a Break Zone and returns their targets.
+     *
+     * @param opponentZone if {@code true}, selects from P2's Break Zone; otherwise P1's
+     * @param condition    optional eligibility filter ({@code "active"}, {@code "dull"},
+     *                     {@code "damaged"}, or {@code null} for any)
+     * @param element      optional element name to restrict targets; {@code null} = any
+     */
+    List<ForwardTarget> selectForwardsFromBreakZone(int maxCount, boolean upTo,
+            boolean opponentZone, String condition, String element);
+
+    // ---- Play from break zone onto field ------------------------------------
+
+    /** Moves P1's forward at break-zone index {@code idx} onto P1's field (no cost paid). */
+    void playP1ForwardFromBreakZoneOntoField(int idx);
+
+    /** Moves P2's forward at break-zone index {@code idx} onto the field (no cost paid). */
+    void playP2ForwardFromBreakZoneOntoField(int idx);
+
+    // ---- Add from break zone to hand ----------------------------------------
+
+    /** Moves P1's forward at break-zone index {@code idx} to P1's hand. */
+    void addP1BreakZoneForwardToHand(int idx);
+
+    /** Moves P2's forward at break-zone index {@code idx} to P1's hand. */
+    void addP2BreakZoneForwardToHand(int idx);
 }
