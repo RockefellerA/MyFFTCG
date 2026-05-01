@@ -4853,6 +4853,63 @@ public class MainWindow {
 					gameState.addToP2PermanentRfp(bz.remove(bz.size() - 1));
 				refreshP2BreakLabel();
 			}
+
+			@Override
+			public java.util.List<ForwardTarget> selectForwardsFromBreakZone(
+					int maxCount, boolean upTo, boolean opponentZone,
+					String condition, String element) {
+				java.util.List<CardData> zone = opponentZone
+						? gameState.getP2BreakZone() : gameState.getP1BreakZone();
+				java.util.List<ForwardTarget> eligible = new ArrayList<>();
+				for (int i = 0; i < zone.size(); i++) {
+					CardData card = zone.get(i);
+					if (element != null && !card.containsElement(element)) continue;
+					eligible.add(new ForwardTarget(!opponentZone, i));
+				}
+				String title = "Choose " + (upTo ? "up to " : "") + maxCount
+						+ (element != null ? " " + element : "")
+						+ " Forward" + (maxCount != 1 ? "s" : "")
+						+ " in " + (opponentZone ? "opponent's" : "your") + " Break Zone";
+				return showBreakZoneSelectDialog(eligible, zone, maxCount, upTo, title);
+			}
+
+			@Override public void playP1ForwardFromBreakZoneOntoField(int idx) {
+				java.util.List<CardData> bz = gameState.getP1BreakZone();
+				if (idx >= bz.size()) return;
+				CardData card = bz.remove(idx);
+				logEntry(card.name() + " played from Break Zone onto field");
+				placeCardInForwardZone(card);
+				refreshP1BreakLabel();
+			}
+
+			@Override public void playP2ForwardFromBreakZoneOntoField(int idx) {
+				java.util.List<CardData> bz = gameState.getP2BreakZone();
+				if (idx >= bz.size()) return;
+				CardData card = bz.remove(idx);
+				logEntry(card.name() + " played from opponent's Break Zone onto field");
+				placeCardInForwardZone(card);
+				refreshP2BreakLabel();
+			}
+
+			@Override public void addP1BreakZoneForwardToHand(int idx) {
+				java.util.List<CardData> bz = gameState.getP1BreakZone();
+				if (idx >= bz.size()) return;
+				CardData card = bz.remove(idx);
+				gameState.getP1Hand().add(card);
+				logEntry(card.name() + " returned from Break Zone to hand");
+				refreshP1BreakLabel();
+				refreshP1HandLabel();
+			}
+
+			@Override public void addP2BreakZoneForwardToHand(int idx) {
+				java.util.List<CardData> bz = gameState.getP2BreakZone();
+				if (idx >= bz.size()) return;
+				CardData card = bz.remove(idx);
+				gameState.getP1Hand().add(card);
+				logEntry(card.name() + " taken from opponent's Break Zone to hand");
+				refreshP2BreakLabel();
+				refreshP1HandLabel();
+			}
 		};
 
 		ActionResolver.resolve(ability, source, gameState, ctx);
@@ -4955,6 +5012,85 @@ public class MainWindow {
 		dlg.getContentPane().add(hdr,      BorderLayout.NORTH);
 		dlg.getContentPane().add(btnsPanel, BorderLayout.CENTER);
 		dlg.getContentPane().add(south,     BorderLayout.SOUTH);
+		dlg.pack();
+		dlg.setLocationRelativeTo(frame);
+		dlg.setVisible(true);
+		return java.util.List.copyOf(chosen);
+	}
+
+	/**
+	 * Like {@link #showForwardSelectDialog} but selects from a Break Zone list
+	 * rather than the field.  {@code eligible} entries carry the correct
+	 * {@code isP1} flag and an index into {@code zone}.
+	 */
+	private java.util.List<ForwardTarget> showBreakZoneSelectDialog(
+			java.util.List<ForwardTarget> eligible, java.util.List<CardData> zone,
+			int maxCount, boolean upTo, String title) {
+		if (eligible.isEmpty()) { logEntry("Choose: no eligible targets in break zone"); return java.util.List.of(); }
+		if (!upTo && eligible.size() <= maxCount) return java.util.List.copyOf(eligible);
+
+		JDialog dlg = new JDialog(frame, title, true);
+		dlg.setResizable(false);
+		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+		java.util.List<ForwardTarget> chosen = new ArrayList<>();
+		java.util.Set<Integer> sel = new java.util.LinkedHashSet<>();
+
+		JPanel btnsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 4));
+
+		JButton confirmBtn = new JButton("Confirm");
+		confirmBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		confirmBtn.setEnabled(upTo);
+
+		for (int i = 0; i < eligible.size(); i++) {
+			ForwardTarget target = eligible.get(i);
+			CardData card = zone.get(target.idx());
+			final int fi = i;
+			JButton btn = new JButton("<html><center>"
+					+ (target.isP1() ? "[Your BZ] " : "[P2 BZ] ")
+					+ card.name() + "<br>(" + card.power() + ")</center></html>");
+			btn.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			btn.setPreferredSize(new Dimension(130, 56));
+			btn.addActionListener(ae -> {
+				if (sel.contains(fi)) {
+					sel.remove(fi);
+					btn.setBackground(null);
+				} else {
+					if (sel.size() >= maxCount) return;
+					sel.add(fi);
+					btn.setBackground(Color.YELLOW);
+					if (!upTo && sel.size() == maxCount) {
+						for (int si : sel) chosen.add(eligible.get(si));
+						dlg.dispose();
+						return;
+					}
+				}
+				confirmBtn.setEnabled(upTo || sel.size() == maxCount);
+			});
+			btnsPanel.add(btn);
+		}
+
+		confirmBtn.addActionListener(ae -> {
+			for (int si : sel) chosen.add(eligible.get(si));
+			dlg.dispose();
+		});
+		JPanel south = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 4));
+		south.add(confirmBtn);
+		if (upTo) {
+			JButton skipBtn = new JButton("Skip");
+			skipBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+			skipBtn.addActionListener(ae -> dlg.dispose());
+			south.add(skipBtn);
+		}
+
+		JLabel hdr = new JLabel(title, SwingConstants.CENTER);
+		hdr.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		hdr.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
+
+		dlg.getContentPane().setLayout(new BorderLayout(0, 4));
+		dlg.getContentPane().add(hdr,       BorderLayout.NORTH);
+		dlg.getContentPane().add(btnsPanel,  BorderLayout.CENTER);
+		dlg.getContentPane().add(south,      BorderLayout.SOUTH);
 		dlg.pack();
 		dlg.setLocationRelativeTo(frame);
 		dlg.setVisible(true);
