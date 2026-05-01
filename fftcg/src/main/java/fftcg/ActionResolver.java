@@ -30,14 +30,14 @@ public class ActionResolver {
      * <ul>
      *   <li>Group {@code upto}      — present when "up to" precedes the count</li>
      *   <li>Group {@code count}     — number of forwards to choose</li>
-     *   <li>Group {@code condition} — optional: "dull", "dulled", or "damaged"</li>
+     *   <li>Group {@code condition} — optional: "dull", "damaged", "attacking", "blocking", or "active"</li>
      *   <li>Group {@code opponent}  — present when "opponent controls" appears</li>
      *   <li>Group {@code followup}  — the action to apply to chosen targets</li>
      * </ul>
      */
     private static final Pattern CHOOSE_FORWARDS_PATTERN = Pattern.compile(
         "(?i)Choose\\s+(?<upto>up\\s+to\\s+)?(?<count>\\d+)\\s+" +
-        "(?:(?<condition>dull(?:ed)?|damaged|attacking|blocking|active)\\s+)?" +
+        "(?:(?<condition>dull|damaged|attacking|blocking|active)\\s+)?" +
         "(?:(?<element>Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark)\\s+)?" +
         "Forwards?" +
         "(?:\\s+(?<control>(?:your\\s+)?opponent\\s+controls|you\\s+control))?" +
@@ -79,13 +79,13 @@ public class ActionResolver {
      * Matches: "Deal X damage to all [the] [condition] Forwards[.] [opponent controls]"
      * <ul>
      *   <li>Group {@code amount}    — numeric damage value</li>
-     *   <li>Group {@code condition} — optional "damaged" or "dull/dulled"</li>
+     *   <li>Group {@code condition} — optional "damaged" or "dull"</li>
      *   <li>Group {@code opponent}  — present when "opponent controls" appears</li>
      * </ul>
      */
     private static final Pattern DEAL_DAMAGE_TO_FORWARDS = Pattern.compile(
         "(?i)Deal\\s+(?<amount>\\d+)\\s+damage\\s+to\\s+all(?:\\s+the)?\\s+" +
-        "(?:(?<condition>damaged|dull(?:ed)?|attacking|blocking)\\s+)?" +
+        "(?:(?<condition>damaged|dull|attacking|blocking)\\s+)?" +
         "Forwards?(?:\\s+(?<opponent>opponent\\s+controls))?"
     );
 
@@ -148,7 +148,7 @@ public class ActionResolver {
      *
      * <ul>
      *   <li>No condition — all Forwards (P1 and P2, or opponent only if stated)</li>
-     *   <li>condition=dull/dulled — only Dulled Forwards</li>
+     *   <li>condition=dull — only Dulled Forwards</li>
      *   <li>condition=damaged — only Forwards that have already taken damage</li>
      * </ul>
      *

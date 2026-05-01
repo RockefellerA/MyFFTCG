@@ -4868,11 +4868,12 @@ public class MainWindow {
 			boolean isAttacking, boolean isBlocking, String condition) {
 		if (condition == null) return true;
 		return switch (condition.toLowerCase()) {
-			case "dull", "dulled" -> state == CardState.DULL;
-			case "damaged"        -> damage > 0;
-			case "attacking"      -> isAttacking;
-			case "blocking"       -> isBlocking;
-			default               -> true;
+			case "active"    -> state == CardState.ACTIVE;
+			case "dull"      -> state == CardState.DULL;
+			case "damaged"   -> damage > 0;
+			case "attacking" -> isAttacking;
+			case "blocking"  -> isBlocking;
+			default          -> true;
 		};
 	}
 
