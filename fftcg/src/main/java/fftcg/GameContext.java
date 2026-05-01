@@ -73,7 +73,12 @@ public interface GameContext {
      * @return the list of chosen {@link ForwardTarget}s (may be empty if no eligible targets
      *         exist or the player skips)
      */
-    List<ForwardTarget> selectForwards(int maxCount, boolean upTo, boolean opponentOnly, String condition);
+    /**
+     * @param selfOnly  if {@code true} only the active player's (P1's) forwards are eligible
+     * @param element   optional element name to restrict targets (e.g. {@code "Earth"}); {@code null} = any
+     */
+    List<ForwardTarget> selectForwards(int maxCount, boolean upTo, boolean opponentOnly,
+            boolean selfOnly, String condition, String element);
 
     // ---- Dull effects -------------------------------------------------------
 

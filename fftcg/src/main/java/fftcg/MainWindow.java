@@ -4757,24 +4757,32 @@ public class MainWindow {
 
 			@Override
 			public java.util.List<ForwardTarget> selectForwards(
-					int maxCount, boolean upTo, boolean opponentOnly, String condition) {
+					int maxCount, boolean upTo, boolean opponentOnly,
+					boolean selfOnly, String condition, String element) {
 				java.util.List<ForwardTarget> eligible = new ArrayList<>();
 				if (!opponentOnly) {
 					for (int i = 0; i < p1ForwardCards.size(); i++) {
+						CardData card = p1Forward(i);  // primed-aware
+						if (element != null && !card.containsElement(element)) continue;
 						if (meetsTargetCondition(p1ForwardStates.get(i), p1ForwardDamage.get(i),
 								p1AttackSelection.contains(i), false, condition))
 							eligible.add(new ForwardTarget(true, i));
 					}
 				}
-				for (int i = 0; i < p2ForwardCards.size(); i++) {
-					if (meetsTargetCondition(p2ForwardStates.get(i), p2ForwardDamage.get(i),
-						false, false, condition))
-						eligible.add(new ForwardTarget(false, i));
+				if (!selfOnly) {
+					for (int i = 0; i < p2ForwardCards.size(); i++) {
+						CardData card = p2ForwardCards.get(i);
+						if (element != null && !card.containsElement(element)) continue;
+						if (meetsTargetCondition(p2ForwardStates.get(i), p2ForwardDamage.get(i),
+								false, false, condition))
+							eligible.add(new ForwardTarget(false, i));
+					}
 				}
 				String title = "Choose " + (upTo ? "up to " : "") + maxCount
 						+ (condition != null ? " " + condition : "")
+						+ (element != null ? " " + element : "")
 						+ " Forward" + (maxCount != 1 ? "s" : "")
-						+ (opponentOnly ? " (opponent)" : "");
+						+ (opponentOnly ? " (opponent)" : selfOnly ? " (yours)" : "");
 				return showForwardSelectDialog(eligible, maxCount, upTo, title);
 			}
 

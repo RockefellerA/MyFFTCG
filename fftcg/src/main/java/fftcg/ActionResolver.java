@@ -37,9 +37,10 @@ public class ActionResolver {
      */
     private static final Pattern CHOOSE_FORWARDS_PATTERN = Pattern.compile(
         "(?i)Choose\\s+(?<upto>up\\s+to\\s+)?(?<count>\\d+)\\s+" +
-        "(?:(?<condition>dull(?:ed)?|damaged|attacking|blocking)\\s+)?" +
+        "(?:(?<condition>dull(?:ed)?|damaged|attacking|blocking|active)\\s+)?" +
+        "(?:(?<element>Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark)\\s+)?" +
         "Forwards?" +
-        "(?:\\s+(?<opponent>(?:your\\s+)?opponent\\s+controls))?" +
+        "(?:\\s+(?<control>(?:your\\s+)?opponent\\s+controls|you\\s+control))?" +
         "(?:[.]\\s*|\\s+and\\s+|,\\s*)" +
         "(?<followup>.+)"
     );
@@ -242,7 +243,10 @@ public class ActionResolver {
         boolean upTo       = m.group("upto") != null;
         int     maxCount   = Integer.parseInt(m.group("count"));
         String  condition  = m.group("condition");   // nullable
-        boolean opponentOnly = m.group("opponent") != null;
+        String  element    = m.group("element");     // nullable — e.g. "Earth", "Fire"
+        String  control    = m.group("control");     // nullable — "opponent controls" / "you control"
+        boolean opponentOnly = control != null && !control.equalsIgnoreCase("you control");
+        boolean selfOnly     = "you control".equalsIgnoreCase(control);
         String  followup   = m.group("followup").trim();
 
         // --- Damage followup ---
@@ -254,7 +258,7 @@ public class ActionResolver {
                         + (condition != null ? " " + condition : "") + " Forward(s)"
                         + (opponentOnly ? " (opponent)" : "") + " — Deal " + damage + " damage");
                 List<ForwardTarget> targets =
-                        ctx.selectForwards(maxCount, upTo, opponentOnly, condition);
+                        ctx.selectForwards(maxCount, upTo, opponentOnly, selfOnly, condition, element);
                 // Apply damage in reverse-index order within each player to keep indices stable
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
@@ -273,7 +277,7 @@ public class ActionResolver {
                         + (condition != null ? " " + condition : "") + " Forward(s)"
                         + (opponentOnly ? " (opponent)" : "") + " — Dull");
                 List<ForwardTarget> targets =
-                        ctx.selectForwards(maxCount, upTo, opponentOnly, condition);
+                        ctx.selectForwards(maxCount, upTo, opponentOnly, selfOnly, condition, element);
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> ctx.dullP1Forward(t.idx()));
@@ -290,7 +294,7 @@ public class ActionResolver {
                         + (condition != null ? " " + condition : "") + " Forward(s)"
                         + (opponentOnly ? " (opponent)" : "") + " — Dull & Freeze");
                 List<ForwardTarget> targets =
-                        ctx.selectForwards(maxCount, upTo, opponentOnly, condition);
+                        ctx.selectForwards(maxCount, upTo, opponentOnly, selfOnly, condition, element);
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> { ctx.dullP1Forward(t.idx()); ctx.freezeP1Forward(t.idx()); });
@@ -307,7 +311,7 @@ public class ActionResolver {
                         + (condition != null ? " " + condition : "") + " Forward(s)"
                         + (opponentOnly ? " (opponent)" : "") + " — Freeze");
                 List<ForwardTarget> targets =
-                        ctx.selectForwards(maxCount, upTo, opponentOnly, condition);
+                        ctx.selectForwards(maxCount, upTo, opponentOnly, selfOnly, condition, element);
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> ctx.freezeP1Forward(t.idx()));
@@ -324,7 +328,7 @@ public class ActionResolver {
                         + (condition != null ? " " + condition : "") + " Forward(s)"
                         + (opponentOnly ? " (opponent)" : "") + " — Break");
                 List<ForwardTarget> targets =
-                        ctx.selectForwards(maxCount, upTo, opponentOnly, condition);
+                        ctx.selectForwards(maxCount, upTo, opponentOnly, selfOnly, condition, element);
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> ctx.breakP1Forward(t.idx()));
@@ -341,7 +345,7 @@ public class ActionResolver {
                         + (condition != null ? " " + condition : "") + " Forward(s)"
                         + (opponentOnly ? " (opponent)" : "") + " — Remove From Game");
                 List<ForwardTarget> targets =
-                        ctx.selectForwards(maxCount, upTo, opponentOnly, condition);
+                        ctx.selectForwards(maxCount, upTo, opponentOnly, selfOnly, condition, element);
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> ctx.removeP1ForwardFromGame(t.idx()));
