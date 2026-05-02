@@ -166,6 +166,14 @@ public class MainWindow {
 	private final List<Integer>  p1MonsterPlayedOnTurn = new ArrayList<>();
 	private JPanel p1MonsterPanel;
 
+	private final List<Boolean>   p2MonsterFrozen       = new ArrayList<>();
+	private final List<JLabel>    p2MonsterLabels        = new ArrayList<>();
+	private final List<String>    p2MonsterUrls          = new ArrayList<>();
+	private final List<CardData>  p2MonsterCards         = new ArrayList<>();
+	private final List<CardState> p2MonsterStates        = new ArrayList<>();
+	private final List<Integer>   p2MonsterPlayedOnTurn  = new ArrayList<>();
+	private JPanel p2MonsterPanel;
+
 	private int      p2DamageCount = 0;
 	private JPanel[] p2DamageSlots = new JPanel[7];
 
@@ -1291,6 +1299,18 @@ public class MainWindow {
 		p1MonsterCards.clear();
 		p1MonsterStates.clear();
 		p1MonsterPlayedOnTurn.clear();
+
+		if (p2MonsterPanel != null) {
+			p2MonsterPanel.removeAll();
+			p2MonsterPanel.revalidate();
+			p2MonsterPanel.repaint();
+		}
+		p2MonsterLabels.clear();
+		p2MonsterUrls.clear();
+		p2MonsterCards.clear();
+		p2MonsterStates.clear();
+		p2MonsterPlayedOnTurn.clear();
+		p2MonsterFrozen.clear();
 		spentLbIndices.clear();
 		p2SpentLbIndices.clear();
 
@@ -4918,6 +4938,143 @@ public class MainWindow {
 				refreshP2BreakLabel();
 				refreshP1HandLabel();
 			}
+
+			@Override
+			public void applyMassFieldEffect(GameContext.MassAction action,
+					boolean forwards, boolean backups, boolean monsters,
+					boolean opponentOnly, boolean selfOnly,
+					String element, int costVal, String costCmp) {
+				if (!opponentOnly) {
+					if (forwards) {
+						for (int i = p1ForwardCards.size() - 1; i >= 0; i--) {
+							CardData c = p1Forward(i);
+							if (element != null && !c.containsElement(element)) continue;
+							if (!meetsCostConstraint(c.cost(), costVal, costCmp)) continue;
+							switch (action) {
+								case BREAK          -> breakP1Forward(i);
+								case DULL           -> dullP1Forward(i);
+								case FREEZE         -> freezeP1Forward(i);
+								case DULL_AND_FREEZE -> { dullP1Forward(i); freezeP1Forward(i); }
+								case ACTIVATE       -> { p1ForwardStates.set(i, CardState.ACTIVE); refreshP1ForwardSlot(i); }
+							}
+						}
+					}
+					if (backups) {
+						for (int i = 0; i < p1BackupCards.length; i++) {
+							if (p1BackupCards[i] == null) continue;
+							CardData c = p1BackupCards[i];
+							if (element != null && !c.containsElement(element)) continue;
+							if (!meetsCostConstraint(c.cost(), costVal, costCmp)) continue;
+							switch (action) {
+								case BREAK -> {
+									logEntry(c.name() + " is broken");
+									gameState.getP1BreakZone().add(c);
+									p1BackupCards[i] = null;
+									p1BackupStates[i] = CardState.ACTIVE;
+									refreshP1BackupSlot(i);
+									refreshP1BreakLabel();
+								}
+								case DULL           -> { p1BackupStates[i] = CardState.DULL;   logEntry(c.name() + " is dulled");          refreshP1BackupSlot(i); }
+								case FREEZE         -> { p1BackupFrozen[i] = true;              logEntry(c.name() + " is frozen");          refreshP1BackupSlot(i); }
+								case DULL_AND_FREEZE -> { p1BackupStates[i] = CardState.DULL; p1BackupFrozen[i] = true; logEntry(c.name() + " is dulled & frozen"); refreshP1BackupSlot(i); }
+								case ACTIVATE       -> { p1BackupStates[i] = CardState.ACTIVE; logEntry(c.name() + " is activated");       refreshP1BackupSlot(i); }
+							}
+						}
+					}
+					if (monsters) {
+						for (int i = p1MonsterCards.size() - 1; i >= 0; i--) {
+							CardData c = p1MonsterCards.get(i);
+							if (element != null && !c.containsElement(element)) continue;
+							if (!meetsCostConstraint(c.cost(), costVal, costCmp)) continue;
+							switch (action) {
+								case BREAK -> {
+									logEntry(c.name() + " is broken");
+									gameState.getP1BreakZone().add(c);
+									p1MonsterCards.remove(i);
+									p1MonsterStates.remove(i);
+									p1MonsterFrozen.remove(i);
+									p1MonsterPlayedOnTurn.remove(i);
+									p1MonsterUrls.remove(i);
+									JLabel lbl = p1MonsterLabels.remove(i);
+									p1MonsterPanel.remove(lbl);
+									p1MonsterPanel.revalidate();
+									p1MonsterPanel.repaint();
+									refreshP1BreakLabel();
+								}
+								case DULL           -> { p1MonsterStates.set(i, CardState.DULL);   logEntry(c.name() + " is dulled");          refreshP1MonsterSlot(i); }
+								case FREEZE         -> { p1MonsterFrozen.set(i, true);              logEntry(c.name() + " is frozen");          refreshP1MonsterSlot(i); }
+								case DULL_AND_FREEZE -> { p1MonsterStates.set(i, CardState.DULL); p1MonsterFrozen.set(i, true); logEntry(c.name() + " is dulled & frozen"); refreshP1MonsterSlot(i); }
+								case ACTIVATE       -> { p1MonsterStates.set(i, CardState.ACTIVE); logEntry(c.name() + " is activated");       refreshP1MonsterSlot(i); }
+							}
+						}
+					}
+				}
+				if (!selfOnly) {
+					if (forwards) {
+						for (int i = p2ForwardCards.size() - 1; i >= 0; i--) {
+							CardData c = p2ForwardCards.get(i);
+							if (element != null && !c.containsElement(element)) continue;
+							if (!meetsCostConstraint(c.cost(), costVal, costCmp)) continue;
+							switch (action) {
+								case BREAK          -> breakP2Forward(i);
+								case DULL           -> dullP2Forward(i);
+								case FREEZE         -> freezeP2Forward(i);
+								case DULL_AND_FREEZE -> { dullP2Forward(i); freezeP2Forward(i); }
+								case ACTIVATE       -> { p2ForwardStates.set(i, CardState.ACTIVE); refreshP2ForwardSlot(i); }
+							}
+						}
+					}
+					if (backups) {
+						for (int i = 0; i < p2BackupCards.length; i++) {
+							if (p2BackupCards[i] == null) continue;
+							CardData c = p2BackupCards[i];
+							if (element != null && !c.containsElement(element)) continue;
+							if (!meetsCostConstraint(c.cost(), costVal, costCmp)) continue;
+							switch (action) {
+								case BREAK -> {
+									logEntry("[P2] " + c.name() + " is broken");
+									gameState.getP2BreakZone().add(c);
+									p2BackupCards[i] = null;
+									p2BackupStates[i] = CardState.ACTIVE;
+									refreshP2BackupSlot(i);
+									refreshP2BreakLabel();
+								}
+								case DULL           -> { p2BackupStates[i] = CardState.DULL;   logEntry("[P2] " + c.name() + " is dulled");          refreshP2BackupSlot(i); }
+								case FREEZE         -> { p2BackupFrozen[i] = true;              logEntry("[P2] " + c.name() + " is frozen");          refreshP2BackupSlot(i); }
+								case DULL_AND_FREEZE -> { p2BackupStates[i] = CardState.DULL; p2BackupFrozen[i] = true; logEntry("[P2] " + c.name() + " is dulled & frozen"); refreshP2BackupSlot(i); }
+								case ACTIVATE       -> { p2BackupStates[i] = CardState.ACTIVE; logEntry("[P2] " + c.name() + " is activated");       refreshP2BackupSlot(i); }
+							}
+						}
+					}
+					if (monsters) {
+						for (int i = p2MonsterCards.size() - 1; i >= 0; i--) {
+							CardData c = p2MonsterCards.get(i);
+							if (element != null && !c.containsElement(element)) continue;
+							if (!meetsCostConstraint(c.cost(), costVal, costCmp)) continue;
+							switch (action) {
+								case BREAK -> {
+									logEntry("[P2] " + c.name() + " is broken");
+									gameState.getP2BreakZone().add(c);
+									p2MonsterCards.remove(i);
+									p2MonsterStates.remove(i);
+									p2MonsterFrozen.remove(i);
+									p2MonsterPlayedOnTurn.remove(i);
+									p2MonsterUrls.remove(i);
+									JLabel lbl = p2MonsterLabels.remove(i);
+									p2MonsterPanel.remove(lbl);
+									p2MonsterPanel.revalidate();
+									p2MonsterPanel.repaint();
+									refreshP2BreakLabel();
+								}
+								case DULL           -> { p2MonsterStates.set(i, CardState.DULL);   logEntry("[P2] " + c.name() + " is dulled");          refreshP2MonsterSlot(i); }
+								case FREEZE         -> { p2MonsterFrozen.set(i, true);              logEntry("[P2] " + c.name() + " is frozen");          refreshP2MonsterSlot(i); }
+								case DULL_AND_FREEZE -> { p2MonsterStates.set(i, CardState.DULL); p2MonsterFrozen.set(i, true); logEntry("[P2] " + c.name() + " is dulled & frozen"); refreshP2MonsterSlot(i); }
+								case ACTIVATE       -> { p2MonsterStates.set(i, CardState.ACTIVE); logEntry("[P2] " + c.name() + " is activated");       refreshP2MonsterSlot(i); }
+							}
+						}
+					}
+				}
+			}
 		};
 
 		ActionResolver.resolve(ability, source, gameState, ctx);
@@ -5193,6 +5350,7 @@ public class MainWindow {
 		};
 		monsterInner.setOpaque(false);
 		if (isP1) p1MonsterPanel = monsterInner;
+		else      p2MonsterPanel = monsterInner;
 
 		// Monster panel sits at the bottom of the EAST area for "lower-right" appearance
 		JPanel monsterContainer = new JPanel(new BorderLayout());
@@ -5316,6 +5474,60 @@ public class MainWindow {
 				if (raw == null) return null;
 				BufferedImage card = toARGB(raw, CARD_W, CARD_H);
 				return new ImageIcon(renderBackupCard(card, state, false, false, p1MonsterFrozen.get(idx)));
+			}
+			@Override protected void done() {
+				try {
+					ImageIcon icon = get();
+					if (icon != null) { slot.setIcon(icon); slot.setText(null); }
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+	}
+
+	/** Adds a Monster card to P2's monster zone (right side of forward zone). */
+	private void placeP2CardInMonsterZone(CardData card) {
+		if (p2MonsterPanel == null) return;
+		int idx = p2MonsterLabels.size();
+
+		JLabel lbl = new JLabel("", SwingConstants.CENTER);
+		lbl.setPreferredSize(new Dimension(CARD_H, CARD_H));
+		lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
+		lbl.setOpaque(false);
+		lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		lbl.setBorder(BorderFactory.createEmptyBorder());
+		lbl.addMouseListener(new MouseAdapter() {
+			@Override public void mouseEntered(MouseEvent e) {
+				if (lbl.getIcon() != null) showZoomAt(p2MonsterUrls.get(idx), lbl);
+			}
+			@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+		});
+
+		p2MonsterUrls.add(card.imageUrl());
+		p2MonsterCards.add(card);
+		p2MonsterStates.add(CardState.ACTIVE);
+		p2MonsterPlayedOnTurn.add(gameState.getTurnNumber());
+		p2MonsterFrozen.add(false);
+		p2MonsterLabels.add(lbl);
+
+		p2MonsterPanel.add(lbl);
+		p2MonsterPanel.revalidate();
+		p2MonsterPanel.repaint();
+
+		refreshP2MonsterSlot(idx);
+	}
+
+	/** Reloads and re-renders a single P2 monster slot using its stored URL and state. */
+	private void refreshP2MonsterSlot(int idx) {
+		String url = p2MonsterUrls.get(idx);
+		CardState state = p2MonsterStates.get(idx);
+		JLabel slot = p2MonsterLabels.get(idx);
+		if (url == null) return;
+		new SwingWorker<ImageIcon, Void>() {
+			@Override protected ImageIcon doInBackground() throws Exception {
+				Image raw = ImageCache.load(url);
+				if (raw == null) return null;
+				BufferedImage card = toARGB(raw, CARD_W, CARD_H);
+				return new ImageIcon(renderBackupCard(card, state, false, false, p2MonsterFrozen.get(idx)));
 			}
 			@Override protected void done() {
 				try {
@@ -6514,6 +6726,14 @@ public class MainWindow {
 					refreshP2ForwardSlot(i);
 				}
 			}
+			for (int i = 0; i < p2MonsterStates.size(); i++) {
+				CardState ms = p2MonsterStates.get(i);
+				if ((ms == CardState.DULL || ms == CardState.BRAVE_ATTACKED) && !p2MonsterFrozen.get(i)) {
+					p2MonsterStates.set(i, CardState.ACTIVE); refreshP2MonsterSlot(i); activated++;
+				} else {
+					refreshP2MonsterSlot(i);
+				}
+			}
 
 			// Pass 2: remove freeze — card state is unchanged, only the frozen flag is cleared
 			for (int i = 0; i < p2BackupStates.length; i++) {
@@ -6522,6 +6742,9 @@ public class MainWindow {
 			}
 			for (int i = 0; i < p2ForwardStates.size(); i++) {
 				if (p2ForwardFrozen.get(i)) { p2ForwardFrozen.set(i, false); refreshP2ForwardSlot(i); thawed++; }
+			}
+			for (int i = 0; i < p2MonsterStates.size(); i++) {
+				if (p2MonsterFrozen.get(i)) { p2MonsterFrozen.set(i, false); refreshP2MonsterSlot(i); thawed++; }
 			}
 			StringBuilder msg = new StringBuilder("Turn " + gameState.getTurnNumber() + " — P2 Active Phase");
 			if (activated > 0) msg.append(" (").append(activated).append(" activated");
@@ -6586,8 +6809,9 @@ public class MainWindow {
 				gameState.spendP2Cp(element, Math.min(card.cost(), gameState.getP2CpForElement(element)));
 				refreshP2LimitButton();
 				logEntry("[P2] Plays LB \"" + card.name() + "\"");
-				if (card.isForward())     placeP2CardInForwardZone(card);
-				else if (card.isBackup()) placeP2CardInFirstBackupSlot(card);
+				if (card.isForward())      placeP2CardInForwardZone(card);
+				else if (card.isBackup())  placeP2CardInFirstBackupSlot(card);
+				else if (card.isMonster()) placeP2CardInMonsterZone(card);
 				step(() -> doMainPhase(onDone));
 				return;
 			}
@@ -6618,8 +6842,9 @@ public class MainWindow {
 				String element = toPlay.elements()[0];
 				gameState.spendP2Cp(element, Math.min(toPlay.cost(), gameState.getP2CpForElement(element)));
 				logEntry("[P2] Plays " + toPlay.name());
-				if (toPlay.isForward())     placeP2CardInForwardZone(toPlay);
-				else if (toPlay.isBackup()) placeP2CardInFirstBackupSlot(toPlay);
+				if (toPlay.isForward())      placeP2CardInForwardZone(toPlay);
+				else if (toPlay.isBackup())  placeP2CardInFirstBackupSlot(toPlay);
+				else if (toPlay.isMonster()) placeP2CardInMonsterZone(toPlay);
 			}
 			step(() -> doMainPhase(onDone));
 		}

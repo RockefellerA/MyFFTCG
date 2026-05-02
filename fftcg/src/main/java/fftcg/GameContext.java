@@ -157,4 +157,26 @@ public interface GameContext {
 
     /** Moves P2's forward at break-zone index {@code idx} to P1's hand. */
     void addP2BreakZoneForwardToHand(int idx);
+
+    // ---- Mass field effects -------------------------------------------------
+
+    /** Action verbs for mass field effects. */
+    enum MassAction { BREAK, DULL, FREEZE, DULL_AND_FREEZE, ACTIVATE }
+
+    /**
+     * Applies {@code action} to every field card that matches all filters.
+     *
+     * @param forwards     include Forwards in the sweep
+     * @param backups      include Backups in the sweep
+     * @param monsters     include Monsters in the sweep
+     * @param opponentOnly only affect P2's cards
+     * @param selfOnly     only affect P1's cards
+     * @param element      optional element filter; {@code null} = any
+     * @param costVal      CP cost filter value; {@code -1} = no filter
+     * @param costCmp      {@code "less"}, {@code "more"}, or {@code null} for exact
+     */
+    void applyMassFieldEffect(MassAction action,
+            boolean forwards, boolean backups, boolean monsters,
+            boolean opponentOnly, boolean selfOnly,
+            String element, int costVal, String costCmp);
 }

@@ -95,6 +95,28 @@ public class ActionResolver {
     );
 
     /**
+     * Matches mass-effect actions on all field cards of a given type:
+     * "[action] all [the] [element] [targets] [of cost X [or less|more]] [control]"
+     * <ul>
+     *   <li>Group {@code action}  — "Break", "dull", "freeze", "dull and freeze", or "Activate"</li>
+     *   <li>Group {@code element} — optional element name</li>
+     *   <li>Group {@code targets} — "Forwards", "Backups", "Forwards and Monsters", or "Characters"</li>
+     *   <li>Group {@code cost}    — optional CP cost value</li>
+     *   <li>Group {@code costcmp} — optional comparison: "less" or "more"</li>
+     *   <li>Group {@code control} — optional: "opponent controls" or "you control"</li>
+     * </ul>
+     */
+    private static final Pattern ALL_FIELD_EFFECT_PATTERN = Pattern.compile(
+        "(?i)(?<action>Break|Activate|dull\\s+and\\s+freeze|dull|freeze)\\s+" +
+        "all\\s+(?:the\\s+)?" +
+        "(?:(?<element>Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark)\\s+)?" +
+        "(?<targets>Forwards?(?:\\s+and\\s+Monsters?)?|Backups?|Characters?)" +
+        "(?:\\s+of\\s+cost\\s+(?<cost>\\d+)(?:\\s+or\\s+(?<costcmp>less|more))?)?" +
+        "(?:\\s+(?<control>(?:your\\s+)?opponent\\s+controls?|you\\s+control))?" +
+        "[.]?"
+    );
+
+    /**
      * Matches: "Deal X damage to all [the] [condition] Forwards[.] [opponent controls]"
      * <ul>
      *   <li>Group {@code amount}    — numeric damage value</li>
@@ -125,6 +147,9 @@ public class ActionResolver {
         if (result != null) return result;
 
         result = tryParseChooseForwards(effectText);
+        if (result != null) return result;
+
+        result = tryParseAllFieldEffect(effectText);
         if (result != null) return result;
 
         // TODO: add more effect parsers here as they are implemented
@@ -433,6 +458,65 @@ public class ActionResolver {
         // Recognised "Choose" header but followup not yet implemented
         return ctx -> ctx.logEntry(
                 "[ActionResolver] Choose effect — followup not yet implemented: " + followup);
+    }
+
+    // -------------------------------------------------------------------------
+    // All-field-cards effect parser
+    // -------------------------------------------------------------------------
+
+    /**
+     * Parses "[action] all [the] [element] [targets] [of cost X] [control]".
+     *
+     * <p>Supported actions: Break, dull, freeze, dull and freeze, Activate.
+     * <p>Supported targets: Forwards, Backups, Forwards and Monsters, Characters.
+     */
+    private static Consumer<GameContext> tryParseAllFieldEffect(String text) {
+        Matcher m = ALL_FIELD_EFFECT_PATTERN.matcher(text);
+        if (!m.find()) return null;
+
+        String rawAction = m.group("action").toLowerCase().replaceAll("\\s+", " ");
+        GameContext.MassAction action = switch (rawAction) {
+            case "break"          -> GameContext.MassAction.BREAK;
+            case "dull"           -> GameContext.MassAction.DULL;
+            case "freeze"         -> GameContext.MassAction.FREEZE;
+            case "dull and freeze"-> GameContext.MassAction.DULL_AND_FREEZE;
+            case "activate"       -> GameContext.MassAction.ACTIVATE;
+            default               -> null;
+        };
+        if (action == null) return null;
+
+        String element  = m.group("element");
+        String targets  = m.group("targets");
+        String tgtLower = targets.toLowerCase();
+        boolean inclForwards = tgtLower.contains("forward") || tgtLower.contains("character");
+        boolean inclBackups  = tgtLower.contains("backup")  || tgtLower.contains("character");
+        boolean inclMonsters = tgtLower.contains("monster") || tgtLower.contains("character");
+
+        String costStr = m.group("cost");
+        String costCmp = m.group("costcmp");
+        int    costVal = costStr != null ? Integer.parseInt(costStr) : -1;
+
+        String control      = m.group("control");
+        boolean opponentOnly = control != null && !control.toLowerCase().contains("you control");
+        boolean selfOnly     = control != null && control.toLowerCase().contains("you control");
+
+        String actionLabel = switch (action) {
+            case BREAK          -> "Break";
+            case DULL           -> "Dull";
+            case FREEZE         -> "Freeze";
+            case DULL_AND_FREEZE -> "Dull & Freeze";
+            case ACTIVATE       -> "Activate";
+        };
+        String costLabel    = costVal >= 0
+                ? " of cost " + costVal + (costCmp != null ? " or " + costCmp : "") : "";
+        String controlLabel = opponentOnly ? " (opponent)" : selfOnly ? " (yours)" : "";
+        String logMsg = actionLabel + " all " + targets + costLabel + controlLabel;
+
+        return ctx -> {
+            ctx.logEntry("Effect: " + logMsg);
+            ctx.applyMassFieldEffect(action, inclForwards, inclBackups, inclMonsters,
+                    opponentOnly, selfOnly, element, costVal, costCmp);
+        };
     }
 
     /**
