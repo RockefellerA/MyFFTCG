@@ -78,7 +78,7 @@ public interface GameContext {
      * @param element   optional element name to restrict targets (e.g. {@code "Earth"}); {@code null} = any
      */
     List<ForwardTarget> selectForwards(int maxCount, boolean upTo, boolean opponentOnly,
-            boolean selfOnly, String condition, String element);
+            boolean selfOnly, String condition, String element, int costVal, String costCmp);
 
     // ---- Dull effects -------------------------------------------------------
 
@@ -140,7 +140,7 @@ public interface GameContext {
      * @param element      optional element name to restrict targets; {@code null} = any
      */
     List<ForwardTarget> selectForwardsFromBreakZone(int maxCount, boolean upTo,
-            boolean opponentZone, String condition, String element);
+            boolean opponentZone, String condition, String element, int costVal, String costCmp);
 
     // ---- Play from break zone onto field ------------------------------------
 

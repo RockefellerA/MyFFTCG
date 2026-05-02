@@ -4758,12 +4758,14 @@ public class MainWindow {
 			@Override
 			public java.util.List<ForwardTarget> selectForwards(
 					int maxCount, boolean upTo, boolean opponentOnly,
-					boolean selfOnly, String condition, String element) {
+					boolean selfOnly, String condition, String element,
+					int costVal, String costCmp) {
 				java.util.List<ForwardTarget> eligible = new ArrayList<>();
 				if (!opponentOnly) {
 					for (int i = 0; i < p1ForwardCards.size(); i++) {
 						CardData card = p1Forward(i);  // primed-aware
 						if (element != null && !card.containsElement(element)) continue;
+						if (!meetsCostConstraint(card.cost(), costVal, costCmp)) continue;
 						if (meetsTargetCondition(p1ForwardStates.get(i), p1ForwardDamage.get(i),
 								p1AttackSelection.contains(i), false, condition))
 							eligible.add(new ForwardTarget(true, i));
@@ -4773,15 +4775,18 @@ public class MainWindow {
 					for (int i = 0; i < p2ForwardCards.size(); i++) {
 						CardData card = p2ForwardCards.get(i);
 						if (element != null && !card.containsElement(element)) continue;
+						if (!meetsCostConstraint(card.cost(), costVal, costCmp)) continue;
 						if (meetsTargetCondition(p2ForwardStates.get(i), p2ForwardDamage.get(i),
 								false, false, condition))
 							eligible.add(new ForwardTarget(false, i));
 					}
 				}
+				String costLabel = costVal >= 0
+						? " of cost " + costVal + (costCmp != null ? " or " + costCmp : "") : "";
 				String title = "Choose " + (upTo ? "up to " : "") + maxCount
 						+ (condition != null ? " " + condition : "")
 						+ (element != null ? " " + element : "")
-						+ " Forward" + (maxCount != 1 ? "s" : "")
+						+ " Forward" + (maxCount != 1 ? "s" : "") + costLabel
 						+ (opponentOnly ? " (opponent)" : selfOnly ? " (yours)" : "");
 				return showForwardSelectDialog(eligible, maxCount, upTo, title);
 			}
@@ -4857,18 +4862,21 @@ public class MainWindow {
 			@Override
 			public java.util.List<ForwardTarget> selectForwardsFromBreakZone(
 					int maxCount, boolean upTo, boolean opponentZone,
-					String condition, String element) {
+					String condition, String element, int costVal, String costCmp) {
 				java.util.List<CardData> zone = opponentZone
 						? gameState.getP2BreakZone() : gameState.getP1BreakZone();
 				java.util.List<ForwardTarget> eligible = new ArrayList<>();
 				for (int i = 0; i < zone.size(); i++) {
 					CardData card = zone.get(i);
 					if (element != null && !card.containsElement(element)) continue;
+					if (!meetsCostConstraint(card.cost(), costVal, costCmp)) continue;
 					eligible.add(new ForwardTarget(!opponentZone, i));
 				}
+				String costLabel = costVal >= 0
+						? " of cost " + costVal + (costCmp != null ? " or " + costCmp : "") : "";
 				String title = "Choose " + (upTo ? "up to " : "") + maxCount
 						+ (element != null ? " " + element : "")
-						+ " Forward" + (maxCount != 1 ? "s" : "")
+						+ " Forward" + (maxCount != 1 ? "s" : "") + costLabel
 						+ " in " + (opponentZone ? "opponent's" : "your") + " Break Zone";
 				return showBreakZoneSelectDialog(eligible, zone, maxCount, upTo, title);
 			}
@@ -4931,6 +4939,16 @@ public class MainWindow {
 			case "attacking" -> isAttacking;
 			case "blocking"  -> isBlocking;
 			default          -> true;
+		};
+	}
+
+	private static boolean meetsCostConstraint(int cardCost, int costVal, String costCmp) {
+		if (costVal < 0) return true;
+		if (costCmp == null)            return cardCost == costVal;
+		return switch (costCmp.toLowerCase()) {
+			case "less" -> cardCost <= costVal;
+			case "more" -> cardCost >= costVal;
+			default     -> cardCost == costVal;
 		};
 	}
 

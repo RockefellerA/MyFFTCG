@@ -26,12 +26,15 @@ public class ActionResolver {
 
     /**
      * Matches the "Choose" targeted effect header:
-     * "Choose [up to] N [condition] [element] Forward[s] [control] [zone] [separator] followup"
+     * "Choose [up to] N [condition] [element] Forward[s] [of cost X [or less|more]] [control] [zone]
+     *  [separator] followup"
      * <ul>
      *   <li>Group {@code upto}      — present when "up to" precedes the count</li>
      *   <li>Group {@code count}     — number of forwards to choose</li>
      *   <li>Group {@code condition} — optional: "dull", "damaged", "attacking", "blocking", or "active"</li>
      *   <li>Group {@code element}   — optional element name, e.g. "Fire", "Earth"</li>
+     *   <li>Group {@code cost}      — optional CP cost value, e.g. "3" in "of cost 3 or less"</li>
+     *   <li>Group {@code costcmp}   — optional comparison: "less" or "more" (absent = exact match)</li>
      *   <li>Group {@code control}   — optional: "opponent controls", "your opponent controls",
      *                                 or "you control"</li>
      *   <li>Group {@code zone}      — optional zone, e.g. "in your Break Zone" or
@@ -44,6 +47,7 @@ public class ActionResolver {
         "(?:(?<condition>dull|damaged|attacking|blocking|active)\\s+)?" +
         "(?:(?<element>Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark)\\s+)?" +
         "Forwards?" +
+        "(?:\\s+of\\s+cost\\s+(?<cost>\\d+)(?:\\s+or\\s+(?<costcmp>less|more))?)?" +
         "(?:\\s+(?<control>(?:your\\s+)?opponent\\s+controls|you\\s+control))?" +
         "(?:\\s+(?<zone>in\\s+your(?:\\s+opponent(?:'s)?)?\\s+Break\\s+Zone))?" +
         "(?:[.]\\s*|\\s+and\\s+|,\\s*)" +
@@ -265,6 +269,9 @@ public class ActionResolver {
         int     maxCount     = Integer.parseInt(m.group("count"));
         String  condition    = m.group("condition");   // nullable
         String  element      = m.group("element");     // nullable — e.g. "Earth", "Fire"
+        String  costStr      = m.group("cost");        // nullable — numeric cost value
+        String  costCmp      = m.group("costcmp");     // nullable — "less" or "more"
+        int     costVal      = costStr != null ? Integer.parseInt(costStr) : -1;
         String  control      = m.group("control");     // nullable — "opponent controls" / "you control"
         boolean opponentOnly = control != null && !control.equalsIgnoreCase("you control");
         boolean selfOnly     = "you control".equalsIgnoreCase(control);
@@ -282,7 +289,7 @@ public class ActionResolver {
                         + (opponentOnly ? " (opponent)" : "") + " — Deal " + damage + " damage");
                 List<ForwardTarget> targets = selectTargets(
                         ctx, maxCount, upTo, opponentOnly, selfOnly, condition, element,
-                        zone, opponentZone);
+                        zone, opponentZone, costVal, costCmp);
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> ctx.damageP1Forward(t.idx(), damage));
@@ -301,7 +308,7 @@ public class ActionResolver {
                         + (opponentOnly ? " (opponent)" : "") + " — Dull");
                 List<ForwardTarget> targets = selectTargets(
                         ctx, maxCount, upTo, opponentOnly, selfOnly, condition, element,
-                        zone, opponentZone);
+                        zone, opponentZone, costVal, costCmp);
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> ctx.dullP1Forward(t.idx()));
@@ -319,7 +326,7 @@ public class ActionResolver {
                         + (opponentOnly ? " (opponent)" : "") + " — Dull & Freeze");
                 List<ForwardTarget> targets = selectTargets(
                         ctx, maxCount, upTo, opponentOnly, selfOnly, condition, element,
-                        zone, opponentZone);
+                        zone, opponentZone, costVal, costCmp);
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> { ctx.dullP1Forward(t.idx()); ctx.freezeP1Forward(t.idx()); });
@@ -337,7 +344,7 @@ public class ActionResolver {
                         + (opponentOnly ? " (opponent)" : "") + " — Freeze");
                 List<ForwardTarget> targets = selectTargets(
                         ctx, maxCount, upTo, opponentOnly, selfOnly, condition, element,
-                        zone, opponentZone);
+                        zone, opponentZone, costVal, costCmp);
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> ctx.freezeP1Forward(t.idx()));
@@ -355,7 +362,7 @@ public class ActionResolver {
                         + (opponentOnly ? " (opponent)" : "") + " — Break");
                 List<ForwardTarget> targets = selectTargets(
                         ctx, maxCount, upTo, opponentOnly, selfOnly, condition, element,
-                        zone, opponentZone);
+                        zone, opponentZone, costVal, costCmp);
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> ctx.breakP1Forward(t.idx()));
@@ -373,7 +380,7 @@ public class ActionResolver {
                         + (opponentOnly ? " (opponent)" : "") + " — Remove From Game");
                 List<ForwardTarget> targets = selectTargets(
                         ctx, maxCount, upTo, opponentOnly, selfOnly, condition, element,
-                        zone, opponentZone);
+                        zone, opponentZone, costVal, costCmp);
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> ctx.removeP1ForwardFromGame(t.idx()));
@@ -393,7 +400,7 @@ public class ActionResolver {
                         + zoneLabel + " — Play onto Field");
                 List<ForwardTarget> targets = selectTargets(
                         ctx, maxCount, upTo, opponentOnly, selfOnly, condition, element,
-                        zone, opponentZone);
+                        zone, opponentZone, costVal, costCmp);
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> ctx.playP1ForwardFromBreakZoneOntoField(t.idx()));
@@ -413,7 +420,7 @@ public class ActionResolver {
                         + zoneLabel + " — Add to Hand");
                 List<ForwardTarget> targets = selectTargets(
                         ctx, maxCount, upTo, opponentOnly, selfOnly, condition, element,
-                        zone, opponentZone);
+                        zone, opponentZone, costVal, costCmp);
                 targets.stream().filter(ForwardTarget::isP1)
                         .sorted((a, b) -> Integer.compare(b.idx(), a.idx()))
                         .forEach(t -> ctx.addP1BreakZoneForwardToHand(t.idx()));
@@ -430,13 +437,14 @@ public class ActionResolver {
 
     /**
      * Routes target selection to either the field or a Break Zone depending on
-     * whether {@code zone} is non-null.
+     * whether {@code zone} is non-null, and forwards the cost constraint.
      */
     private static List<ForwardTarget> selectTargets(GameContext ctx,
             int maxCount, boolean upTo, boolean opponentOnly, boolean selfOnly,
-            String condition, String element, String zone, boolean opponentZone) {
+            String condition, String element, String zone, boolean opponentZone,
+            int costVal, String costCmp) {
         return zone != null
-                ? ctx.selectForwardsFromBreakZone(maxCount, upTo, opponentZone, condition, element)
-                : ctx.selectForwards(maxCount, upTo, opponentOnly, selfOnly, condition, element);
+                ? ctx.selectForwardsFromBreakZone(maxCount, upTo, opponentZone, condition, element, costVal, costCmp)
+                : ctx.selectForwards(maxCount, upTo, opponentOnly, selfOnly, condition, element, costVal, costCmp);
     }
 }
