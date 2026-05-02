@@ -63,24 +63,77 @@ public interface GameContext {
 
     /**
      * Shows a modal dialog letting P1 choose up to {@code maxCount} eligible
-     * forwards and returns their targets.
+     * field cards and returns their targets.
      *
-     * @param maxCount     maximum number of forwards the player may select
+     * @param maxCount     maximum number of cards the player may select
      * @param upTo         if {@code true} the player may confirm with fewer than {@code maxCount}
-     * @param opponentOnly if {@code true} only P2's forwards are offered as targets
-     * @param condition    optional eligibility filter: {@code "active"}, {@code "dull"}
-     *                     {@code "damaged"}, or {@code null} for any forward
-     * @return the list of chosen {@link ForwardTarget}s (may be empty if no eligible targets
-     *         exist or the player skips)
+     * @param opponentOnly if {@code true} only P2's cards are offered as targets
+     * @param selfOnly     if {@code true} only P1's cards are eligible
+     * @param condition    optional eligibility filter: {@code "active"}, {@code "dull"},
+     *                     {@code "damaged"}, {@code "attacking"}, {@code "blocking"},
+     *                     or {@code null} for any
+     * @param element      optional element name to restrict targets; {@code null} = any
+     * @param costVal      CP cost filter value; {@code -1} = no filter
+     * @param costCmp      {@code "less"}, {@code "more"}, or {@code null} for exact
+     * @param forwards     include Forwards as eligible targets
+     * @param backups      include Backups as eligible targets
+     * @param monsters     include Monsters as eligible targets
      */
-    /**
-     * @param selfOnly  if {@code true} only the active player's (P1's) forwards are eligible
-     * @param element   optional element name to restrict targets (e.g. {@code "Earth"}); {@code null} = any
-     */
-    List<ForwardTarget> selectForwards(int maxCount, boolean upTo, boolean opponentOnly,
-            boolean selfOnly, String condition, String element, int costVal, String costCmp);
+    List<ForwardTarget> selectCharacters(int maxCount, boolean upTo, boolean opponentOnly,
+            boolean selfOnly, String condition, String element, int costVal, String costCmp,
+            boolean forwards, boolean backups, boolean monsters);
 
-    // ---- Dull effects -------------------------------------------------------
+    /**
+     * Shows a modal dialog letting P1 choose up to {@code maxCount} eligible
+     * cards from a Break Zone and returns their targets.
+     *
+     * @param opponentZone if {@code true}, selects from P2's Break Zone; otherwise P1's
+     * @param condition    optional eligibility filter; {@code null} = any
+     * @param element      optional element name to restrict targets; {@code null} = any
+     * @param costVal      CP cost filter value; {@code -1} = no filter
+     * @param costCmp      {@code "less"}, {@code "more"}, or {@code null} for exact
+     * @param forwards     include Forwards as eligible targets
+     * @param backups      include Backups as eligible targets
+     * @param monsters     include Monsters as eligible targets
+     */
+    List<ForwardTarget> selectCharactersFromBreakZone(int maxCount, boolean upTo,
+            boolean opponentZone, String condition, String element, int costVal, String costCmp,
+            boolean forwards, boolean backups, boolean monsters);
+
+    // ---- Zone-dispatch single-target effects --------------------------------
+
+    /**
+     * Applies {@code amount} damage to the target.
+     * Only meaningful for Forwards and Monsters (Backups are ignored).
+     */
+    void damageTarget(ForwardTarget t, int amount);
+
+    /** Dulls the target and refreshes its slot. */
+    void dullTarget(ForwardTarget t);
+
+    /** Freezes the target (skips activation next Active Phase) and refreshes its slot. */
+    void freezeTarget(ForwardTarget t);
+
+    /** Dulls and freezes the target. */
+    void dullAndFreezeTarget(ForwardTarget t);
+
+    /** Breaks the target (sends to the owning player's Break Zone). */
+    void breakTarget(ForwardTarget t);
+
+    /** Removes the target from the game permanently (not to the Break Zone). */
+    void removeTargetFromGame(ForwardTarget t);
+
+    /**
+     * Plays the target (chosen from a Break Zone) onto the field without
+     * paying costs.  Forwards go to the forward zone, Backups to a backup
+     * slot, Monsters to the monster zone.
+     */
+    void playTargetOntoField(ForwardTarget t);
+
+    /** Moves the target (chosen from a Break Zone) to P1's hand. */
+    void addTargetToHand(ForwardTarget t);
+
+    // ---- Dull effects (used by mass-effect; also available individually) ----
 
     /** Dulls P1's forward at {@code idx} and refreshes its slot. */
     void dullP1Forward(int idx);
@@ -108,7 +161,7 @@ public interface GameContext {
     /** Returns {@code true} if P2's forward at {@code idx} is currently declared as a blocker. */
     boolean isP2ForwardBlocking(int idx);
 
-    // ---- Break / Remove-from-game effects -----------------------------------
+    // ---- Break / Remove-from-game (forward-specific, used by mass effect) ---
 
     /** Breaks P1's forward at {@code idx} (sends to P1's Break Zone). */
     void breakP1Forward(int idx);
@@ -116,47 +169,11 @@ public interface GameContext {
     /** Breaks P2's forward at {@code idx} (sends to P2's Break Zone). */
     void breakP2Forward(int idx);
 
-    /**
-     * Removes P1's forward at {@code idx} from the game permanently
-     * (sends to P1's Removed-From-Game zone, not the Break Zone).
-     */
+    /** Removes P1's forward at {@code idx} from the game permanently. */
     void removeP1ForwardFromGame(int idx);
 
-    /**
-     * Removes P2's forward at {@code idx} from the game permanently
-     * (sends to P2's Removed-From-Game zone, not the Break Zone).
-     */
+    /** Removes P2's forward at {@code idx} from the game permanently. */
     void removeP2ForwardFromGame(int idx);
-
-    // ---- Break-zone selection -----------------------------------------------
-
-    /**
-     * Shows a modal dialog letting P1 choose up to {@code maxCount} eligible
-     * forwards from a Break Zone and returns their targets.
-     *
-     * @param opponentZone if {@code true}, selects from P2's Break Zone; otherwise P1's
-     * @param condition    optional eligibility filter ({@code "active"}, {@code "dull"},
-     *                     {@code "damaged"}, or {@code null} for any)
-     * @param element      optional element name to restrict targets; {@code null} = any
-     */
-    List<ForwardTarget> selectForwardsFromBreakZone(int maxCount, boolean upTo,
-            boolean opponentZone, String condition, String element, int costVal, String costCmp);
-
-    // ---- Play from break zone onto field ------------------------------------
-
-    /** Moves P1's forward at break-zone index {@code idx} onto P1's field (no cost paid). */
-    void playP1ForwardFromBreakZoneOntoField(int idx);
-
-    /** Moves P2's forward at break-zone index {@code idx} onto the field (no cost paid). */
-    void playP2ForwardFromBreakZoneOntoField(int idx);
-
-    // ---- Add from break zone to hand ----------------------------------------
-
-    /** Moves P1's forward at break-zone index {@code idx} to P1's hand. */
-    void addP1BreakZoneForwardToHand(int idx);
-
-    /** Moves P2's forward at break-zone index {@code idx} to P1's hand. */
-    void addP2BreakZoneForwardToHand(int idx);
 
     // ---- Mass field effects -------------------------------------------------
 

@@ -4776,29 +4776,58 @@ public class MainWindow {
 			}
 
 			@Override
-			public java.util.List<ForwardTarget> selectForwards(
+			public java.util.List<ForwardTarget> selectCharacters(
 					int maxCount, boolean upTo, boolean opponentOnly,
 					boolean selfOnly, String condition, String element,
-					int costVal, String costCmp) {
+					int costVal, String costCmp,
+					boolean inclForwards, boolean inclBackups, boolean inclMonsters) {
 				java.util.List<ForwardTarget> eligible = new ArrayList<>();
 				if (!opponentOnly) {
-					for (int i = 0; i < p1ForwardCards.size(); i++) {
-						CardData card = p1Forward(i);  // primed-aware
+					if (inclForwards) for (int i = 0; i < p1ForwardCards.size(); i++) {
+						CardData card = p1Forward(i);
 						if (element != null && !card.containsElement(element)) continue;
 						if (!meetsCostConstraint(card.cost(), costVal, costCmp)) continue;
 						if (meetsTargetCondition(p1ForwardStates.get(i), p1ForwardDamage.get(i),
 								p1AttackSelection.contains(i), false, condition))
-							eligible.add(new ForwardTarget(true, i));
+							eligible.add(new ForwardTarget(true, i, ForwardTarget.CardZone.FORWARD));
+					}
+					if (inclBackups) for (int i = 0; i < p1BackupCards.length; i++) {
+						if (p1BackupCards[i] == null) continue;
+						if (element != null && !p1BackupCards[i].containsElement(element)) continue;
+						if (!meetsCostConstraint(p1BackupCards[i].cost(), costVal, costCmp)) continue;
+						if (meetsTargetCondition(p1BackupStates[i], 0, false, false, condition))
+							eligible.add(new ForwardTarget(true, i, ForwardTarget.CardZone.BACKUP));
+					}
+					if (inclMonsters) for (int i = 0; i < p1MonsterCards.size(); i++) {
+						CardData card = p1MonsterCards.get(i);
+						if (element != null && !card.containsElement(element)) continue;
+						if (!meetsCostConstraint(card.cost(), costVal, costCmp)) continue;
+						if (meetsTargetCondition(p1MonsterStates.get(i), 0, false, false, condition))
+							eligible.add(new ForwardTarget(true, i, ForwardTarget.CardZone.MONSTER));
 					}
 				}
 				if (!selfOnly) {
-					for (int i = 0; i < p2ForwardCards.size(); i++) {
+					if (inclForwards) for (int i = 0; i < p2ForwardCards.size(); i++) {
 						CardData card = p2ForwardCards.get(i);
 						if (element != null && !card.containsElement(element)) continue;
 						if (!meetsCostConstraint(card.cost(), costVal, costCmp)) continue;
 						if (meetsTargetCondition(p2ForwardStates.get(i), p2ForwardDamage.get(i),
 								false, false, condition))
-							eligible.add(new ForwardTarget(false, i));
+							eligible.add(new ForwardTarget(false, i, ForwardTarget.CardZone.FORWARD));
+					}
+					if (inclBackups) for (int i = 0; i < p2BackupCards.length; i++) {
+						if (p2BackupCards[i] == null) continue;
+						if (element != null && !p2BackupCards[i].containsElement(element)) continue;
+						if (!meetsCostConstraint(p2BackupCards[i].cost(), costVal, costCmp)) continue;
+						if (meetsTargetCondition(p2BackupStates[i], 0, false, false, condition))
+							eligible.add(new ForwardTarget(false, i, ForwardTarget.CardZone.BACKUP));
+					}
+					if (inclMonsters) for (int i = 0; i < p2MonsterCards.size(); i++) {
+						CardData card = p2MonsterCards.get(i);
+						if (element != null && !card.containsElement(element)) continue;
+						if (!meetsCostConstraint(card.cost(), costVal, costCmp)) continue;
+						if (meetsTargetCondition(p2MonsterStates.get(i), 0, false, false, condition))
+							eligible.add(new ForwardTarget(false, i, ForwardTarget.CardZone.MONSTER));
 					}
 				}
 				String costLabel = costVal >= 0
@@ -4806,7 +4835,7 @@ public class MainWindow {
 				String title = "Choose " + (upTo ? "up to " : "") + maxCount
 						+ (condition != null ? " " + condition : "")
 						+ (element != null ? " " + element : "")
-						+ " Forward" + (maxCount != 1 ? "s" : "") + costLabel
+						+ " Character" + (maxCount != 1 ? "s" : "") + costLabel
 						+ (opponentOnly ? " (opponent)" : selfOnly ? " (yours)" : "");
 				return showForwardSelectDialog(eligible, maxCount, upTo, title);
 			}
@@ -4880,62 +4909,165 @@ public class MainWindow {
 			}
 
 			@Override
-			public java.util.List<ForwardTarget> selectForwardsFromBreakZone(
+			public java.util.List<ForwardTarget> selectCharactersFromBreakZone(
 					int maxCount, boolean upTo, boolean opponentZone,
-					String condition, String element, int costVal, String costCmp) {
-				java.util.List<CardData> zone = opponentZone
+					String condition, String element, int costVal, String costCmp,
+					boolean inclForwards, boolean inclBackups, boolean inclMonsters) {
+				java.util.List<CardData> bz = opponentZone
 						? gameState.getP2BreakZone() : gameState.getP1BreakZone();
 				java.util.List<ForwardTarget> eligible = new ArrayList<>();
-				for (int i = 0; i < zone.size(); i++) {
-					CardData card = zone.get(i);
+				for (int i = 0; i < bz.size(); i++) {
+					CardData card = bz.get(i);
+					if (card.isForward()  && !inclForwards) continue;
+					if (card.isBackup()   && !inclBackups)  continue;
+					if (card.isMonster()  && !inclMonsters) continue;
 					if (element != null && !card.containsElement(element)) continue;
 					if (!meetsCostConstraint(card.cost(), costVal, costCmp)) continue;
-					eligible.add(new ForwardTarget(!opponentZone, i));
+					ForwardTarget.CardZone cz = card.isBackup()  ? ForwardTarget.CardZone.BACKUP
+					                         : card.isMonster() ? ForwardTarget.CardZone.MONSTER
+					                         :                    ForwardTarget.CardZone.FORWARD;
+					eligible.add(new ForwardTarget(!opponentZone, i, cz));
 				}
 				String costLabel = costVal >= 0
 						? " of cost " + costVal + (costCmp != null ? " or " + costCmp : "") : "";
 				String title = "Choose " + (upTo ? "up to " : "") + maxCount
 						+ (element != null ? " " + element : "")
-						+ " Forward" + (maxCount != 1 ? "s" : "") + costLabel
+						+ " Character" + (maxCount != 1 ? "s" : "") + costLabel
 						+ " in " + (opponentZone ? "opponent's" : "your") + " Break Zone";
-				return showBreakZoneSelectDialog(eligible, zone, maxCount, upTo, title);
+				return showBreakZoneSelectDialog(eligible, bz, maxCount, upTo, title);
 			}
 
-			@Override public void playP1ForwardFromBreakZoneOntoField(int idx) {
-				java.util.List<CardData> bz = gameState.getP1BreakZone();
-				if (idx >= bz.size()) return;
-				CardData card = bz.remove(idx);
-				logEntry(card.name() + " played from Break Zone onto field");
-				placeCardInForwardZone(card);
-				refreshP1BreakLabel();
+			// ---- Zone-dispatch single-target effects ----------------------------
+
+			@Override public void damageTarget(ForwardTarget t, int amount) {
+				if (t.zone() == ForwardTarget.CardZone.BACKUP) return; // backups have no power
+				if (t.isP1()) damageP1Forward(t.idx(), amount);
+				else          damageP2Forward(t.idx(), amount);
 			}
 
-			@Override public void playP2ForwardFromBreakZoneOntoField(int idx) {
-				java.util.List<CardData> bz = gameState.getP2BreakZone();
-				if (idx >= bz.size()) return;
-				CardData card = bz.remove(idx);
-				logEntry(card.name() + " played from opponent's Break Zone onto field");
-				placeCardInForwardZone(card);
-				refreshP2BreakLabel();
+			@Override public void dullTarget(ForwardTarget t) {
+				switch (t.zone()) {
+					case FORWARD -> { if (t.isP1()) dullP1Forward(t.idx()); else dullP2Forward(t.idx()); }
+					case BACKUP  -> {
+						int i = t.idx();
+						if (t.isP1()) { if (i < p1BackupCards.length && p1BackupCards[i] != null) { p1BackupStates[i] = CardState.DULL; logEntry(p1BackupCards[i].name() + " is dulled"); refreshP1BackupSlot(i); } }
+						else          { if (i < p2BackupCards.length && p2BackupCards[i] != null) { p2BackupStates[i] = CardState.DULL; logEntry("[P2] " + p2BackupCards[i].name() + " is dulled"); refreshP2BackupSlot(i); } }
+					}
+					case MONSTER -> {
+						int i = t.idx();
+						if (t.isP1()) { if (i < p1MonsterCards.size()) { p1MonsterStates.set(i, CardState.DULL); logEntry(p1MonsterCards.get(i).name() + " is dulled"); refreshP1MonsterSlot(i); } }
+						else          { if (i < p2MonsterCards.size()) { p2MonsterStates.set(i, CardState.DULL); logEntry("[P2] " + p2MonsterCards.get(i).name() + " is dulled"); refreshP2MonsterSlot(i); } }
+					}
+				}
 			}
 
-			@Override public void addP1BreakZoneForwardToHand(int idx) {
-				java.util.List<CardData> bz = gameState.getP1BreakZone();
-				if (idx >= bz.size()) return;
-				CardData card = bz.remove(idx);
+			@Override public void freezeTarget(ForwardTarget t) {
+				switch (t.zone()) {
+					case FORWARD -> { if (t.isP1()) freezeP1Forward(t.idx()); else freezeP2Forward(t.idx()); }
+					case BACKUP  -> {
+						int i = t.idx();
+						if (t.isP1()) { if (i < p1BackupCards.length && p1BackupCards[i] != null) { p1BackupFrozen[i] = true; logEntry(p1BackupCards[i].name() + " is frozen"); refreshP1BackupSlot(i); } }
+						else          { if (i < p2BackupCards.length && p2BackupCards[i] != null) { p2BackupFrozen[i] = true; logEntry("[P2] " + p2BackupCards[i].name() + " is frozen"); refreshP2BackupSlot(i); } }
+					}
+					case MONSTER -> {
+						int i = t.idx();
+						if (t.isP1()) { if (i < p1MonsterCards.size()) { p1MonsterFrozen.set(i, true); logEntry(p1MonsterCards.get(i).name() + " is frozen"); refreshP1MonsterSlot(i); } }
+						else          { if (i < p2MonsterCards.size()) { p2MonsterFrozen.set(i, true); logEntry("[P2] " + p2MonsterCards.get(i).name() + " is frozen"); refreshP2MonsterSlot(i); } }
+					}
+				}
+			}
+
+			@Override public void dullAndFreezeTarget(ForwardTarget t) { dullTarget(t); freezeTarget(t); }
+
+			@Override public void breakTarget(ForwardTarget t) {
+				switch (t.zone()) {
+					case FORWARD -> { if (t.isP1()) breakP1Forward(t.idx()); else breakP2Forward(t.idx()); }
+					case BACKUP  -> {
+						int i = t.idx();
+						CardData[] cards = t.isP1() ? p1BackupCards : p2BackupCards;
+						CardState[] states = t.isP1() ? p1BackupStates : p2BackupStates;
+						if (i >= cards.length || cards[i] == null) return;
+						CardData c = cards[i];
+						String prefix = t.isP1() ? "" : "[P2] ";
+						logEntry(prefix + c.name() + " is broken");
+						(t.isP1() ? gameState.getP1BreakZone() : gameState.getP2BreakZone()).add(c);
+						cards[i] = null; states[i] = CardState.ACTIVE;
+						if (t.isP1()) { refreshP1BackupSlot(i); refreshP1BreakLabel(); }
+						else          { refreshP2BackupSlot(i); refreshP2BreakLabel(); }
+					}
+					case MONSTER -> {
+						int i = t.idx();
+						java.util.List<CardData> cards = t.isP1() ? p1MonsterCards : p2MonsterCards;
+						if (i >= cards.size()) return;
+						CardData c = cards.get(i);
+						String prefix = t.isP1() ? "" : "[P2] ";
+						logEntry(prefix + c.name() + " is broken");
+						(t.isP1() ? gameState.getP1BreakZone() : gameState.getP2BreakZone()).add(c);
+						cards.remove(i);
+						(t.isP1() ? p1MonsterStates : p2MonsterStates).remove(i);
+						(t.isP1() ? p1MonsterFrozen : p2MonsterFrozen).remove(i);
+						(t.isP1() ? p1MonsterPlayedOnTurn : p2MonsterPlayedOnTurn).remove(i);
+						(t.isP1() ? p1MonsterUrls : p2MonsterUrls).remove(i);
+						JLabel lbl = (t.isP1() ? p1MonsterLabels : p2MonsterLabels).remove(i);
+						JPanel panel = t.isP1() ? p1MonsterPanel : p2MonsterPanel;
+						panel.remove(lbl); panel.revalidate(); panel.repaint();
+						if (t.isP1()) refreshP1BreakLabel(); else refreshP2BreakLabel();
+					}
+				}
+			}
+
+			@Override public void removeTargetFromGame(ForwardTarget t) {
+				switch (t.zone()) {
+					case FORWARD -> { if (t.isP1()) removeP1ForwardFromGame(t.idx()); else removeP2ForwardFromGame(t.idx()); }
+					case BACKUP  -> {
+						int i = t.idx();
+						CardData[] cards = t.isP1() ? p1BackupCards : p2BackupCards;
+						CardState[] states = t.isP1() ? p1BackupStates : p2BackupStates;
+						if (i >= cards.length || cards[i] == null) return;
+						logEntry((t.isP1() ? "" : "[P2] ") + cards[i].name() + " → Removed From Game");
+						if (t.isP1()) gameState.addToP1PermanentRfp(cards[i]); else gameState.addToP2PermanentRfp(cards[i]);
+						cards[i] = null; states[i] = CardState.ACTIVE;
+						if (t.isP1()) refreshP1BackupSlot(i); else refreshP2BackupSlot(i);
+					}
+					case MONSTER -> {
+						int i = t.idx();
+						java.util.List<CardData> cards = t.isP1() ? p1MonsterCards : p2MonsterCards;
+						if (i >= cards.size()) return;
+						CardData c = cards.get(i);
+						logEntry((t.isP1() ? "" : "[P2] ") + c.name() + " → Removed From Game");
+						if (t.isP1()) gameState.addToP1PermanentRfp(c); else gameState.addToP2PermanentRfp(c);
+						cards.remove(i);
+						(t.isP1() ? p1MonsterStates : p2MonsterStates).remove(i);
+						(t.isP1() ? p1MonsterFrozen : p2MonsterFrozen).remove(i);
+						(t.isP1() ? p1MonsterPlayedOnTurn : p2MonsterPlayedOnTurn).remove(i);
+						(t.isP1() ? p1MonsterUrls : p2MonsterUrls).remove(i);
+						JLabel lbl = (t.isP1() ? p1MonsterLabels : p2MonsterLabels).remove(i);
+						JPanel panel = t.isP1() ? p1MonsterPanel : p2MonsterPanel;
+						panel.remove(lbl); panel.revalidate(); panel.repaint();
+					}
+				}
+			}
+
+			@Override public void playTargetOntoField(ForwardTarget t) {
+				java.util.List<CardData> bz = t.isP1() ? gameState.getP1BreakZone() : gameState.getP2BreakZone();
+				if (t.idx() >= bz.size()) return;
+				CardData card = bz.remove(t.idx());
+				String src = t.isP1() ? "Break Zone" : "opponent's Break Zone";
+				logEntry(card.name() + " played from " + src + " onto field");
+				// Always plays to P1's field (P1 activated the ability)
+				if (card.isBackup())       placeCardInFirstBackupSlot(card);
+				else if (card.isMonster()) placeCardInMonsterZone(card);
+				else                       placeCardInForwardZone(card);
+				if (t.isP1()) refreshP1BreakLabel(); else refreshP2BreakLabel();
+			}
+
+			@Override public void addTargetToHand(ForwardTarget t) {
+				java.util.List<CardData> bz = t.isP1() ? gameState.getP1BreakZone() : gameState.getP2BreakZone();
+				if (t.idx() >= bz.size()) return;
+				CardData card = bz.remove(t.idx());
 				gameState.getP1Hand().add(card);
-				logEntry(card.name() + " returned from Break Zone to hand");
-				refreshP1BreakLabel();
-				refreshP1HandLabel();
-			}
-
-			@Override public void addP2BreakZoneForwardToHand(int idx) {
-				java.util.List<CardData> bz = gameState.getP2BreakZone();
-				if (idx >= bz.size()) return;
-				CardData card = bz.remove(idx);
-				gameState.getP1Hand().add(card);
-				logEntry(card.name() + " taken from opponent's Break Zone to hand");
-				refreshP2BreakLabel();
+				logEntry(card.name() + (t.isP1() ? " returned from Break Zone to hand" : " taken from opponent's Break Zone to hand"));
+				if (t.isP1()) refreshP1BreakLabel(); else refreshP2BreakLabel();
 				refreshP1HandLabel();
 			}
 
@@ -5136,13 +5268,22 @@ public class MainWindow {
 
 		for (int i = 0; i < eligible.size(); i++) {
 			ForwardTarget target = eligible.get(i);
-			CardData card = target.isP1()
-					? (p1ForwardPrimedTop.get(target.idx()) != null
-							? p1ForwardPrimedTop.get(target.idx()) : p1ForwardCards.get(target.idx()))
-					: p2ForwardCards.get(target.idx());
+			int tIdx = target.idx();
+			CardData card = switch (target.zone()) {
+				case BACKUP  -> target.isP1() ? p1BackupCards[tIdx] : p2BackupCards[tIdx];
+				case MONSTER -> target.isP1() ? p1MonsterCards.get(tIdx) : p2MonsterCards.get(tIdx);
+				default      -> target.isP1()
+						? (p1ForwardPrimedTop.get(tIdx) != null ? p1ForwardPrimedTop.get(tIdx) : p1ForwardCards.get(tIdx))
+						: p2ForwardCards.get(tIdx);
+			};
+			String typeTag = switch (target.zone()) {
+				case BACKUP  -> "BK";
+				case MONSTER -> "MON";
+				default      -> "FWD";
+			};
 			final int fi = i;
 			JButton btn = new JButton("<html><center>"
-					+ (target.isP1() ? "[You] " : "[P2] ")
+					+ (target.isP1() ? "[You " : "[P2 ") + typeTag + "] "
 					+ card.name() + "<br>(" + card.power() + ")</center></html>");
 			btn.setFont(new Font("Pixel NES", Font.PLAIN, 9));
 			btn.setPreferredSize(new Dimension(130, 56));
