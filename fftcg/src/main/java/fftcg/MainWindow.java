@@ -4227,6 +4227,86 @@ public class MainWindow {
 		}.execute();
 	}
 
+	private void animateActivateForward(int idx) {
+		String url  = p1ForwardUrls.get(idx);
+		JLabel slot = p1ForwardLabels.get(idx);
+		if (url == null || slot == null) { refreshP1ForwardSlot(idx); return; }
+
+		new SwingWorker<BufferedImage, Void>() {
+			@Override protected BufferedImage doInBackground() throws Exception {
+				Image raw = ImageCache.load(url);
+				return raw == null ? null : toARGB(raw, CARD_W, CARD_H);
+			}
+			@Override protected void done() {
+				try {
+					BufferedImage card = get();
+					if (card == null) { refreshP1ForwardSlot(idx); return; }
+
+					int   totalFrames = 12;
+					int[] frame       = { 0 };
+					javax.swing.Timer timer = new javax.swing.Timer(16, null);
+					timer.addActionListener(ae -> {
+						frame[0]++;
+						double progress = Math.min(1.0, (double) frame[0] / totalFrames);
+						double t = progress < 0.5
+								? 2 * progress * progress
+								: 1 - Math.pow(-2 * progress + 2, 2) / 2;
+						double angle = Math.PI / 2 * (1 - t);
+						slot.setIcon(new ImageIcon(renderBackupCardAtAngle(card, angle)));
+						slot.setText(null);
+						if (frame[0] >= totalFrames) {
+							timer.stop();
+							refreshP1ForwardSlot(idx);
+						}
+					});
+					timer.start();
+				} catch (InterruptedException | ExecutionException ignored) {
+					refreshP1ForwardSlot(idx);
+				}
+			}
+		}.execute();
+	}
+
+	private void animateActivateP2Forward(int idx) {
+		String url  = p2ForwardUrls.get(idx);
+		JLabel slot = p2ForwardLabels.get(idx);
+		if (url == null || slot == null) { refreshP2ForwardSlot(idx); return; }
+
+		new SwingWorker<BufferedImage, Void>() {
+			@Override protected BufferedImage doInBackground() throws Exception {
+				Image raw = ImageCache.load(url);
+				return raw == null ? null : toARGB(raw, CARD_W, CARD_H);
+			}
+			@Override protected void done() {
+				try {
+					BufferedImage card = get();
+					if (card == null) { refreshP2ForwardSlot(idx); return; }
+
+					int   totalFrames = 12;
+					int[] frame       = { 0 };
+					javax.swing.Timer timer = new javax.swing.Timer(16, null);
+					timer.addActionListener(ae -> {
+						frame[0]++;
+						double progress = Math.min(1.0, (double) frame[0] / totalFrames);
+						double t = progress < 0.5
+								? 2 * progress * progress
+								: 1 - Math.pow(-2 * progress + 2, 2) / 2;
+						double angle = Math.PI / 2 * (1 - t);
+						slot.setIcon(new ImageIcon(renderBackupCardAtAngle(card, angle)));
+						slot.setText(null);
+						if (frame[0] >= totalFrames) {
+							timer.stop();
+							refreshP2ForwardSlot(idx);
+						}
+					});
+					timer.start();
+				} catch (InterruptedException | ExecutionException ignored) {
+					refreshP2ForwardSlot(idx);
+				}
+			}
+		}.execute();
+	}
+
 	private static BufferedImage renderBackupCardAtAngle(BufferedImage card, double angle) {
 		BufferedImage canvas = new BufferedImage(CARD_H, CARD_H, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = canvas.createGraphics();
@@ -6892,7 +6972,7 @@ public class MainWindow {
 				p2ForwardDamage.set(i, 0);
 				CardState fs = p2ForwardStates.get(i);
 				if ((fs == CardState.DULL || fs == CardState.BRAVE_ATTACKED) && !p2ForwardFrozen.get(i)) {
-					p2ForwardStates.set(i, CardState.ACTIVE); refreshP2ForwardSlot(i); activated++;
+					p2ForwardStates.set(i, CardState.ACTIVE); animateActivateP2Forward(i); activated++;
 				} else {
 					refreshP2ForwardSlot(i);
 				}
@@ -7079,7 +7159,7 @@ public class MainWindow {
 			for (int i = 0; i < p1ForwardStates.size(); i++) {
 				CardState fs = p1ForwardStates.get(i);
 				if ((fs == CardState.DULL || fs == CardState.BRAVE_ATTACKED) && !p1ForwardFrozen.get(i)) {
-					p1ForwardStates.set(i, CardState.ACTIVE); refreshP1ForwardSlot(i); activated++;
+					p1ForwardStates.set(i, CardState.ACTIVE); animateActivateForward(i); activated++;
 				}
 			}
 
