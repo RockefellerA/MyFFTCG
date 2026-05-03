@@ -4350,18 +4350,6 @@ public class MainWindow {
 		return dst;
 	}
 
-	/** Rotates a {@link BufferedImage} 180°. */
-	private static BufferedImage rotate180(BufferedImage src) {
-		int w = src.getWidth(), h = src.getHeight();
-		BufferedImage dst = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-		Graphics2D g = dst.createGraphics();
-		g.translate(w, h);
-		g.rotate(Math.PI);
-		g.drawImage(src, 0, 0, null);
-		g.dispose();
-		return dst;
-	}
-
 	/** Applies a blue tint to a {@link BufferedImage} (darkens R/G, boosts B). */
 	private static BufferedImage applyBlueTint(BufferedImage src) {
 		float[] scales  = { 0.4f, 0.4f, 1.0f, 1.0f };
