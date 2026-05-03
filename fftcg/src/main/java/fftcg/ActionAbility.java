@@ -21,19 +21,23 @@ import java.util.List;
  *   <li>{@link #isSpecial} — {@code true} when {@code [[s]]…[[/]]} markup is present
  *       or {@code 《S》} appears in the cost.  Requires discarding a same-name card
  *       from hand in addition to the other costs.</li>
+ *   <li>{@link #breakZoneCosts} — one entry per "put X into the Break Zone" cost item;
+ *       empty when no such cost is present.</li>
  * </ul>
  *
  * <p>{@link #effectText} is stored as a raw string for now and will be parsed
  * into discrete effects in a future iteration.
  */
 public record ActionAbility(
-        String       abilityName,   // "" for regular abilities; named (e.g. "Mug") for specials
-        boolean      requiresDull,  // 《Dull》 present in cost
-        boolean      isSpecial,     // [[s]]…[[/]] or 《S》 present — requires same-name hand discard
-        List<String> cpCost,        // CP cost elements (element names or "" for generic)
-        String       effectText     // raw effect text — future work will parse this further
+        String              abilityName,    // "" for regular abilities; named (e.g. "Mug") for specials
+        boolean             requiresDull,   // 《Dull》 present in cost
+        boolean             isSpecial,      // [[s]]…[[/]] or 《S》 present — requires same-name hand discard
+        List<String>        cpCost,         // CP cost elements (element names or "" for generic)
+        List<BreakZoneCost> breakZoneCosts, // "put X into the Break Zone" costs (may be empty)
+        String              effectText      // raw effect text — future work will parse this further
 ) {
     public ActionAbility {
-        cpCost = List.copyOf(cpCost);
+        cpCost         = List.copyOf(cpCost);
+        breakZoneCosts = List.copyOf(breakZoneCosts);
     }
 }

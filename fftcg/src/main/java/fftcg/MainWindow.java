@@ -4353,6 +4353,14 @@ public class MainWindow {
 			sb.append(e.isEmpty() ? "any" : e);
 			first = false;
 		}
+		for (BreakZoneCost bz : ability.breakZoneCosts()) {
+			if (!first) sb.append(", ");
+			sb.append("put ");
+			if (bz.name().isEmpty()) sb.append(bz.count()).append(' ').append(bz.cardType());
+			else sb.append(bz.name());
+			sb.append("→BZ");
+			first = false;
+		}
 		sb.append("] → ");
 		String fx = ability.effectText();
 		sb.append(fx.length() > 55 ? fx.substring(0, 52) + "..." : fx);
@@ -4432,7 +4440,107 @@ public class MainWindow {
 		}
 		// Special abilities require a same-name card in hand
 		if (ability.isSpecial() && !hasSameNameInHand(sourceName)) return false;
+		// Break-zone costs require at least one eligible field card per cost item
+		for (BreakZoneCost bz : ability.breakZoneCosts())
+			if (!bzCostSatisfied(bz)) return false;
 		return canAffordAbilityCost(ability);
+	}
+
+	/** Returns {@code true} if at least {@link BreakZoneCost#count()} eligible field cards exist. */
+	private boolean bzCostSatisfied(BreakZoneCost bz) {
+		return eligibleBzFieldCards(bz).size() >= bz.count();
+	}
+
+	/**
+	 * Returns all P1 field cards that satisfy {@code bz}'s requirement.
+	 * For named costs every zone is searched; for type costs only the matching zone is searched.
+	 */
+	private List<ForwardTarget> eligibleBzFieldCards(BreakZoneCost bz) {
+		List<ForwardTarget> result = new ArrayList<>();
+		if (!bz.name().isEmpty()) {
+			for (int i = 0; i < p1ForwardCards.size(); i++)
+				if (bz.name().equalsIgnoreCase(p1ForwardCards.get(i).name()))
+					result.add(new ForwardTarget(true, i, ForwardTarget.CardZone.FORWARD));
+			for (int i = 0; i < p1MonsterCards.size(); i++)
+				if (bz.name().equalsIgnoreCase(p1MonsterCards.get(i).name()))
+					result.add(new ForwardTarget(true, i, ForwardTarget.CardZone.MONSTER));
+			for (int i = 0; i < p1BackupCards.length; i++)
+				if (p1BackupCards[i] != null && bz.name().equalsIgnoreCase(p1BackupCards[i].name()))
+					result.add(new ForwardTarget(true, i, ForwardTarget.CardZone.BACKUP));
+			return result;
+		}
+		String typeDesc  = bz.cardType();
+		String last      = typeDesc.isEmpty() ? "" : typeDesc.substring(typeDesc.lastIndexOf(' ') + 1);
+		String elemFilt  = typeDesc.contains(" ") ? typeDesc.substring(0, typeDesc.lastIndexOf(' ')).trim() : null;
+		if (last.equalsIgnoreCase("Forward")) {
+			for (int i = 0; i < p1ForwardCards.size(); i++) {
+				if (elemFilt != null && !p1ForwardCards.get(i).containsElement(elemFilt)) continue;
+				result.add(new ForwardTarget(true, i, ForwardTarget.CardZone.FORWARD));
+			}
+		} else if (last.equalsIgnoreCase("Backup")) {
+			for (int i = 0; i < p1BackupCards.length; i++) {
+				if (p1BackupCards[i] == null) continue;
+				if (elemFilt != null && !p1BackupCards[i].containsElement(elemFilt)) continue;
+				result.add(new ForwardTarget(true, i, ForwardTarget.CardZone.BACKUP));
+			}
+		} else if (last.equalsIgnoreCase("Monster")) {
+			for (int i = 0; i < p1MonsterCards.size(); i++) {
+				if (elemFilt != null && !p1MonsterCards.get(i).containsElement(elemFilt)) continue;
+				result.add(new ForwardTarget(true, i, ForwardTarget.CardZone.MONSTER));
+			}
+		}
+		return result;
+	}
+
+	private CardData fieldCardData(ForwardTarget t) {
+		return switch (t.zone()) {
+			case FORWARD -> p1ForwardCards.get(t.idx());
+			case BACKUP  -> p1BackupCards[t.idx()];
+			case MONSTER -> p1MonsterCards.get(t.idx());
+		};
+	}
+
+	private String fieldCardUrl(ForwardTarget t) {
+		return switch (t.zone()) {
+			case FORWARD -> p1ForwardUrls.get(t.idx());
+			case BACKUP  -> p1BackupUrls[t.idx()];
+			case MONSTER -> p1MonsterUrls.get(t.idx());
+		};
+	}
+
+	private void breakP1BackupSlot(int idx) {
+		CardData c = p1BackupCards[idx];
+		if (c == null) return;
+		logEntry(c.name() + " → Break Zone");
+		gameState.getP1BreakZone().add(c);
+		p1BackupCards[idx]   = null;
+		p1BackupUrls[idx]    = null;
+		p1BackupStates[idx]  = CardState.ACTIVE;
+		p1BackupFrozen[idx]  = false;
+		if (p1BackupLabels[idx] != null) {
+			p1BackupLabels[idx].setIcon(null);
+			p1BackupLabels[idx].setText(null);
+		}
+		refreshP1BreakLabel();
+	}
+
+	private void breakP1MonsterSlot(int idx) {
+		if (idx >= p1MonsterCards.size()) return;
+		CardData c = p1MonsterCards.get(idx);
+		logEntry(c.name() + " → Break Zone");
+		gameState.getP1BreakZone().add(c);
+		p1MonsterCards.remove(idx);
+		p1MonsterStates.remove(idx);
+		p1MonsterFrozen.remove(idx);
+		p1MonsterPlayedOnTurn.remove(idx);
+		p1MonsterUrls.remove(idx);
+		JLabel lbl = p1MonsterLabels.remove(idx);
+		if (p1MonsterPanel != null) {
+			p1MonsterPanel.remove(lbl);
+			p1MonsterPanel.revalidate();
+			p1MonsterPanel.repaint();
+		}
+		refreshP1BreakLabel();
 	}
 
 	/**
@@ -4476,9 +4584,11 @@ public class MainWindow {
 		String[] elems  = costByElem.keySet().toArray(String[]::new);
 		int      totalCost = rawCost.size();
 
-		// If zero CP cost and only Dull/Special, confirm immediately
-		if (totalCost == 0) {
-			executeAbilityPayment(ability, source, applyDull, new ArrayList<>(), new ArrayList<>());
+		List<BreakZoneCost> bzCosts = ability.breakZoneCosts();
+
+		// If zero CP cost and no break-zone costs, confirm immediately
+		if (totalCost == 0 && bzCosts.isEmpty()) {
+			executeAbilityPayment(ability, source, applyDull, new ArrayList<>(), new ArrayList<>(), List.of());
 			return;
 		}
 
@@ -4512,6 +4622,11 @@ public class MainWindow {
 		List<JLabel>  discardLbls = new ArrayList<>();
 		List<Integer> discardIdxs = new ArrayList<>();
 
+		// Break-zone cost tracking: one selected ForwardTarget per BZ cost item
+		ForwardTarget[] selectedBzTargets = new ForwardTarget[bzCosts.size()];
+		List<List<JLabel>>        bzSectionLbls     = new ArrayList<>();
+		List<List<ForwardTarget>> bzSectionEligible = new ArrayList<>();
+
 		boolean[] canAddDiscard = {false};
 		Runnable updateAll = () -> {
 			Map<String, Integer> cpByElem = new LinkedHashMap<>(bankCpByElem);
@@ -4534,7 +4649,10 @@ public class MainWindow {
 			canAddDiscard[0]     = (total + 2 <= maxAllowed) && (total < totalCost || unsatisfied > 0);
 			boolean satisfied    = cpByElem.entrySet().stream()
 					.allMatch(en -> en.getValue() >= costByElem.getOrDefault(en.getKey(), 0));
-			confirmBtn.setEnabled(total >= totalCost && satisfied);
+			boolean bzSatisfied  = true;
+			for (int bzi = 0; bzi < bzCosts.size(); bzi++)
+				if (selectedBzTargets[bzi] == null) { bzSatisfied = false; break; }
+			confirmBtn.setEnabled(total >= totalCost && satisfied && bzSatisfied);
 
 			StringBuilder sb = new StringBuilder("CP: " + total + " / " + totalCost + "  (");
 			boolean first = true;
@@ -4562,6 +4680,15 @@ public class MainWindow {
 				lbl.setBorder(BorderFactory.createLineBorder(sel ? Color.YELLOW : (canAddDiscard[0] ? Color.GRAY : new Color(80,80,80)), sel?3:1));
 				lbl.setBackground(sel || canAddDiscard[0] ? Color.DARK_GRAY : new Color(50,50,50));
 				lbl.setCursor(sel || canAddDiscard[0] ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+			}
+			for (int bzi = 0; bzi < bzSectionLbls.size(); bzi++) {
+				ForwardTarget sel = selectedBzTargets[bzi];
+				List<ForwardTarget> elig = bzSectionEligible.get(bzi);
+				List<JLabel> lbls = bzSectionLbls.get(bzi);
+				for (int li = 0; li < lbls.size(); li++) {
+					boolean isSel = sel != null && sel.equals(elig.get(li));
+					lbls.get(li).setBorder(BorderFactory.createLineBorder(isSel ? Color.YELLOW : Color.GRAY, isSel ? 3 : 1));
+				}
 			}
 		};
 		updateAll.run();
@@ -4646,13 +4773,67 @@ public class MainWindow {
 		}
 		center.add(discHdr); center.add(dp);
 
+		// Break-zone cost sections
+		for (int bzi = 0; bzi < bzCosts.size(); bzi++) {
+			final int bzIdx = bzi;
+			BreakZoneCost bz = bzCosts.get(bzi);
+			List<ForwardTarget> eligible = eligibleBzFieldCards(bz);
+
+			String desc = bz.name().isEmpty()
+					? bz.count() + " " + bz.cardType()
+					: bz.name();
+			JLabel bzHdr = new JLabel("Put into Break Zone: " + desc);
+			bzHdr.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			bzHdr.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+			JPanel bzPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
+			bzPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+			List<JLabel> bzLbls = new ArrayList<>();
+			for (ForwardTarget ft : eligible) {
+				String imgUrl = fieldCardUrl(ft);
+				JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+				lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
+				lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+				lbl.setOpaque(true); lbl.setBackground(Color.DARK_GRAY); lbl.setForeground(Color.WHITE);
+				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+				lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
+				lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mousePressed(MouseEvent ev) {
+						selectedBzTargets[bzIdx] = ft.equals(selectedBzTargets[bzIdx]) ? null : ft;
+						updateAll.run();
+					}
+					@Override public void mouseEntered(MouseEvent ev) { if (lbl.getIcon() != null) showZoomAt(imgUrl, lbl); }
+					@Override public void mouseExited(MouseEvent ev)  { hideZoom(); }
+				});
+				new SwingWorker<ImageIcon, Void>() {
+					@Override protected ImageIcon doInBackground() throws Exception {
+						Image img = ImageCache.load(imgUrl);
+						return img == null ? null : new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+					}
+					@Override protected void done() {
+						try { ImageIcon ic = get(); if (ic != null) { lbl.setIcon(ic); lbl.setText(null); } }
+						catch (InterruptedException | ExecutionException ignored) {}
+					}
+				}.execute();
+				bzLbls.add(lbl);
+				bzPanel.add(lbl);
+			}
+			bzSectionLbls.add(bzLbls);
+			bzSectionEligible.add(eligible);
+			center.add(bzHdr); center.add(bzPanel);
+		}
+
 		JButton cancelBtn = new JButton("Cancel");
 		cancelBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
 		cancelBtn.addActionListener(ev -> dlg.dispose());
 		confirmBtn.addActionListener(ev -> {
+			List<ForwardTarget> bzList = new ArrayList<>();
+			for (ForwardTarget t : selectedBzTargets) if (t != null) bzList.add(t);
 			dlg.dispose();
 			executeAbilityPayment(ability, source, applyDull,
-					new ArrayList<>(selectedDiscards), new ArrayList<>(selectedBackups));
+					new ArrayList<>(selectedDiscards), new ArrayList<>(selectedBackups), bzList);
 		});
 
 		JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
@@ -4668,6 +4849,14 @@ public class MainWindow {
 			costDesc.append(en.getValue()).append(" ").append(en.getKey()).append(" CP"); cf = false;
 		}
 		if (genericNeeded > 0) { if (!cf) costDesc.append(" + "); costDesc.append((int) genericNeeded).append(" any CP"); }
+		for (BreakZoneCost bz : bzCosts) {
+			if (!cf) costDesc.append(" + ");
+			costDesc.append("put ");
+			if (bz.name().isEmpty()) costDesc.append(bz.count()).append(' ').append(bz.cardType());
+			else costDesc.append(bz.name());
+			costDesc.append(" into BZ");
+			cf = false;
+		}
 
 		JLabel titleLabel = new JLabel(
 				"<html><center>" + source.name() + " — " + (costDesc.length() > 0 ? costDesc : "free") + "</center></html>",
@@ -4696,7 +4885,8 @@ public class MainWindow {
 	 * discards a same-name card (Special), then calls {@link ActionResolver#resolve}.
 	 */
 	private void executeAbilityPayment(ActionAbility ability, CardData source,
-			Runnable applyDull, List<Integer> discardIndices, List<Integer> backupDullIndices) {
+			Runnable applyDull, List<Integer> discardIndices, List<Integer> backupDullIndices,
+			List<ForwardTarget> bzTargets) {
 		List<String> rawCost = ability.cpCost();
 		LinkedHashMap<String, Integer> costByElem = new LinkedHashMap<>();
 		for (String e : rawCost) if (!e.isEmpty()) costByElem.merge(e, 1, Integer::sum);
@@ -4731,6 +4921,17 @@ public class MainWindow {
 					logEntry("Special: discarded \"" + source.name() + "\" from hand");
 					break;
 				}
+			}
+		}
+
+		// Break-zone costs: process in reverse index order within each zone to avoid index shifting
+		List<ForwardTarget> sortedBz = new ArrayList<>(bzTargets);
+		sortedBz.sort((a, b) -> a.zone() == b.zone() ? Integer.compare(b.idx(), a.idx()) : 0);
+		for (ForwardTarget t : sortedBz) {
+			switch (t.zone()) {
+				case FORWARD -> breakP1Forward(t.idx());
+				case BACKUP  -> breakP1BackupSlot(t.idx());
+				case MONSTER -> breakP1MonsterSlot(t.idx());
 			}
 		}
 

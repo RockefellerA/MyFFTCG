@@ -169,17 +169,26 @@ public record CardData(
      * Matches action abilities in card text.  The groups are:
      * <ol>
      *   <li>Special ability name (optional) — content of {@code [[s]]…[[/]]}</li>
-     *   <li>Raw cost section — one or more {@code 《token》} sequences</li>
+     *   <li>Zero or more {@code 《token》} CP-cost sequences</li>
+     *   <li>Optional "put … into the Break Zone" cost phrase</li>
      *   <li>Effect text — everything after {@code :} up to the next markup tag or end</li>
      * </ol>
-     * The leading {@code [[s]]name[[/]]} is optional so that regular (unnamed)
-     * action abilities are matched by the same pattern.
+     * A lookahead after the optional {@code [[s]]} header ensures the cost section
+     * begins with either a {@code 《} token or the word {@code put}, preventing
+     * spurious matches on arbitrary colons in card text.
      */
     private static final Pattern ACTION_ABILITY_PATTERN = Pattern.compile(
-        "(?:(?i)\\[\\[s\\]\\]\\s*([^\\[]+?)\\s*\\[\\[/\\]\\]\\s*)?" + // optional [[s]]Name[[/]]
-        "((?:《[^》]*》\\s*)+)"                                        + // one or more 《cost》 tokens
-        ":\\s*"                                                        + // colon separator
-        "([^\\[]*)"                                                      // effect text (up to next markup)
+        "(?:(?i)\\[\\[s\\]\\]\\s*([^\\[]+?)\\s*\\[\\[/\\]\\]\\s*)?" +  // optional [[s]]Name[[/]]
+        "(?=(?:《|(?i:put)\\b))"                                      +  // lookahead: must start with 《 or put
+        "((?:《[^》]*》\\s*)*)"                                        +  // zero or more 《cost》 tokens
+        "((?i)(?:,\\s*)?put\\s+.+?\\s+into\\s+the\\s+Break\\s+Zone\\s*)?" + // optional BZ cost phrase
+        ":\\s*"                                                        +  // colon separator
+        "([^\\[]*)"                                                       // effect text (up to next markup)
+    );
+
+    // Captures the content between "put " and " into the Break Zone"
+    private static final Pattern BREAK_ZONE_COST_PATTERN = Pattern.compile(
+        "(?i)put\\s+(.+?)\\s+into\\s+the\\s+Break\\s+Zone"
     );
 
     /**
@@ -199,30 +208,58 @@ public record CardData(
         while (m.find()) {
             String rawName   = m.group(1);
             String costPart  = m.group(2);
-            String effectRaw = m.group(3).trim();
-            if (effectRaw.isEmpty()) continue;  // cost with no effect — skip (e.g. trait lines)
+            String bzRaw     = m.group(3);
+            String effectRaw = m.group(4).trim();
+            if (effectRaw.isEmpty()) continue;
+            // Skip if there are no CP tokens and no break-zone cost (spurious match)
+            if ((costPart == null || costPart.isBlank()) && bzRaw == null) continue;
 
             String  abilityName  = rawName != null ? rawName.trim() : "";
             boolean isSpecial    = !abilityName.isEmpty();
             boolean requiresDull = false;
             List<String> cpCost  = new ArrayList<>();
 
-            Matcher cpM = CP_TOKEN.matcher(costPart);
-            while (cpM.find()) {
-                String sym = cpM.group(1).trim();
-                if ("Dull".equalsIgnoreCase(sym)) {
-                    requiresDull = true;
-                } else if ("S".equalsIgnoreCase(sym)) {
-                    isSpecial = true;
-                } else if (sym.matches("\\d+")) {
-                    int n = Integer.parseInt(sym);
-                    for (int i = 0; i < n; i++) cpCost.add("");
-                } else {
-                    cpCost.add(ELEM_SYM.getOrDefault(sym.toUpperCase(), sym));
+            if (costPart != null) {
+                Matcher cpM = CP_TOKEN.matcher(costPart);
+                while (cpM.find()) {
+                    String sym = cpM.group(1).trim();
+                    if ("Dull".equalsIgnoreCase(sym)) {
+                        requiresDull = true;
+                    } else if ("S".equalsIgnoreCase(sym)) {
+                        isSpecial = true;
+                    } else if (sym.matches("\\d+")) {
+                        int n = Integer.parseInt(sym);
+                        for (int i = 0; i < n; i++) cpCost.add("");
+                    } else {
+                        cpCost.add(ELEM_SYM.getOrDefault(sym.toUpperCase(), sym));
+                    }
                 }
             }
 
-            result.add(new ActionAbility(abilityName, requiresDull, isSpecial, cpCost, effectRaw));
+            List<BreakZoneCost> breakZoneCosts = parseBreakZoneCosts(bzRaw);
+            result.add(new ActionAbility(abilityName, requiresDull, isSpecial, cpCost, breakZoneCosts, effectRaw));
+        }
+        return List.copyOf(result);
+    }
+
+    /** Parses the "put … into the Break Zone" cost phrase into individual {@link BreakZoneCost} items. */
+    private static List<BreakZoneCost> parseBreakZoneCosts(String bzRaw) {
+        if (bzRaw == null || bzRaw.isBlank()) return List.of();
+        Matcher m = BREAK_ZONE_COST_PATTERN.matcher(bzRaw.trim());
+        if (!m.find()) return List.of();
+        String content = m.group(1).trim();
+
+        List<BreakZoneCost> result = new ArrayList<>();
+        for (String part : content.split("(?i)\\s+and\\s+")) {
+            String p = part.trim();
+            // Strip [[i]]…[[/]] italic markup
+            p = p.replaceAll("(?i)\\[\\[i\\]\\][^\\[]*\\[\\[/\\]\\]\\s*", "").trim();
+            Matcher numM = Pattern.compile("^(\\d+)\\s+(.+)$").matcher(p);
+            if (numM.matches()) {
+                result.add(new BreakZoneCost("", Integer.parseInt(numM.group(1)), numM.group(2).trim()));
+            } else {
+                result.add(new BreakZoneCost(p, 1, ""));
+            }
         }
         return List.copyOf(result);
     }
