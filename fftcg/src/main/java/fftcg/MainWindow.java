@@ -64,6 +64,9 @@ import javax.swing.border.SoftBevelBorder;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 
+import static fftcg.CardAnimation.CARD_H;
+import static fftcg.CardAnimation.CARD_W;
+
 import fftcg.menu.FileMenu;
 import fftcg.menu.HelpMenu;
 import fftcg.menu.MultiplayerMenu;
@@ -75,10 +78,6 @@ import scraper.DeckDatabase.DeckCardDetail;
 public class MainWindow {
 
 	private JFrame frame;
-
-	// Card size constants
-	private static final int CARD_W = 140;
-	private static final int CARD_H = 205;
 
 	// Side info panel dimensions.
 	// The panel is sized to the native card-image width on the first hover;
@@ -4111,7 +4110,7 @@ public class MainWindow {
 		new SwingWorker<BufferedImage, Void>() {
 			@Override protected BufferedImage doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
-				return raw == null ? null : toARGB(raw, CARD_W, CARD_H);
+				return raw == null ? null : CardAnimation.toARGB(raw, CARD_W, CARD_H);
 			}
 			@Override protected void done() {
 				try {
@@ -4129,7 +4128,7 @@ public class MainWindow {
 								? 2 * progress * progress
 								: 1 - Math.pow(-2 * progress + 2, 2) / 2;
 						double angle = dulling ? (Math.PI / 2 * t) : (Math.PI / 2 * (1 - t));
-						slot.setIcon(new ImageIcon(renderBackupCardAtAngle(card, angle)));
+						slot.setIcon(new ImageIcon(CardAnimation.renderBackupCardAtAngle(card, angle)));
 						slot.setText(null);
 						if (frame[0] >= totalFrames) {
 							timer.stop();
@@ -4151,7 +4150,7 @@ public class MainWindow {
 		new SwingWorker<BufferedImage, Void>() {
 			@Override protected BufferedImage doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
-				return raw == null ? null : toARGB(raw, CARD_W, CARD_H);
+				return raw == null ? null : CardAnimation.toARGB(raw, CARD_W, CARD_H);
 			}
 			@Override protected void done() {
 				try {
@@ -4168,7 +4167,7 @@ public class MainWindow {
 								? 2 * progress * progress
 								: 1 - Math.pow(-2 * progress + 2, 2) / 2;
 						double angle = Math.PI / 2 * t;
-						slot.setIcon(new ImageIcon(renderBackupCardAtAngle(card, angle)));
+						slot.setIcon(new ImageIcon(CardAnimation.renderBackupCardAtAngle(card, angle)));
 						slot.setText(null);
 						if (frame[0] >= totalFrames) {
 							timer.stop();
@@ -4193,7 +4192,7 @@ public class MainWindow {
 		new SwingWorker<BufferedImage, Void>() {
 			@Override protected BufferedImage doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
-				return raw == null ? null : toARGB(raw, CARD_W, CARD_H);
+				return raw == null ? null : CardAnimation.toARGB(raw, CARD_W, CARD_H);
 			}
 			@Override protected void done() {
 				try {
@@ -4210,7 +4209,7 @@ public class MainWindow {
 								? 2 * progress * progress
 								: 1 - Math.pow(-2 * progress + 2, 2) / 2;
 						double angle = Math.PI / 2 * t;
-						slot.setIcon(new ImageIcon(renderBackupCardAtAngle(card, angle)));
+						slot.setIcon(new ImageIcon(CardAnimation.renderBackupCardAtAngle(card, angle)));
 						slot.setText(null);
 						if (frame[0] >= totalFrames) {
 							timer.stop();
@@ -4235,7 +4234,7 @@ public class MainWindow {
 		new SwingWorker<BufferedImage, Void>() {
 			@Override protected BufferedImage doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
-				return raw == null ? null : toARGB(raw, CARD_W, CARD_H);
+				return raw == null ? null : CardAnimation.toARGB(raw, CARD_W, CARD_H);
 			}
 			@Override protected void done() {
 				try {
@@ -4252,7 +4251,7 @@ public class MainWindow {
 								? 2 * progress * progress
 								: 1 - Math.pow(-2 * progress + 2, 2) / 2;
 						double angle = Math.PI / 2 * (1 - t);
-						slot.setIcon(new ImageIcon(renderBackupCardAtAngle(card, angle)));
+						slot.setIcon(new ImageIcon(CardAnimation.renderBackupCardAtAngle(card, angle)));
 						slot.setText(null);
 						if (frame[0] >= totalFrames) {
 							timer.stop();
@@ -4275,7 +4274,7 @@ public class MainWindow {
 		new SwingWorker<BufferedImage, Void>() {
 			@Override protected BufferedImage doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
-				return raw == null ? null : toARGB(raw, CARD_W, CARD_H);
+				return raw == null ? null : CardAnimation.toARGB(raw, CARD_W, CARD_H);
 			}
 			@Override protected void done() {
 				try {
@@ -4292,7 +4291,7 @@ public class MainWindow {
 								? 2 * progress * progress
 								: 1 - Math.pow(-2 * progress + 2, 2) / 2;
 						double angle = Math.PI / 2 * (1 - t);
-						slot.setIcon(new ImageIcon(renderBackupCardAtAngle(card, angle)));
+						slot.setIcon(new ImageIcon(CardAnimation.renderBackupCardAtAngle(card, angle)));
 						slot.setText(null);
 						if (frame[0] >= totalFrames) {
 							timer.stop();
@@ -4307,19 +4306,6 @@ public class MainWindow {
 		}.execute();
 	}
 
-	private static BufferedImage renderBackupCardAtAngle(BufferedImage card, double angle) {
-		BufferedImage canvas = new BufferedImage(CARD_H, CARD_H, BufferedImage.TYPE_INT_ARGB);
-		Graphics2D g = canvas.createGraphics();
-		g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-		g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-		g.translate(CARD_H / 2.0, CARD_H / 2.0);
-		g.rotate(angle);
-		g.translate(-CARD_W / 2.0, -CARD_H / 2.0);
-		g.drawImage(card, 0, 0, null);
-		g.dispose();
-		return canvas;
-	}
-
 	/** Reloads and re-renders a single P1 backup slot using its stored URL and state. */
 	private void refreshP1BackupSlot(int idx) {
 		String url  = p1BackupUrls[idx];
@@ -4330,8 +4316,8 @@ public class MainWindow {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
 				if (raw == null) return null;
-				BufferedImage card = toARGB(raw, CARD_W, CARD_H);
-				return new ImageIcon(renderBackupCard(card, state, false, false, p1BackupFrozen[idx]));
+				BufferedImage card = CardAnimation.toARGB(raw, CARD_W, CARD_H);
+				return new ImageIcon(CardAnimation.renderBackupCard(card, state, false, false, p1BackupFrozen[idx]));
 			}
 			@Override protected void done() {
 				try {
@@ -4340,101 +4326,6 @@ public class MainWindow {
 				} catch (InterruptedException | ExecutionException ignored) {}
 			}
 		}.execute();
-	}
-
-	/**
-	 * Composites a (possibly transformed) card image onto a square
-	 * {@code CARD_H × CARD_H} canvas, respecting the slot alignment rules:
-	 * <ul>
-	 *   <li>Active - upright card pinned to the left edge, top</li>
-	 *   <li>Dull — card rotated 90° CW ({@code CARD_H × CARD_W}), pinned left + bottom</li>
-	 * </ul>
-	 */
-	private static BufferedImage renderBackupCard(BufferedImage card, CardState state) {
-		return renderBackupCard(card, state, false);
-	}
-
-	private static BufferedImage renderBackupCard(BufferedImage card, CardState state, boolean highlight) {
-		return renderBackupCard(card, state, highlight, false);
-	}
-
-	private static BufferedImage renderBackupCard(BufferedImage card, CardState state, boolean highlight, boolean selected) {
-		return renderBackupCard(card, state, highlight, selected, false);
-	}
-
-	private static BufferedImage renderBackupCard(BufferedImage card, CardState state, boolean highlight, boolean selected, boolean frozen) {
-		BufferedImage canvas = new BufferedImage(CARD_H, CARD_H, BufferedImage.TYPE_INT_ARGB);
-		Graphics2D g = canvas.createGraphics();
-		if (frozen) card = applyBlueTint(card);
-		switch (state) {
-			case CardState.DULL -> {
-				BufferedImage rotated = rotateCW90(card);          // now CARD_H × CARD_W
-				g.drawImage(rotated, 0, CARD_H - CARD_W, null);   // pinned to bottom-left
-			}
-			default -> g.drawImage(card, 0, 0, null);             // pinned to top-left
-		}
-		if (selected) {
-			g.setColor(new Color(255, 165, 0));
-			g.setStroke(new BasicStroke(4f));
-			g.drawRect(2, 2, CARD_W - 5, CARD_H - 5);
-		} else if (highlight) {
-			g.setColor(new Color(0, 220, 0));
-			g.setStroke(new BasicStroke(3f));
-			g.drawRect(1, 1, CARD_W - 3, CARD_H - 3);
-		}
-		g.dispose();
-		return canvas;
-	}
-
-	/**
-	 * Draws remaining-HP text in the bottom-center of {@code canvas} when a forward
-	 * has taken damage but not broken.  The dark pill behind the number keeps it
-	 * readable over any card art.
-	 */
-	private static void renderDamageOverlay(BufferedImage canvas, int remainingHp) {
-		Graphics2D g = canvas.createGraphics();
-		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-		String text = String.valueOf(remainingHp);
-		Font font = new Font("Pixel NES", Font.BOLD, 13);
-		g.setFont(font);
-		FontMetrics fm = g.getFontMetrics();
-		int tw = fm.stringWidth(text);
-		int tx = 4;
-		int ty = canvas.getHeight() - 5;
-		g.setColor(new Color(0, 0, 0, 180));
-		g.fillRoundRect(tx - 4, ty - fm.getAscent() - 1, tw + 8, fm.getAscent() + fm.getDescent() + 2, 5, 5);
-		g.setColor(new Color(255, 50, 50));
-		g.drawString(text, tx, ty);
-		g.dispose();
-	}
-
-	/** Converts any {@link Image} to a scaled {@link BufferedImage} (ARGB). */
-	private static BufferedImage toARGB(Image src, int w, int h) {
-		BufferedImage buf = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-		Graphics2D g = buf.createGraphics();
-		g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-		g.drawImage(src, 0, 0, w, h, null);
-		g.dispose();
-		return buf;
-	}
-
-	/** Rotates a {@link BufferedImage} 90° clockwise. Result dimensions are {@code h × w}. */
-	private static BufferedImage rotateCW90(BufferedImage src) {
-		int w = src.getWidth(), h = src.getHeight();
-		BufferedImage dst = new BufferedImage(h, w, BufferedImage.TYPE_INT_ARGB);
-		Graphics2D g = dst.createGraphics();
-		g.translate(h, 0);
-		g.rotate(Math.PI / 2);
-		g.drawImage(src, 0, 0, null);
-		g.dispose();
-		return dst;
-	}
-
-	/** Applies a blue tint to a {@link BufferedImage} (darkens R/G, boosts B). */
-	private static BufferedImage applyBlueTint(BufferedImage src) {
-		float[] scales  = { 0.4f, 0.4f, 1.0f, 1.0f };
-		float[] offsets = { 0f,   0f,   60f,  0f   };
-		return new RescaleOp(scales, offsets, null).filter(src, null);
 	}
 
 	/**
@@ -5721,8 +5612,8 @@ public class MainWindow {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
 				if (raw == null) return null;
-				BufferedImage card = toARGB(raw, CARD_W, CARD_H);
-				return new ImageIcon(renderBackupCard(card, state, false, false, p1MonsterFrozen.get(idx)));
+				BufferedImage card = CardAnimation.toARGB(raw, CARD_W, CARD_H);
+				return new ImageIcon(CardAnimation.renderBackupCard(card, state, false, false, p1MonsterFrozen.get(idx)));
 			}
 			@Override protected void done() {
 				try {
@@ -5775,8 +5666,8 @@ public class MainWindow {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
 				if (raw == null) return null;
-				BufferedImage card = toARGB(raw, CARD_W, CARD_H);
-				return new ImageIcon(renderBackupCard(card, state, false, false, p2MonsterFrozen.get(idx)));
+				BufferedImage card = CardAnimation.toARGB(raw, CARD_W, CARD_H);
+				return new ImageIcon(CardAnimation.renderBackupCard(card, state, false, false, p2MonsterFrozen.get(idx)));
 			}
 			@Override protected void done() {
 				try {
@@ -5837,8 +5728,8 @@ public class MainWindow {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
 				if (raw == null) return null;
-				BufferedImage canvas = renderBackupCard(toARGB(raw, CARD_W, CARD_H), state, canAttack, selected, Boolean.TRUE.equals(p1ForwardFrozen.get(idx)));
-				if (damage > 0 && power > 0) renderDamageOverlay(canvas, power - damage);
+				BufferedImage canvas = CardAnimation.renderBackupCard(CardAnimation.toARGB(raw, CARD_W, CARD_H), state, canAttack, selected, Boolean.TRUE.equals(p1ForwardFrozen.get(idx)));
+				if (damage > 0 && power > 0) CardAnimation.renderDamageOverlay(canvas, power - damage);
 				return new ImageIcon(canvas);
 			}
 			@Override protected void done() {
@@ -6896,7 +6787,7 @@ public class MainWindow {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
 				if (raw == null) return null;
-				return new ImageIcon(renderBackupCard(toARGB(raw, CARD_W, CARD_H), state, false, false, p2BackupFrozen[idx]));
+				return new ImageIcon(CardAnimation.renderBackupCard(CardAnimation.toARGB(raw, CARD_W, CARD_H), state, false, false, p2BackupFrozen[idx]));
 			}
 			@Override protected void done() {
 				try {
@@ -6918,8 +6809,8 @@ public class MainWindow {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
 				if (raw == null) return null;
-				BufferedImage canvas = renderBackupCard(toARGB(raw, CARD_W, CARD_H), state, false, false, p2ForwardFrozen.get(idx));
-				if (damage > 0 && power > 0) renderDamageOverlay(canvas, power - damage);
+				BufferedImage canvas = CardAnimation.renderBackupCard(CardAnimation.toARGB(raw, CARD_W, CARD_H), state, false, false, p2ForwardFrozen.get(idx));
+				if (damage > 0 && power > 0) CardAnimation.renderDamageOverlay(canvas, power - damage);
 				return new ImageIcon(canvas);
 			}
 			@Override protected void done() {
