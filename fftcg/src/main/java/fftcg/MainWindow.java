@@ -1182,7 +1182,7 @@ public class MainWindow {
 
 		switch (current) {
 
-			case ACTIVE: {
+			case ACTIVE ->  {
 				// Advance first so getTurnNumber() still reflects the current turn
 				gameState.advancePhase();   // ACTIVE → DRAW
 				int drawCount = gameState.getTurnNumber() == 1 ? 1 : 2;
@@ -1197,52 +1197,50 @@ public class MainWindow {
 				}
 				// No choices to make during Draw phase — advance automatically
 				onNextPhase();
-				break;
 			}
 
-			case DRAW:
-				gameState.advancePhase();   // DRAW → MAIN_1
-				logEntry("Main Phase 1");
-				processWarpCounters();
-				break;
+			case DRAW -> {
+                            gameState.advancePhase();   // DRAW → MAIN_1
+                            logEntry("Main Phase 1");
+                            processWarpCounters();
+            }
 
-			case MAIN_1:
-				p1AttackSelection.clear();
-				gameState.advancePhase();   // MAIN_1 → ATTACK
-				refreshAttackButton();
-				logEntry("Attack Phase");
-				refreshAllForwardSlots();
-				if (!hasAttackableForward() && !hasBackAttackInHand()) {
-					logEntry("No attackers available — skipping to Main Phase 2");
-					onNextPhase();
-				}
-				break;
+			case MAIN_1 -> {
+                            p1AttackSelection.clear();
+                            gameState.advancePhase();   // MAIN_1 → ATTACK
+                            refreshAttackButton();
+                            logEntry("Attack Phase");
+                            refreshAllForwardSlots();
+                            if (!hasAttackableForward() && !hasBackAttackInHand()) {
+                                logEntry("No attackers available — skipping to Main Phase 2");
+                                onNextPhase();
+                            }
+            }
 
-			case ATTACK:
-				p1AttackSelection.clear();
-				refreshAttackButton();
-				gameState.advancePhase();   // ATTACK → MAIN_2
-				refreshAllForwardSlots();
-				logEntry("Main Phase 2");
-				break;
+			case ATTACK -> {
+                            p1AttackSelection.clear();
+                            refreshAttackButton();
+                            gameState.advancePhase();   // ATTACK → MAIN_2
+                            refreshAllForwardSlots();
+                            logEntry("Main Phase 2");
+			}
 
-			case MAIN_2:
-				gameState.advancePhase();   // MAIN_2 → END
-				logEntry("End Phase");
-				for (int i = 0; i < p1ForwardDamage.size(); i++) p1ForwardDamage.set(i, 0);
-				for (int i = 0; i < p1ForwardCards.size(); i++) refreshP1ForwardSlot(i);
-				for (int i = 0; i < p2ForwardDamage.size(); i++) p2ForwardDamage.set(i, 0);
-				for (int i = 0; i < p2ForwardCards.size(); i++) refreshP2ForwardSlot(i);
-				showEndPhaseDiscardDialog();
-				onNextPhase();             // END → ACTIVE (auto-advance)
-				break;
+			case MAIN_2 -> {
+                            gameState.advancePhase();   // MAIN_2 → END
+                            logEntry("End Phase");
+                            for (int i = 0; i < p1ForwardDamage.size(); i++) p1ForwardDamage.set(i, 0);
+                            for (int i = 0; i < p1ForwardCards.size(); i++) refreshP1ForwardSlot(i);
+                            for (int i = 0; i < p2ForwardDamage.size(); i++) p2ForwardDamage.set(i, 0);
+                            for (int i = 0; i < p2ForwardCards.size(); i++) refreshP2ForwardSlot(i);
+                            showEndPhaseDiscardDialog();
+                            onNextPhase();             // END → ACTIVE (auto-advance)
+            }
 
-			case END: {
+			case END ->  {
 				// END → ACTIVE: increments turn number and switches to P2
 				gameState.advancePhase();
 				nextPhaseButton.setEnabled(false);
 				computerPlayer.runTurn();
-				break;
 			}
 		}
 	}
@@ -4187,6 +4185,48 @@ public class MainWindow {
 		}.execute();
 	}
 
+	private void animateDullP2Forward(int idx, Runnable onComplete) {
+		String url  = p2ForwardUrls.get(idx);
+		JLabel slot = p2ForwardLabels.get(idx);
+		if (url == null || slot == null) { refreshP2ForwardSlot(idx); if (onComplete != null) onComplete.run(); return; }
+
+		new SwingWorker<BufferedImage, Void>() {
+			@Override protected BufferedImage doInBackground() throws Exception {
+				Image raw = ImageCache.load(url);
+				return raw == null ? null : toARGB(raw, CARD_W, CARD_H);
+			}
+			@Override protected void done() {
+				try {
+					BufferedImage card = get();
+					if (card == null) { refreshP2ForwardSlot(idx); if (onComplete != null) onComplete.run(); return; }
+
+					int   totalFrames = 12;
+					int[] frame       = { 0 };
+					javax.swing.Timer timer = new javax.swing.Timer(16, null);
+					timer.addActionListener(ae -> {
+						frame[0]++;
+						double progress = Math.min(1.0, (double) frame[0] / totalFrames);
+						double t = progress < 0.5
+								? 2 * progress * progress
+								: 1 - Math.pow(-2 * progress + 2, 2) / 2;
+						double angle = Math.PI / 2 * t;
+						slot.setIcon(new ImageIcon(renderBackupCardAtAngle(card, angle)));
+						slot.setText(null);
+						if (frame[0] >= totalFrames) {
+							timer.stop();
+							refreshP2ForwardSlot(idx);
+							if (onComplete != null) onComplete.run();
+						}
+					});
+					timer.start();
+				} catch (InterruptedException | ExecutionException ignored) {
+					refreshP2ForwardSlot(idx);
+					if (onComplete != null) onComplete.run();
+				}
+			}
+		}.execute();
+	}
+
 	private static BufferedImage renderBackupCardAtAngle(BufferedImage card, double angle) {
 		BufferedImage canvas = new BufferedImage(CARD_H, CARD_H, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = canvas.createGraphics();
@@ -4844,14 +4884,14 @@ public class MainWindow {
 				if (idx >= p1ForwardStates.size()) return;
 				p1ForwardStates.set(idx, CardState.DULL);
 				logEntry(p1Forward(idx).name() + " is dulled");
-				refreshP1ForwardSlot(idx);
+				animateDullForward(idx, null);
 			}
 
 			@Override public void dullP2Forward(int idx) {
 				if (idx >= p2ForwardStates.size()) return;
 				p2ForwardStates.set(idx, CardState.DULL);
 				logEntry("[P2] " + p2ForwardCards.get(idx).name() + " is dulled");
-				refreshP2ForwardSlot(idx);
+				animateDullP2Forward(idx, null);
 			}
 
 			@Override public void freezeP1Forward(int idx) {
@@ -5790,10 +5830,11 @@ public class MainWindow {
 			CardData c = p1ForwardCards.get(idx);
 			if (c.hasTrait(CardData.Trait.BRAVE)) {
 				p1ForwardStates.set(idx, CardState.BRAVE_ATTACKED);
+				refreshP1ForwardSlot(idx);
 			} else {
 				p1ForwardStates.set(idx, CardState.DULL);
+				animateDullForward(idx, null);
 			}
-			refreshP1ForwardSlot(idx);
 		}
 		if (selection.size() == 1) {
 			int idx = selection.get(0);
@@ -5911,7 +5952,7 @@ public class MainWindow {
 				? p1ForwardPrimedTop.get(idx) : p1ForwardCards.get(idx);
 		addAbilityMenuItems(menu, effectiveFwd, p1ForwardFrozen.get(idx),
 				p1ForwardStates.get(idx), p1ForwardPlayedOnTurn.get(idx),
-				() -> { p1ForwardStates.set(idx, CardState.DULL); refreshP1ForwardSlot(idx); });
+				() -> { p1ForwardStates.set(idx, CardState.DULL); animateDullForward(idx, null); });
 
 		// Prime — visible whenever the forward has the Priming trait
 		CardData fwd = p1ForwardCards.get(idx);
@@ -5928,9 +5969,10 @@ public class MainWindow {
 		if (AppSettings.isDebugMode()) {
 			JMenuItem dullItem = new JMenuItem("Debug: Dull");
 			dullItem.addActionListener(ae -> {
-				p1ForwardStates.set(idx,
-						p1ForwardStates.get(idx) == CardState.DULL ? CardState.ACTIVE : CardState.DULL);
-				refreshP1ForwardSlot(idx);
+				boolean dulling = p1ForwardStates.get(idx) != CardState.DULL;
+				p1ForwardStates.set(idx, dulling ? CardState.DULL : CardState.ACTIVE);
+				if (dulling) animateDullForward(idx, null);
+				else refreshP1ForwardSlot(idx);
 			});
 			menu.add(dullItem);
 
@@ -7000,10 +7042,11 @@ public class MainWindow {
 				logEntry("[P2] " + attacker.name() + " attacks!");
 				if (attacker.hasTrait(CardData.Trait.BRAVE)) {
 					p2ForwardStates.set(i, CardState.BRAVE_ATTACKED);
+					refreshP2ForwardSlot(i);
 				} else {
 					p2ForwardStates.set(i, CardState.DULL);
+					animateDullP2Forward(i, null);
 				}
-				refreshP2ForwardSlot(i);
 				final int fi = i;
 				p1ChooseBlockerDialog(attacker, fi, () -> {
 					if (!gameState.isP1GameOver()) step(() -> doAttackPhase(onDone));
