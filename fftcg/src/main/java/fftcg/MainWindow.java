@@ -398,6 +398,20 @@ public class MainWindow {
 		JPanel p2DamagePanel = buildDamageZonePanel("P2", p2ColorBox);
 
 		JPanel p2BackupSlots = buildBackupZonePanel(p2BackupLabels);
+		for (int i = 0; i < p2BackupLabels.length; i++) {
+			final int backupIdx = i;
+			p2BackupLabels[i].addMouseListener(new MouseAdapter() {
+				@Override public void mousePressed(MouseEvent e) {
+					if (p2BackupLabels[backupIdx].getIcon() != null)
+						showP2BackupContextMenu(backupIdx, p2BackupLabels[backupIdx], e);
+				}
+				@Override public void mouseEntered(MouseEvent e) {
+					if (p2BackupLabels[backupIdx].getIcon() != null)
+						showZoomAt(p2BackupUrls[backupIdx], p2BackupLabels[backupIdx]);
+				}
+				@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+			});
+		}
 		JPanel p2BackupWrapper = new JPanel(new GridBagLayout());
 		GridBagConstraints p2BackupGbc = new GridBagConstraints();
 		p2BackupGbc.anchor = GridBagConstraints.NORTH;
@@ -4346,8 +4360,9 @@ public class MainWindow {
 			sb.append("[").append(ability.abilityName()).append("] ");
 		sb.append("[");
 		boolean first = true;
-		if (ability.requiresDull())  { sb.append("Dull");      first = false; }
-		if (ability.isSpecial())     { if (!first) sb.append(", "); sb.append("S"); first = false; }
+		if (ability.requiresDull())    { sb.append("Dull");      first = false; }
+		if (ability.isSpecial())       { if (!first) sb.append(", "); sb.append("S"); first = false; }
+		if (ability.crystalCost() > 0) { if (!first) sb.append(", "); sb.append(ability.crystalCost()).append(" Crystal"); first = false; }
 		for (String e : ability.cpCost()) {
 			if (!first) sb.append(", ");
 			sb.append(e.isEmpty() ? "any" : e);
@@ -4372,7 +4387,7 @@ public class MainWindow {
 	 * ability's cost (element and generic CP only; Dull/S requirements are checked
 	 * separately in the context-menu enable logic).
 	 */
-	private boolean canAffordAbilityCost(ActionAbility ability) {
+	private boolean canAffordAbilityCost(ActionAbility ability, boolean isP1) {
 		List<String> cost = ability.cpCost();
 		if (cost.isEmpty()) return true;
 
@@ -4386,24 +4401,25 @@ public class MainWindow {
 		int available = 0;
 
 		for (int ei = 0; ei < elems.length; ei++) {
-			int b = gameState.getP1CpForElement(elems[ei]);
+			int b = playerCpForElem(isP1, elems[ei]);
 			available += b;
 			if (b > 0) hasSrc[ei] = true;
 		}
 		if (hasGeneric) {
-			available += gameState.getP1CpByElement().values().stream().mapToInt(Integer::intValue).sum();
-			for (int ei = 0; ei < elems.length; ei++) available -= gameState.getP1CpForElement(elems[ei]);
+			available += playerCpByElem(isP1).values().stream().mapToInt(Integer::intValue).sum();
+			for (int ei = 0; ei < elems.length; ei++) available -= playerCpForElem(isP1, elems[ei]);
 		}
-		for (int i = 0; i < p1BackupCards.length; i++) {
-			if (p1BackupCards[i] == null || p1BackupStates[i] != CardState.ACTIVE) continue;
+		CardData[]  bkpCards  = playerBackupCards(isP1);
+		CardState[] bkpStates = playerBackupStates(isP1);
+		for (int i = 0; i < bkpCards.length; i++) {
+			if (bkpCards[i] == null || bkpStates[i] != CardState.ACTIVE) continue;
 			boolean matched = false;
 			for (int ei = 0; ei < elems.length; ei++) {
-				if (p1BackupCards[i].containsElement(elems[ei])) { available++; hasSrc[ei] = true; matched = true; break; }
+				if (bkpCards[i].containsElement(elems[ei])) { available++; hasSrc[ei] = true; matched = true; break; }
 			}
 			if (!matched && hasGeneric) available++;
 		}
-		List<CardData> hand = gameState.getP1Hand();
-		for (CardData h : hand) {
+		for (CardData h : playerHand(isP1)) {
 			if (h.isLightOrDark()) continue;
 			available += 2;
 			for (int ei = 0; ei < elems.length; ei++) if (h.containsElement(elems[ei])) hasSrc[ei] = true;
@@ -4413,13 +4429,99 @@ public class MainWindow {
 	}
 
 	/**
-	 * Returns {@code true} if the player has at least one card named {@code name}
+	 * Returns {@code true} if the given player has at least one card named {@code name}
 	 * in hand (needed for Special Ability payment).
 	 */
-	private boolean hasSameNameInHand(String name) {
-		for (CardData c : gameState.getP1Hand())
+	private boolean hasSameNameInHand(String name, boolean isP1) {
+		for (CardData c : playerHand(isP1))
 			if (name.equalsIgnoreCase(c.name())) return true;
 		return false;
+	}
+
+	// ---- Per-player data selectors used by the ability payment chain -----------
+
+	private List<CardData> playerHand(boolean isP1)       { return isP1 ? gameState.getP1Hand()       : gameState.getP2Hand(); }
+	private CardData[]     playerBackupCards(boolean isP1) { return isP1 ? p1BackupCards               : p2BackupCards; }
+	private CardState[]    playerBackupStates(boolean isP1){ return isP1 ? p1BackupStates              : p2BackupStates; }
+	private boolean[]      playerBackupFrozen(boolean isP1){ return isP1 ? p1BackupFrozen              : p2BackupFrozen; }
+	private String[]       playerBackupUrls(boolean isP1)  { return isP1 ? p1BackupUrls                : p2BackupUrls; }
+	private List<CardData> playerForwardCards(boolean isP1){ return isP1 ? p1ForwardCards              : p2ForwardCards; }
+	private List<CardData> playerMonsterCards(boolean isP1){ return isP1 ? p1MonsterCards              : p2MonsterCards; }
+	private int  playerCrystals(boolean isP1)              { return isP1 ? gameState.getP1Crystals()   : gameState.getP2Crystals(); }
+	private int  playerCpForElem(boolean isP1, String e)   { return isP1 ? gameState.getP1CpForElement(e) : gameState.getP2CpForElement(e); }
+	private Map<String, Integer> playerCpByElem(boolean isP1) { return isP1 ? gameState.getP1CpByElement() : gameState.getP2CpByElement(); }
+	private void playerAddCp(boolean isP1, String e, int n)    { if (isP1) gameState.addP1Cp(e, n);   else gameState.addP2Cp(e, n); }
+	private void playerSpendCp(boolean isP1, String e, int n)  { if (isP1) gameState.spendP1Cp(e, n); else gameState.spendP2Cp(e, n); }
+	private void playerClearCp(boolean isP1, String e)         { if (isP1) gameState.clearP1Cp(e);    else gameState.clearP2Cp(e); }
+	private void playerSpendCrystals(boolean isP1, int n)      { if (isP1) gameState.spendP1Crystals(n); else gameState.spendP2Crystals(n); }
+	private CardData playerBreakFromHand(boolean isP1, int i)  { return isP1 ? gameState.breakFromHand(i) : gameState.breakP2FromHand(i); }
+	private void playerDullBackupSlot(boolean isP1, int idx) {
+		if (isP1) animateDullBackup(idx, true); else animateDullP2Backup(idx, true);
+	}
+
+	private void animateDullP2Backup(int idx, boolean dulling) {
+		String url  = p2BackupUrls[idx];
+		JLabel slot = p2BackupLabels[idx];
+		if (url == null || slot == null) return;
+		new SwingWorker<java.awt.image.BufferedImage, Void>() {
+			@Override protected java.awt.image.BufferedImage doInBackground() throws Exception {
+				Image raw = ImageCache.load(url);
+				return raw == null ? null : CardAnimation.toARGB(raw, CARD_W, CARD_H);
+			}
+			@Override protected void done() {
+				try {
+					java.awt.image.BufferedImage card = get();
+					if (card == null) { refreshP2BackupSlot(idx); return; }
+					int totalFrames = 12; int[] frame = {0};
+					javax.swing.Timer timer = new javax.swing.Timer(16, null);
+					timer.addActionListener(ae -> {
+						frame[0]++;
+						double progress = Math.min(1.0, (double) frame[0] / totalFrames);
+						double t = progress < 0.5 ? 2*progress*progress : 1 - Math.pow(-2*progress+2, 2)/2;
+						double angle = dulling ? (Math.PI/2*t) : (Math.PI/2*(1-t));
+						slot.setIcon(new ImageIcon(CardAnimation.renderBackupCardAtAngle(card, angle)));
+						slot.setText(null);
+						if (frame[0] >= totalFrames) { timer.stop(); refreshP2BackupSlot(idx); }
+					});
+					timer.start();
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+	}
+
+	private void breakP2BackupSlot(int idx) {
+		CardData c = p2BackupCards[idx];
+		if (c == null) return;
+		logEntry("[P2] " + c.name() + " → Break Zone");
+		gameState.getP2BreakZone().add(c);
+		p2BackupCards[idx]  = null;
+		p2BackupUrls[idx]   = null;
+		p2BackupStates[idx] = CardState.ACTIVE;
+		p2BackupFrozen[idx] = false;
+		if (p2BackupLabels[idx] != null) {
+			p2BackupLabels[idx].setIcon(null);
+			p2BackupLabels[idx].setText(null);
+		}
+		refreshP1BreakLabel();
+	}
+
+	private void breakP2MonsterSlot(int idx) {
+		if (idx >= p2MonsterCards.size()) return;
+		CardData c = p2MonsterCards.get(idx);
+		logEntry("[P2] " + c.name() + " → Break Zone");
+		gameState.getP2BreakZone().add(c);
+		p2MonsterCards.remove(idx);
+		p2MonsterStates.remove(idx);
+		p2MonsterFrozen.remove(idx);
+		p2MonsterPlayedOnTurn.remove(idx);
+		p2MonsterUrls.remove(idx);
+		JLabel lbl = p2MonsterLabels.remove(idx);
+		if (p2MonsterPanel != null) {
+			p2MonsterPanel.remove(lbl);
+			p2MonsterPanel.revalidate();
+			p2MonsterPanel.repaint();
+		}
+		refreshP1BreakLabel();
 	}
 
 	/**
@@ -4431,80 +4533,85 @@ public class MainWindow {
 	 * @param sourceName  card name, needed for special-ability hand check
 	 */
 	private boolean canActivateAbility(ActionAbility ability, boolean isFrozen, CardState state,
-			int playedTurn, String sourceName) {
-		// Abilities with Dull cost require the card to be in ACTIVE state
-		// and not played this turn (summoning restriction)
+			int playedTurn, String sourceName, boolean isP1) {
 		if (ability.requiresDull()) {
 			if (state != CardState.ACTIVE) return false;
 			if (playedTurn == gameState.getTurnNumber()) return false;
 		}
-		// Special abilities require a same-name card in hand
-		if (ability.isSpecial() && !hasSameNameInHand(sourceName)) return false;
-		// Break-zone costs require at least one eligible field card per cost item
+		if (ability.isSpecial() && !hasSameNameInHand(sourceName, isP1)) return false;
+		if (ability.crystalCost() > 0 && playerCrystals(isP1) < ability.crystalCost()) return false;
 		for (BreakZoneCost bz : ability.breakZoneCosts())
-			if (!bzCostSatisfied(bz)) return false;
-		return canAffordAbilityCost(ability);
+			if (!bzCostSatisfied(bz, isP1)) return false;
+		return canAffordAbilityCost(ability, isP1);
 	}
 
-	/** Returns {@code true} if at least {@link BreakZoneCost#count()} eligible field cards exist. */
-	private boolean bzCostSatisfied(BreakZoneCost bz) {
-		return eligibleBzFieldCards(bz).size() >= bz.count();
+	private boolean bzCostSatisfied(BreakZoneCost bz, boolean isP1) {
+		return eligibleBzFieldCards(bz, isP1).size() >= bz.count();
 	}
 
-	/**
-	 * Returns all P1 field cards that satisfy {@code bz}'s requirement.
-	 * For named costs every zone is searched; for type costs only the matching zone is searched.
-	 */
-	private List<ForwardTarget> eligibleBzFieldCards(BreakZoneCost bz) {
+	private List<ForwardTarget> eligibleBzFieldCards(BreakZoneCost bz, boolean isP1) {
 		List<ForwardTarget> result = new ArrayList<>();
+		List<CardData> fwds = playerForwardCards(isP1);
+		List<CardData> mons = playerMonsterCards(isP1);
+		CardData[]     bkps = playerBackupCards(isP1);
 		if (!bz.name().isEmpty()) {
-			for (int i = 0; i < p1ForwardCards.size(); i++)
-				if (bz.name().equalsIgnoreCase(p1ForwardCards.get(i).name()))
-					result.add(new ForwardTarget(true, i, ForwardTarget.CardZone.FORWARD));
-			for (int i = 0; i < p1MonsterCards.size(); i++)
-				if (bz.name().equalsIgnoreCase(p1MonsterCards.get(i).name()))
-					result.add(new ForwardTarget(true, i, ForwardTarget.CardZone.MONSTER));
-			for (int i = 0; i < p1BackupCards.length; i++)
-				if (p1BackupCards[i] != null && bz.name().equalsIgnoreCase(p1BackupCards[i].name()))
-					result.add(new ForwardTarget(true, i, ForwardTarget.CardZone.BACKUP));
+			for (int i = 0; i < fwds.size(); i++)
+				if (bz.name().equalsIgnoreCase(fwds.get(i).name()))
+					result.add(new ForwardTarget(isP1, i, ForwardTarget.CardZone.FORWARD));
+			for (int i = 0; i < mons.size(); i++)
+				if (bz.name().equalsIgnoreCase(mons.get(i).name()))
+					result.add(new ForwardTarget(isP1, i, ForwardTarget.CardZone.MONSTER));
+			for (int i = 0; i < bkps.length; i++)
+				if (bkps[i] != null && bz.name().equalsIgnoreCase(bkps[i].name()))
+					result.add(new ForwardTarget(isP1, i, ForwardTarget.CardZone.BACKUP));
 			return result;
 		}
-		String typeDesc  = bz.cardType();
-		String last      = typeDesc.isEmpty() ? "" : typeDesc.substring(typeDesc.lastIndexOf(' ') + 1);
-		String elemFilt  = typeDesc.contains(" ") ? typeDesc.substring(0, typeDesc.lastIndexOf(' ')).trim() : null;
+		String typeDesc = bz.cardType();
+		String last     = typeDesc.isEmpty() ? "" : typeDesc.substring(typeDesc.lastIndexOf(' ') + 1);
+		String elemFilt = typeDesc.contains(" ") ? typeDesc.substring(0, typeDesc.lastIndexOf(' ')).trim() : null;
 		if (last.equalsIgnoreCase("Forward")) {
-			for (int i = 0; i < p1ForwardCards.size(); i++) {
-				if (elemFilt != null && !p1ForwardCards.get(i).containsElement(elemFilt)) continue;
-				result.add(new ForwardTarget(true, i, ForwardTarget.CardZone.FORWARD));
+			for (int i = 0; i < fwds.size(); i++) {
+				if (elemFilt != null && !fwds.get(i).containsElement(elemFilt)) continue;
+				result.add(new ForwardTarget(isP1, i, ForwardTarget.CardZone.FORWARD));
 			}
 		} else if (last.equalsIgnoreCase("Backup")) {
-			for (int i = 0; i < p1BackupCards.length; i++) {
-				if (p1BackupCards[i] == null) continue;
-				if (elemFilt != null && !p1BackupCards[i].containsElement(elemFilt)) continue;
-				result.add(new ForwardTarget(true, i, ForwardTarget.CardZone.BACKUP));
+			for (int i = 0; i < bkps.length; i++) {
+				if (bkps[i] == null) continue;
+				if (elemFilt != null && !bkps[i].containsElement(elemFilt)) continue;
+				result.add(new ForwardTarget(isP1, i, ForwardTarget.CardZone.BACKUP));
 			}
 		} else if (last.equalsIgnoreCase("Monster")) {
-			for (int i = 0; i < p1MonsterCards.size(); i++) {
-				if (elemFilt != null && !p1MonsterCards.get(i).containsElement(elemFilt)) continue;
-				result.add(new ForwardTarget(true, i, ForwardTarget.CardZone.MONSTER));
+			for (int i = 0; i < mons.size(); i++) {
+				if (elemFilt != null && !mons.get(i).containsElement(elemFilt)) continue;
+				result.add(new ForwardTarget(isP1, i, ForwardTarget.CardZone.MONSTER));
 			}
 		}
 		return result;
 	}
 
 	private CardData fieldCardData(ForwardTarget t) {
-		return switch (t.zone()) {
+		if (t.isP1()) return switch (t.zone()) {
 			case FORWARD -> p1ForwardCards.get(t.idx());
 			case BACKUP  -> p1BackupCards[t.idx()];
 			case MONSTER -> p1MonsterCards.get(t.idx());
 		};
+		return switch (t.zone()) {
+			case FORWARD -> p2ForwardCards.get(t.idx());
+			case BACKUP  -> p2BackupCards[t.idx()];
+			case MONSTER -> p2MonsterCards.get(t.idx());
+		};
 	}
 
 	private String fieldCardUrl(ForwardTarget t) {
-		return switch (t.zone()) {
+		if (t.isP1()) return switch (t.zone()) {
 			case FORWARD -> p1ForwardUrls.get(t.idx());
 			case BACKUP  -> p1BackupUrls[t.idx()];
 			case MONSTER -> p1MonsterUrls.get(t.idx());
+		};
+		return switch (t.zone()) {
+			case FORWARD -> p2ForwardUrls.get(t.idx());
+			case BACKUP  -> p2BackupUrls[t.idx()];
+			case MONSTER -> p2MonsterUrls.get(t.idx());
 		};
 	}
 
@@ -4553,7 +4660,7 @@ public class MainWindow {
 	 * @param applyDull   called on confirm if the ability has a Dull cost (dulls the card)
 	 */
 	private void addAbilityMenuItems(JPopupMenu menu, CardData card, boolean isFrozen,
-			CardState state, int playedTurn, Runnable applyDull) {
+			CardState state, int playedTurn, Runnable applyDull, boolean isP1) {
 		List<ActionAbility> abilities = card.actionAbilities();
 		if (abilities.isEmpty()) return;
 
@@ -4562,9 +4669,9 @@ public class MainWindow {
 
 		for (ActionAbility ability : abilities) {
 			JMenuItem item = new JMenuItem(buildAbilityMenuLabel(ability));
-			item.setEnabled(isMainPhase && canActivateAbility(ability, isFrozen, state, playedTurn, card.name()));
+			item.setEnabled(isMainPhase && canActivateAbility(ability, isFrozen, state, playedTurn, card.name(), isP1));
 			item.addActionListener(ae ->
-					showActionAbilityPaymentDialog(ability, card, applyDull));
+					showActionAbilityPaymentDialog(ability, card, applyDull, isP1));
 			menu.add(item);
 		}
 	}
@@ -4576,7 +4683,7 @@ public class MainWindow {
 	 * {@link ActionResolver#resolve}.
 	 */
 	private void showActionAbilityPaymentDialog(ActionAbility ability, CardData source,
-			Runnable applyDull) {
+			Runnable applyDull, boolean isP1) {
 		List<String> rawCost = ability.cpCost();
 		long genericNeeded   = rawCost.stream().filter(String::isEmpty).count();
 		LinkedHashMap<String, Integer> costByElem = new LinkedHashMap<>();
@@ -4588,7 +4695,7 @@ public class MainWindow {
 
 		// If zero CP cost and no break-zone costs, confirm immediately
 		if (totalCost == 0 && bzCosts.isEmpty()) {
-			executeAbilityPayment(ability, source, applyDull, new ArrayList<>(), new ArrayList<>(), List.of());
+			executeAbilityPayment(ability, source, applyDull, new ArrayList<>(), new ArrayList<>(), List.of(), isP1);
 			return;
 		}
 
@@ -4596,7 +4703,12 @@ public class MainWindow {
 		dlg.setResizable(false);
 		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 
-		List<CardData> hand = gameState.getP1Hand();
+		// Capture player-specific arrays once so lambdas below can close over them
+		List<CardData> hand       = playerHand(isP1);
+		CardData[]     bkpCards   = playerBackupCards(isP1);
+		CardState[]    bkpStates  = playerBackupStates(isP1);
+		String[]       bkpUrls    = playerBackupUrls(isP1);
+
 		Map<String, Integer> bankCpByElem = new LinkedHashMap<>(costByElem);
 		for (String k : bankCpByElem.keySet()) bankCpByElem.put(k, 0);
 
@@ -4604,9 +4716,9 @@ public class MainWindow {
 		List<Integer> selectedDiscards = new ArrayList<>();
 
 		List<Integer> eligibleBackupSlots = new ArrayList<>();
-		for (int i = 0; i < p1BackupCards.length; i++) {
-			if (p1BackupCards[i] != null && p1BackupStates[i] == CardState.ACTIVE
-					&& (genericNeeded > 0 || matchesAnyElement(p1BackupCards[i], elems)))
+		for (int i = 0; i < bkpCards.length; i++) {
+			if (bkpCards[i] != null && bkpStates[i] == CardState.ACTIVE
+					&& (genericNeeded > 0 || matchesAnyElement(bkpCards[i], elems)))
 				eligibleBackupSlots.add(i);
 		}
 
@@ -4632,8 +4744,8 @@ public class MainWindow {
 			Map<String, Integer> cpByElem = new LinkedHashMap<>(bankCpByElem);
 			int extraCp = 0;
 			for (int slot : selectedBackups) {
-				if (matchesAnyElement(p1BackupCards[slot], elems))
-					cpByElem.merge(contributingElement(p1BackupCards[slot], elems, cpByElem, costByElem), 1, Integer::sum);
+				if (matchesAnyElement(bkpCards[slot], elems))
+					cpByElem.merge(contributingElement(bkpCards[slot], elems, cpByElem, costByElem), 1, Integer::sum);
 				else extraCp++;
 			}
 			for (int idx : selectedDiscards) {
@@ -4706,7 +4818,7 @@ public class MainWindow {
 				lbl.setOpaque(true); lbl.setBackground(Color.DARK_GRAY); lbl.setForeground(Color.WHITE);
 				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10)); lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
 				lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-				final String url = p1BackupUrls[slot];
+				final String url = bkpUrls[slot];
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mousePressed(MouseEvent ev) {
 						int tot = bankCpByElem.values().stream().mapToInt(Integer::intValue).sum() + selectedBackups.size() + selectedDiscards.size() * 2;
@@ -4777,7 +4889,7 @@ public class MainWindow {
 		for (int bzi = 0; bzi < bzCosts.size(); bzi++) {
 			final int bzIdx = bzi;
 			BreakZoneCost bz = bzCosts.get(bzi);
-			List<ForwardTarget> eligible = eligibleBzFieldCards(bz);
+			List<ForwardTarget> eligible = eligibleBzFieldCards(bz, isP1);
 
 			String desc = bz.name().isEmpty()
 					? bz.count() + " " + bz.cardType()
@@ -4833,7 +4945,7 @@ public class MainWindow {
 			for (ForwardTarget t : selectedBzTargets) if (t != null) bzList.add(t);
 			dlg.dispose();
 			executeAbilityPayment(ability, source, applyDull,
-					new ArrayList<>(selectedDiscards), new ArrayList<>(selectedBackups), bzList);
+					new ArrayList<>(selectedDiscards), new ArrayList<>(selectedBackups), bzList, isP1);
 		});
 
 		JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
@@ -4842,8 +4954,9 @@ public class MainWindow {
 		// Build cost summary for title
 		StringBuilder costDesc = new StringBuilder();
 		boolean cf = true;
-		if (ability.requiresDull()) { costDesc.append("Dull"); cf = false; }
-		if (ability.isSpecial())    { if (!cf) costDesc.append(" + "); costDesc.append("S (discard ").append(source.name()).append(")"); cf = false; }
+		if (ability.requiresDull())    { costDesc.append("Dull"); cf = false; }
+		if (ability.isSpecial())       { if (!cf) costDesc.append(" + "); costDesc.append("S (discard ").append(source.name()).append(")"); cf = false; }
+		if (ability.crystalCost() > 0) { if (!cf) costDesc.append(" + "); costDesc.append(ability.crystalCost()).append(" Crystal"); cf = false; }
 		for (Map.Entry<String, Integer> en : costByElem.entrySet()) {
 			if (!cf) costDesc.append(" + ");
 			costDesc.append(en.getValue()).append(" ").append(en.getKey()).append(" CP"); cf = false;
@@ -4886,38 +4999,43 @@ public class MainWindow {
 	 */
 	private void executeAbilityPayment(ActionAbility ability, CardData source,
 			Runnable applyDull, List<Integer> discardIndices, List<Integer> backupDullIndices,
-			List<ForwardTarget> bzTargets) {
+			List<ForwardTarget> bzTargets, boolean isP1) {
 		List<String> rawCost = ability.cpCost();
 		LinkedHashMap<String, Integer> costByElem = new LinkedHashMap<>();
 		for (String e : rawCost) if (!e.isEmpty()) costByElem.merge(e, 1, Integer::sum);
 		String[] elems = costByElem.keySet().toArray(String[]::new);
 
+		CardData[]  bkpCards  = playerBackupCards(isP1);
+		CardState[] bkpStates = playerBackupStates(isP1);
 		for (int bi : backupDullIndices) {
-			p1BackupStates[bi] = CardState.DULL;
-			animateDullBackup(bi, true);
-			String cpElem = matchesAnyElement(p1BackupCards[bi], elems)
-					? contributingElement(p1BackupCards[bi], elems) : (elems.length > 0 ? elems[0] : "");
-			if (!cpElem.isEmpty()) gameState.addP1Cp(cpElem, 1);
+			bkpStates[bi] = CardState.DULL;
+			playerDullBackupSlot(isP1, bi);
+			String cpElem = matchesAnyElement(bkpCards[bi], elems)
+					? contributingElement(bkpCards[bi], elems) : (elems.length > 0 ? elems[0] : "");
+			if (!cpElem.isEmpty()) playerAddCp(isP1, cpElem, 1);
 		}
 		discardIndices.sort(Collections.reverseOrder());
 		for (int di : discardIndices) {
-			CardData discarded = gameState.getP1Hand().get(di);
+			CardData discarded = playerHand(isP1).get(di);
 			String cpElem = matchesAnyElement(discarded, elems)
 					? contributingElement(discarded, elems) : (elems.length > 0 ? elems[0] : "");
-			if (!cpElem.isEmpty()) gameState.addP1Cp(cpElem, 2);
-			gameState.breakFromHand(di);
+			if (!cpElem.isEmpty()) playerAddCp(isP1, cpElem, 2);
+			playerBreakFromHand(isP1, di);
 		}
-		for (String e : elems) { gameState.spendP1Cp(e, gameState.getP1CpForElement(e)); gameState.clearP1Cp(e); }
+		for (String e : elems) { playerSpendCp(isP1, e, playerCpForElem(isP1, e)); playerClearCp(isP1, e); }
+
+		// Crystal cost
+		if (ability.crystalCost() > 0) playerSpendCrystals(isP1, ability.crystalCost());
 
 		// Dull source card
 		if (ability.requiresDull()) applyDull.run();
 
 		// Special: discard first same-name card from hand
 		if (ability.isSpecial()) {
-			List<CardData> hand = gameState.getP1Hand();
+			List<CardData> hand = playerHand(isP1);
 			for (int i = 0; i < hand.size(); i++) {
 				if (source.name().equalsIgnoreCase(hand.get(i).name())) {
-					gameState.breakFromHand(i);
+					playerBreakFromHand(isP1, i);
 					logEntry("Special: discarded \"" + source.name() + "\" from hand");
 					break;
 				}
@@ -4928,10 +5046,18 @@ public class MainWindow {
 		List<ForwardTarget> sortedBz = new ArrayList<>(bzTargets);
 		sortedBz.sort((a, b) -> a.zone() == b.zone() ? Integer.compare(b.idx(), a.idx()) : 0);
 		for (ForwardTarget t : sortedBz) {
-			switch (t.zone()) {
-				case FORWARD -> breakP1Forward(t.idx());
-				case BACKUP  -> breakP1BackupSlot(t.idx());
-				case MONSTER -> breakP1MonsterSlot(t.idx());
+			if (t.isP1()) {
+				switch (t.zone()) {
+					case FORWARD -> breakP1Forward(t.idx());
+					case BACKUP  -> breakP1BackupSlot(t.idx());
+					case MONSTER -> breakP1MonsterSlot(t.idx());
+				}
+			} else {
+				switch (t.zone()) {
+					case FORWARD -> breakP2Forward(t.idx());
+					case BACKUP  -> breakP2BackupSlot(t.idx());
+					case MONSTER -> breakP2MonsterSlot(t.idx());
+				}
 			}
 		}
 
@@ -5621,7 +5747,7 @@ public class MainWindow {
 		CardData card = p1BackupCards[idx];
 		if (card != null) {
 			addAbilityMenuItems(menu, card, p1BackupFrozen[idx], p1BackupStates[idx], p1BackupPlayedOnTurn[idx],
-					() -> { p1BackupStates[idx] = CardState.DULL; animateDullBackup(idx, true); });
+					() -> { p1BackupStates[idx] = CardState.DULL; animateDullBackup(idx, true); }, true);
 		}
 
 		if (AppSettings.isDebugMode()) {
@@ -5837,6 +5963,10 @@ public class MainWindow {
 		lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
 		lbl.setBorder(BorderFactory.createEmptyBorder());
 		lbl.addMouseListener(new MouseAdapter() {
+			@Override public void mousePressed(MouseEvent e) {
+				if (lbl.getIcon() != null && SwingUtilities.isRightMouseButton(e))
+					showP2MonsterContextMenu(idx, lbl, e);
+			}
 			@Override public void mouseEntered(MouseEvent e) {
 				if (lbl.getIcon() != null) showZoomAt(p2MonsterUrls.get(idx), lbl);
 			}
@@ -5886,7 +6016,7 @@ public class MainWindow {
 		// Action abilities
 		addAbilityMenuItems(menu, p1MonsterCards.get(idx), p1MonsterFrozen.get(idx),
 				p1MonsterStates.get(idx), p1MonsterPlayedOnTurn.get(idx),
-				() -> { p1MonsterStates.set(idx, CardState.DULL); refreshP1MonsterSlot(idx); });
+				() -> { p1MonsterStates.set(idx, CardState.DULL); refreshP1MonsterSlot(idx); }, true);
 
 		if (AppSettings.isDebugMode()) {
 			JMenuItem dullItem = new JMenuItem("Debug: Dull");
@@ -6112,7 +6242,7 @@ public class MainWindow {
 				? p1ForwardPrimedTop.get(idx) : p1ForwardCards.get(idx);
 		addAbilityMenuItems(menu, effectiveFwd, p1ForwardFrozen.get(idx),
 				p1ForwardStates.get(idx), p1ForwardPlayedOnTurn.get(idx),
-				() -> { p1ForwardStates.set(idx, CardState.DULL); animateDullForward(idx, null); });
+				() -> { p1ForwardStates.set(idx, CardState.DULL); animateDullForward(idx, null); }, true);
 
 		// Prime — visible whenever the forward has the Priming trait
 		CardData fwd = p1ForwardCards.get(idx);
@@ -6144,6 +6274,78 @@ public class MainWindow {
 			menu.add(freezeItem);
 		}
 
+		if (menu.getComponentCount() > 0) menu.show(slot, e.getX(), e.getY());
+	}
+
+	private void showP2BackupContextMenu(int idx, JLabel slot, MouseEvent e) {
+		JPopupMenu menu = new JPopupMenu();
+		CardData card = p2BackupCards[idx];
+		if (card != null) {
+			addAbilityMenuItems(menu, card, p2BackupFrozen[idx], p2BackupStates[idx], 0,
+					() -> { p2BackupStates[idx] = CardState.DULL; animateDullP2Backup(idx, true); }, false);
+		}
+		if (AppSettings.isDebugMode()) {
+			if (menu.getComponentCount() > 0) menu.addSeparator();
+			JMenuItem dullItem = new JMenuItem("Debug: Dull");
+			dullItem.addActionListener(ae -> {
+				boolean dulling = p2BackupStates[idx] != CardState.DULL;
+				p2BackupStates[idx] = dulling ? CardState.DULL : CardState.ACTIVE;
+				animateDullP2Backup(idx, dulling);
+			});
+			menu.add(dullItem);
+			JMenuItem freezeItem = new JMenuItem("Debug: Freeze");
+			freezeItem.addActionListener(ae -> {
+				p2BackupFrozen[idx] = !p2BackupFrozen[idx];
+				refreshP2BackupSlot(idx);
+			});
+			menu.add(freezeItem);
+		}
+		if (menu.getComponentCount() > 0) menu.show(slot, e.getX(), e.getY());
+	}
+
+	private void showP2MonsterContextMenu(int idx, JLabel slot, MouseEvent e) {
+		JPopupMenu menu = new JPopupMenu();
+		addAbilityMenuItems(menu, p2MonsterCards.get(idx), p2MonsterFrozen.get(idx),
+				p2MonsterStates.get(idx), p2MonsterPlayedOnTurn.get(idx),
+				() -> { p2MonsterStates.set(idx, CardState.DULL); refreshP2MonsterSlot(idx); }, false);
+		if (AppSettings.isDebugMode()) {
+			JMenuItem dullItem = new JMenuItem("Debug: Dull");
+			dullItem.addActionListener(ae -> {
+				p2MonsterStates.set(idx,
+						p2MonsterStates.get(idx) == CardState.DULL ? CardState.ACTIVE : CardState.DULL);
+				refreshP2MonsterSlot(idx);
+			});
+			menu.add(dullItem);
+			JMenuItem freezeItem = new JMenuItem("Debug: Freeze");
+			freezeItem.addActionListener(ae -> {
+				p2MonsterFrozen.set(idx, !p2MonsterFrozen.get(idx));
+				refreshP2MonsterSlot(idx);
+			});
+			menu.add(freezeItem);
+		}
+		if (menu.getComponentCount() > 0) menu.show(slot, e.getX(), e.getY());
+	}
+
+	private void showP2ForwardContextMenu(int idx, JLabel slot, MouseEvent e) {
+		JPopupMenu menu = new JPopupMenu();
+		addAbilityMenuItems(menu, p2ForwardCards.get(idx), p2ForwardFrozen.get(idx),
+				p2ForwardStates.get(idx), p2ForwardPlayedOnTurn.get(idx),
+				() -> { p2ForwardStates.set(idx, CardState.DULL); refreshP2ForwardSlot(idx); }, false);
+		if (AppSettings.isDebugMode()) {
+			JMenuItem dullItem = new JMenuItem("Debug: Dull");
+			dullItem.addActionListener(ae -> {
+				boolean dulling = p2ForwardStates.get(idx) != CardState.DULL;
+				p2ForwardStates.set(idx, dulling ? CardState.DULL : CardState.ACTIVE);
+				refreshP2ForwardSlot(idx);
+			});
+			menu.add(dullItem);
+			JMenuItem freezeItem = new JMenuItem("Debug: Freeze");
+			freezeItem.addActionListener(ae -> {
+				p2ForwardFrozen.set(idx, !p2ForwardFrozen.get(idx));
+				refreshP2ForwardSlot(idx);
+			});
+			menu.add(freezeItem);
+		}
 		if (menu.getComponentCount() > 0) menu.show(slot, e.getX(), e.getY());
 	}
 
@@ -6947,6 +7149,10 @@ public class MainWindow {
 		lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
 		lbl.setBorder(BorderFactory.createEmptyBorder());
 		lbl.addMouseListener(new MouseAdapter() {
+			@Override public void mousePressed(MouseEvent e) {
+				if (lbl.getIcon() != null && SwingUtilities.isRightMouseButton(e))
+					showP2ForwardContextMenu(idx, lbl, e);
+			}
 			@Override public void mouseEntered(MouseEvent e) {
 				if (lbl.getIcon() != null) showZoomAt(p2ForwardUrls.get(idx), lbl);
 			}

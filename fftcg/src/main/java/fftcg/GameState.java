@@ -369,6 +369,14 @@ public class GameState {
         return card;
     }
 
+    /** P2 equivalent of {@link #breakFromHand}: moves a P2 hand card to the P2 Break Zone without granting CP. */
+    public CardData breakP2FromHand(int idx) {
+        if (idx < 0 || idx >= p2Hand.size()) return null;
+        CardData card = p2Hand.remove(idx);
+        p2BreakZone.add(card);
+        return card;
+    }
+
     // -------------------------------------------------------------------------
     // Crystal Points
     // -------------------------------------------------------------------------
@@ -405,6 +413,11 @@ public class GameState {
     /** Zeroes the CP bucket for the given element. */
     public void clearP1Cp(String element) {
         p1CpByElement.put(element, 0);
+    }
+
+    /** Zeroes the P2 CP bucket for the given element. */
+    public void clearP2Cp(String element) {
+        p2CpByElement.put(element, 0);
     }
 
     // -------------------------------------------------------------------------

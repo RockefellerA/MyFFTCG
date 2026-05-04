@@ -21,6 +21,7 @@ import java.util.List;
  *   <li>{@link #isSpecial} — {@code true} when {@code [[s]]…[[/]]} markup is present
  *       or {@code 《S》} appears in the cost.  Requires discarding a same-name card
  *       from hand in addition to the other costs.</li>
+ *   <li>{@link #crystalCost} — number of Crystals the player must spend ({@code 《C》} tokens).</li>
  *   <li>{@link #breakZoneCosts} — one entry per "put X into the Break Zone" cost item;
  *       empty when no such cost is present.</li>
  * </ul>
@@ -32,6 +33,7 @@ public record ActionAbility(
         String              abilityName,    // "" for regular abilities; named (e.g. "Mug") for specials
         boolean             requiresDull,   // 《Dull》 present in cost
         boolean             isSpecial,      // [[s]]…[[/]] or 《S》 present — requires same-name hand discard
+        int                 crystalCost,    // number of Crystals the player must spend (《C》 tokens)
         List<String>        cpCost,         // CP cost elements (element names or "" for generic)
         List<BreakZoneCost> breakZoneCosts, // "put X into the Break Zone" costs (may be empty)
         String              effectText      // raw effect text — future work will parse this further
