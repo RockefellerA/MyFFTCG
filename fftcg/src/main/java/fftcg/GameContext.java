@@ -160,6 +160,24 @@ public interface GameContext {
      */
     void reduceSourceForward(CardData source, int amount, EnumSet<CardData.Trait> traits);
 
+    // ---- Computed-damage queries -----------------------------------------------
+
+    /** Returns the highest effective power among all P1 Forwards on the field; {@code 0} if none. */
+    int highestP1ForwardPower();
+
+    /**
+     * Returns the effective power of the first field Forward or Monster whose name matches
+     * {@code cardName} (case-insensitive), searching P1's zones then P2's.
+     * Returns {@code -1} if no matching card is found.
+     */
+    int fieldForwardPowerByName(String cardName);
+
+    /**
+     * Returns the effective power of the target Forward or Monster.
+     * Returns {@code 0} for Backups or out-of-range indices.
+     */
+    int effectiveTargetPower(ForwardTarget t);
+
     /**
      * Forces the ability-user's opponent to discard {@code count} cards from hand
      * to their Break Zone.  No CP is generated.

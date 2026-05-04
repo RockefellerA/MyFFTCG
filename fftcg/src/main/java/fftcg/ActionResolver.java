@@ -62,6 +62,27 @@ public class ActionResolver {
         "(?i)deal\\s+(?:it|them)\\s+(\\d+)\\s+damage"
     );
 
+    /**
+     * Matches "deal it/them damage equal to &lt;expr&gt;" where the amount is computed
+     * from the game state at resolution time.  Exactly one named group will be set:
+     * <ul>
+     *   <li>{@code highest} — "the highest [power] Forward you control['s power]"</li>
+     *   <li>{@code halfcard} — card name in "half of &lt;name&gt;'s power [(round down…)]"</li>
+     *   <li>{@code itspower} — "its/their power [minus &lt;minus&gt;]"</li>
+     *   <li>{@code card}     — card name in "&lt;name&gt;'s power"</li>
+     * </ul>
+     * Group {@code minus} is set alongside {@code itspower} when a subtraction is present.
+     */
+    private static final Pattern FOLLOWUP_DAMAGE_EXPR = Pattern.compile(
+        "(?i)deal\\s+(?:it|them)\\s+damage\\s+equal\\s+to\\s+" +
+        "(?:" +
+            "(?<highest>the\\s+highest(?:\\s+power)?\\s+Forward(?:\\s+you\\s+control)?(?:'s\\s+power)?)" +
+            "|half\\s+of\\s+(?<halfcard>.+?)'s\\s+power(?:\\s*\\([^)]*\\))?" +
+            "|(?<itspower>(?:its|their)\\s+power)(?:\\s+minus\\s+(?<minus>\\d+))?" +
+            "|(?<card>.+?)'s\\s+power" +
+        ")"
+    );
+
     /** Matches "dull it" or "dull them". */
     private static final Pattern FOLLOWUP_DULL = Pattern.compile(
         "(?i)dull\\s+(?:it|them)"
@@ -399,7 +420,11 @@ public class ActionResolver {
      * <p>Supported target types: Forward(s), Forward(s) or Monster(s), Backup(s), Character(s).
      * <p>Supported followup actions:
      * <ul>
-     *   <li>"Deal [it|them] N damage"      — damages each chosen target (Forwards/Monsters only)</li>
+     *   <li>"Deal [it|them] N damage"                        — fixed damage to each chosen target</li>
+     *   <li>"Deal it damage equal to the highest power Forward you control" — damage = highest P1 forward power</li>
+     *   <li>"Deal it damage equal to &lt;name&gt;'s power"          — damage = named field card's power</li>
+     *   <li>"Deal it damage equal to half of &lt;name&gt;'s power"  — damage = floor(named power / 2) to nearest 1000</li>
+     *   <li>"Deal it damage equal to its power [minus N]"    — damage = target's own power (minus N)</li>
      *   <li>"Dull it/them"                 — dulls each chosen target</li>
      *   <li>"Freeze it/them"               — freezes each chosen target</li>
      *   <li>"Dull it/them and freeze…"     — dulls and freezes each chosen target</li>
@@ -444,7 +469,7 @@ public class ActionResolver {
                 + (element   != null ? " " + element   : "")
                 + " " + targets + costLabel + zoneLabel + controlLabel;
 
-        // --- Damage followup ---
+        // --- Damage followup (fixed amount) ---
         Matcher dmgM = FOLLOWUP_DAMAGE.matcher(followup);
         if (dmgM.find()) {
             int damage = Integer.parseInt(dmgM.group(1));
@@ -456,6 +481,57 @@ public class ActionResolver {
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.damageTarget(t, damage));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.damageTarget(t, damage));
             };
+        }
+
+        // --- Damage followup (computed amount) ---
+        Matcher exprM = FOLLOWUP_DAMAGE_EXPR.matcher(followup);
+        if (exprM.find()) {
+            if (exprM.group("highest") != null) {
+                return ctx -> {
+                    int damage = ctx.highestP1ForwardPower();
+                    ctx.logEntry(choosePrefix + " — Deal " + damage + " damage (highest Forward power)");
+                    List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                            opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                            costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                    sortedByIdxDesc(ts, true) .forEach(t -> ctx.damageTarget(t, damage));
+                    sortedByIdxDesc(ts, false).forEach(t -> ctx.damageTarget(t, damage));
+                };
+            } else if (exprM.group("halfcard") != null) {
+                String cardName = exprM.group("halfcard").trim();
+                return ctx -> {
+                    int raw    = Math.max(0, ctx.fieldForwardPowerByName(cardName));
+                    int damage = (raw / 2 / 1000) * 1000;
+                    ctx.logEntry(choosePrefix + " — Deal " + damage + " damage (half of " + cardName + "'s power)");
+                    List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                            opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                            costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                    sortedByIdxDesc(ts, true) .forEach(t -> ctx.damageTarget(t, damage));
+                    sortedByIdxDesc(ts, false).forEach(t -> ctx.damageTarget(t, damage));
+                };
+            } else if (exprM.group("itspower") != null) {
+                int subtract = exprM.group("minus") != null ? Integer.parseInt(exprM.group("minus")) : 0;
+                String logSuffix = subtract > 0 ? " — Deal damage equal to its power minus " + subtract
+                                                 : " — Deal damage equal to its power";
+                return ctx -> {
+                    ctx.logEntry(choosePrefix + logSuffix);
+                    List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                            opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                            costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                    sortedByIdxDesc(ts, true) .forEach(t -> ctx.damageTarget(t, Math.max(0, ctx.effectiveTargetPower(t) - subtract)));
+                    sortedByIdxDesc(ts, false).forEach(t -> ctx.damageTarget(t, Math.max(0, ctx.effectiveTargetPower(t) - subtract)));
+                };
+            } else if (exprM.group("card") != null) {
+                String cardName = exprM.group("card").trim();
+                return ctx -> {
+                    int damage = Math.max(0, ctx.fieldForwardPowerByName(cardName));
+                    ctx.logEntry(choosePrefix + " — Deal " + damage + " damage (" + cardName + "'s power)");
+                    List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                            opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                            costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                    sortedByIdxDesc(ts, true) .forEach(t -> ctx.damageTarget(t, damage));
+                    sortedByIdxDesc(ts, false).forEach(t -> ctx.damageTarget(t, damage));
+                };
+            }
         }
 
         // --- Dull followup ---

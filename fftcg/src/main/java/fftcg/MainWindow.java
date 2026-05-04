@@ -5660,6 +5660,42 @@ public class MainWindow {
 				}
 			}
 
+			@Override public int highestP1ForwardPower() {
+				int max = 0;
+				for (int i = 0; i < p1ForwardCards.size(); i++)
+					max = Math.max(max, effectiveP1ForwardPower(i));
+				return max;
+			}
+
+			@Override public int fieldForwardPowerByName(String cardName) {
+				for (int i = 0; i < p1ForwardCards.size(); i++)
+					if (p1ForwardCards.get(i).name().equalsIgnoreCase(cardName))
+						return effectiveP1ForwardPower(i);
+				for (int i = 0; i < p2ForwardCards.size(); i++)
+					if (p2ForwardCards.get(i).name().equalsIgnoreCase(cardName))
+						return effectiveP2ForwardPower(i);
+				for (int i = 0; i < p1MonsterCards.size(); i++)
+					if (p1MonsterCards.get(i).name().equalsIgnoreCase(cardName))
+						return p1MonsterCards.get(i).power();
+				for (int i = 0; i < p2MonsterCards.size(); i++)
+					if (p2MonsterCards.get(i).name().equalsIgnoreCase(cardName))
+						return p2MonsterCards.get(i).power();
+				logEntry("[ActionResolver] fieldForwardPowerByName: \"" + cardName + "\" not found on field");
+				return -1;
+			}
+
+			@Override public int effectiveTargetPower(ForwardTarget t) {
+				if (t.zone() == ForwardTarget.CardZone.BACKUP) return 0;
+				if (t.zone() == ForwardTarget.CardZone.FORWARD)
+					return t.isP1()
+							? (t.idx() < p1ForwardCards.size() ? effectiveP1ForwardPower(t.idx()) : 0)
+							: (t.idx() < p2ForwardCards.size() ? effectiveP2ForwardPower(t.idx()) : 0);
+				// MONSTER zone
+				return t.isP1()
+						? (t.idx() < p1MonsterCards.size() ? p1MonsterCards.get(t.idx()).power() : 0)
+						: (t.idx() < p2MonsterCards.size() ? p2MonsterCards.get(t.idx()).power() : 0);
+			}
+
 			@Override public void forceOpponentDiscard(int count) {
 				if (isP1) {
 					// P1 activated — P2 AI discards worst cards automatically
