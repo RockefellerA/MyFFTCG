@@ -1,5 +1,6 @@
 package fftcg;
 
+import java.util.EnumSet;
 import java.util.List;
 
 /**
@@ -132,6 +133,19 @@ public interface GameContext {
 
     /** Moves the target (chosen from a Break Zone) to P1's hand. */
     void addTargetToHand(ForwardTarget t);
+
+    /**
+     * Adds {@code amount} power and optionally grants {@code traits} to the target
+     * until the end of the turn.
+     */
+    void boostTarget(ForwardTarget t, int amount, EnumSet<CardData.Trait> traits);
+
+    /**
+     * Finds {@code source} on P1's forward zone and adds {@code amount} power and
+     * optionally grants {@code traits} to it until the end of the turn.
+     * No-op if the source card is not found on the field.
+     */
+    void boostSourceForward(CardData source, int amount, EnumSet<CardData.Trait> traits);
 
     // ---- Dull effects (used by mass-effect; also available individually) ----
 

@@ -150,6 +150,10 @@ public class MainWindow {
 	/** Per-slot frozen flags — independent of CardState (a card may be Dulled AND frozen). */
 	private final List<Boolean>   p1ForwardFrozen      = new ArrayList<>();
 	private final List<Boolean>   p2ForwardFrozen      = new ArrayList<>();
+	private final List<Integer>                         p1ForwardPowerBoost  = new ArrayList<>();
+	private final List<Integer>                         p2ForwardPowerBoost  = new ArrayList<>();
+	private final List<java.util.EnumSet<CardData.Trait>> p1ForwardTempTraits = new ArrayList<>();
+	private final List<java.util.EnumSet<CardData.Trait>> p2ForwardTempTraits = new ArrayList<>();
 	private final boolean[]       p1BackupFrozen       = new boolean[5];
 	private final boolean[]       p2BackupFrozen       = new boolean[5];
 	private final List<Boolean>   p1MonsterFrozen      = new ArrayList<>();
@@ -1242,8 +1246,12 @@ public class MainWindow {
                             gameState.advancePhase();   // MAIN_2 → END
                             logEntry("End Phase");
                             for (int i = 0; i < p1ForwardDamage.size(); i++) p1ForwardDamage.set(i, 0);
+                            for (int i = 0; i < p1ForwardPowerBoost.size(); i++) p1ForwardPowerBoost.set(i, 0);
+                            p1ForwardTempTraits.forEach(java.util.EnumSet::clear);
                             for (int i = 0; i < p1ForwardCards.size(); i++) refreshP1ForwardSlot(i);
                             for (int i = 0; i < p2ForwardDamage.size(); i++) p2ForwardDamage.set(i, 0);
+                            for (int i = 0; i < p2ForwardPowerBoost.size(); i++) p2ForwardPowerBoost.set(i, 0);
+                            p2ForwardTempTraits.forEach(java.util.EnumSet::clear);
                             for (int i = 0; i < p2ForwardCards.size(); i++) refreshP2ForwardSlot(i);
                             showEndPhaseDiscardDialog();
                             onNextPhase();             // END → ACTIVE (auto-advance)
@@ -1292,6 +1300,8 @@ public class MainWindow {
 		p1ForwardStates.clear();
 		p1ForwardPlayedOnTurn.clear();
 		p1ForwardDamage.clear();
+		p1ForwardPowerBoost.clear();
+		p1ForwardTempTraits.clear();
 		p1ForwardPrimedTop.clear();
 		p1ForwardFrozen.clear();
 		p1MonsterFrozen.clear();
@@ -1380,6 +1390,8 @@ public class MainWindow {
 		p2ForwardStates.clear();
 		p2ForwardPlayedOnTurn.clear();
 		p2ForwardDamage.clear();
+		p2ForwardPowerBoost.clear();
+		p2ForwardTempTraits.clear();
 		p2ForwardFrozen.clear();
 		java.util.Arrays.fill(p2BackupFrozen, false);
 
@@ -1845,6 +1857,8 @@ public class MainWindow {
 		p1ForwardStates.remove(idx);
 		p1ForwardPlayedOnTurn.remove(idx);
 		p1ForwardDamage.remove(idx);
+		p1ForwardPowerBoost.remove(idx);
+		p1ForwardTempTraits.remove(idx);
 		p1ForwardPrimedTop.remove(idx);
 		p1ForwardFrozen.remove(idx);
 		p1ForwardLabels.remove(idx);
@@ -1900,6 +1914,8 @@ public class MainWindow {
 		p2ForwardStates.remove(idx);
 		p2ForwardPlayedOnTurn.remove(idx);
 		p2ForwardDamage.remove(idx);
+		p2ForwardPowerBoost.remove(idx);
+		p2ForwardTempTraits.remove(idx);
 		p2ForwardFrozen.remove(idx);
 		p2ForwardLabels.remove(idx);
 
@@ -1930,6 +1946,28 @@ public class MainWindow {
 		refreshP2BreakLabel();
 	}
 
+	private int effectiveP1ForwardPower(int idx) {
+		CardData top = p1ForwardPrimedTop.get(idx);
+		int base = top != null ? top.power() : p1ForwardCards.get(idx).power();
+		return base + p1ForwardPowerBoost.get(idx);
+	}
+
+	private int effectiveP2ForwardPower(int idx) {
+		return p2ForwardCards.get(idx).power() + p2ForwardPowerBoost.get(idx);
+	}
+
+	private boolean effectiveP1HasTrait(int idx, CardData.Trait trait) {
+		return p1ForwardCards.get(idx).hasTrait(trait) || p1ForwardTempTraits.get(idx).contains(trait);
+	}
+
+	private boolean effectiveP2HasTrait(int idx, CardData.Trait trait) {
+		return p2ForwardCards.get(idx).hasTrait(trait) || p2ForwardTempTraits.get(idx).contains(trait);
+	}
+
+	private boolean effectiveHasTrait(boolean isP1, int idx, CardData.Trait trait) {
+		return isP1 ? effectiveP1HasTrait(idx, trait) : effectiveP2HasTrait(idx, trait);
+	}
+
 	/**
 	 * Resolves combat between an attacker and a blocker.
 	 * A forward breaks when the opponent's power equals or exceeds its own power.
@@ -1938,16 +1976,18 @@ public class MainWindow {
 	 */
 	private void resolveCombat(CardData attacker, boolean attackerIsP1, int attackerIdx,
 			CardData blocker, boolean blockerIsP1, int blockerIdx) {
-		boolean attackerFirst = attacker.hasTrait(CardData.Trait.FIRST_STRIKE)
-				&& !blocker.hasTrait(CardData.Trait.FIRST_STRIKE);
-		boolean blockerFirst = blocker.hasTrait(CardData.Trait.FIRST_STRIKE)
-				&& !attacker.hasTrait(CardData.Trait.FIRST_STRIKE);
+		boolean attackerFirst = effectiveHasTrait(attackerIsP1, attackerIdx, CardData.Trait.FIRST_STRIKE)
+				&& !effectiveHasTrait(blockerIsP1, blockerIdx, CardData.Trait.FIRST_STRIKE);
+		boolean blockerFirst = effectiveHasTrait(blockerIsP1, blockerIdx, CardData.Trait.FIRST_STRIKE)
+				&& !effectiveHasTrait(attackerIsP1, attackerIdx, CardData.Trait.FIRST_STRIKE);
 
-		logEntry((attackerIsP1 ? "" : "[P2] ") + attacker.name() + " (" + attacker.power() + ")"
-				+ " vs " + (blockerIsP1 ? "" : "[P2] ") + blocker.name() + " (" + blocker.power() + ")");
+		int effAttackerPow = attackerIsP1 ? effectiveP1ForwardPower(attackerIdx) : effectiveP2ForwardPower(attackerIdx);
+		int effBlockerPow  = blockerIsP1  ? effectiveP1ForwardPower(blockerIdx)  : effectiveP2ForwardPower(blockerIdx);
+		logEntry((attackerIsP1 ? "" : "[P2] ") + attacker.name() + " (" + effAttackerPow + ")"
+				+ " vs " + (blockerIsP1 ? "" : "[P2] ") + blocker.name() + " (" + effBlockerPow + ")");
 
-		boolean attackerBroken = blocker.power() >= attacker.power();
-		boolean blockerBroken  = attacker.power() >= blocker.power();
+		boolean attackerBroken = effBlockerPow >= effAttackerPow;
+		boolean blockerBroken  = effAttackerPow >= effBlockerPow;
 
 		if (attackerFirst && blockerBroken) {
 			attackerBroken = false;
@@ -1960,7 +2000,7 @@ public class MainWindow {
 			else              breakP2Forward(attackerIdx);
 		} else {
 			// Attacker survives — accumulate damage it received from the blocker
-			int received = blockerFirst ? 0 : blocker.power();
+			int received = blockerFirst ? 0 : effBlockerPow;
 			if (received > 0) {
 				if (attackerIsP1) {
 					p1ForwardDamage.set(attackerIdx, p1ForwardDamage.get(attackerIdx) + received);
@@ -1976,7 +2016,7 @@ public class MainWindow {
 			else             breakP2Forward(blockerIdx);
 		} else {
 			// Blocker survives — accumulate damage it received from the attacker
-			int received = attackerFirst ? 0 : attacker.power();
+			int received = attackerFirst ? 0 : effAttackerPow;
 			if (received > 0) {
 				if (blockerIsP1) {
 					p1ForwardDamage.set(blockerIdx, p1ForwardDamage.get(blockerIdx) + received);
@@ -1997,13 +2037,13 @@ public class MainWindow {
 	 * or -1 if P2 declines to block.
 	 * Strategy: block with the highest-power active forward that can survive (power >= attacker) or trade evenly.
 	 */
-	private int p2ChooseBlocker(CardData attacker) {
+	private int p2ChooseBlocker(int effectiveAttackerPower) {
 		int bestIdx = -1, bestPower = -1;
 		for (int i = 0; i < p2ForwardStates.size(); i++) {
 			if (p2ForwardStates.get(i) != CardState.ACTIVE) continue;
-			CardData c = p2ForwardCards.get(i);
-			if (c.power() >= attacker.power() && c.power() > bestPower) {
-				bestPower = c.power();
+			int effPow = effectiveP2ForwardPower(i);
+			if (effPow >= effectiveAttackerPower && effPow > bestPower) {
+				bestPower = effPow;
 				bestIdx = i;
 			}
 		}
@@ -2012,7 +2052,7 @@ public class MainWindow {
 
 	/** Called after P1 attacks: gives P2 AI a chance to declare a blocker. */
 	private void p2OfferBlock(CardData attacker, int attackerIdx) {
-		int blockerIdx = p2ChooseBlocker(attacker);
+		int blockerIdx = p2ChooseBlocker(effectiveP1ForwardPower(attackerIdx));
 		if (blockerIdx >= 0) {
 			CardData blocker = p2ForwardCards.get(blockerIdx);
 			logEntry("[P2] " + blocker.name() + " blocks!");
@@ -2047,7 +2087,7 @@ public class MainWindow {
 		JPanel panel = new JPanel(new BorderLayout(8, 8));
 		panel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
 
-		JLabel header = new JLabel("[P2] " + attacker.name() + " (" + attacker.power() + ") attacks!");
+		JLabel header = new JLabel("[P2] " + attacker.name() + " (" + effectiveP2ForwardPower(attackerIdx) + ") attacks!");
 		header.setFont(new Font("Pixel NES", Font.PLAIN, 12));
 		header.setHorizontalAlignment(SwingConstants.CENTER);
 		panel.add(header, BorderLayout.NORTH);
@@ -2058,7 +2098,7 @@ public class MainWindow {
 			// Use the top card's name/power for display when the forward is primed
 			CardData top = p1ForwardPrimedTop.get(bi);
 			CardData display = top != null ? top : p1ForwardCards.get(bi);
-			JButton btn = new JButton("<html><center>" + display.name() + "<br>(" + display.power() + ")</center></html>");
+			JButton btn = new JButton("<html><center>" + display.name() + "<br>(" + effectiveP1ForwardPower(bi) + ")</center></html>");
 			btn.setFont(new Font("Pixel NES", Font.PLAIN, 10));
 			btn.setPreferredSize(new Dimension(130, 60));
 			final int blockerIdx = bi;
@@ -5080,9 +5120,10 @@ public class MainWindow {
 				int dmg = p1ForwardDamage.get(idx) + amount;
 				p1ForwardDamage.set(idx, dmg);
 				CardData eff = p1Forward(idx);
+				int effPow = effectiveP1ForwardPower(idx);
 				logEntry(eff.name() + " takes " + amount + " damage"
-						+ (eff.power() > 0 ? " (" + (eff.power() - dmg) + " remaining)" : ""));
-				if (eff.power() > 0 && dmg >= eff.power()) breakP1Forward(idx);
+						+ (effPow > 0 ? " (" + (effPow - dmg) + " remaining)" : ""));
+				if (effPow > 0 && dmg >= effPow) breakP1Forward(idx);
 				else refreshP1ForwardSlot(idx);
 			}
 
@@ -5095,9 +5136,10 @@ public class MainWindow {
 				int dmg = p2ForwardDamage.get(idx) + amount;
 				p2ForwardDamage.set(idx, dmg);
 				CardData card = p2ForwardCards.get(idx);
+				int effPow = effectiveP2ForwardPower(idx);
 				logEntry("[P2] " + card.name() + " takes " + amount + " damage"
-						+ (card.power() > 0 ? " (" + (card.power() - dmg) + " remaining)" : ""));
-				if (card.power() > 0 && dmg >= card.power()) breakP2Forward(idx);
+						+ (effPow > 0 ? " (" + (effPow - dmg) + " remaining)" : ""));
+				if (effPow > 0 && dmg >= effPow) breakP2Forward(idx);
 				else refreshP2ForwardSlot(idx);
 			}
 
@@ -5395,6 +5437,39 @@ public class MainWindow {
 				logEntry(card.name() + (t.isP1() ? " returned from Break Zone to hand" : " taken from opponent's Break Zone to hand"));
 				if (t.isP1()) refreshP1BreakLabel(); else refreshP2BreakLabel();
 				refreshP1HandLabel();
+			}
+
+			@Override public void boostTarget(ForwardTarget t, int amount,
+					java.util.EnumSet<CardData.Trait> traits) {
+				if (t.zone() == ForwardTarget.CardZone.BACKUP) return;
+				if (t.isP1()) {
+					int idx = t.idx();
+					if (idx >= p1ForwardCards.size()) return;
+					p1ForwardPowerBoost.set(idx, p1ForwardPowerBoost.get(idx) + amount);
+					p1ForwardTempTraits.get(idx).addAll(traits);
+					logEntry(p1Forward(idx).name() + " gains +" + amount + " power until end of turn");
+					refreshP1ForwardSlot(idx);
+				} else {
+					int idx = t.idx();
+					if (idx >= p2ForwardCards.size()) return;
+					p2ForwardPowerBoost.set(idx, p2ForwardPowerBoost.get(idx) + amount);
+					p2ForwardTempTraits.get(idx).addAll(traits);
+					logEntry("[P2] " + p2ForwardCards.get(idx).name() + " gains +" + amount + " power until end of turn");
+					refreshP2ForwardSlot(idx);
+				}
+			}
+
+			@Override public void boostSourceForward(CardData source, int amount,
+					java.util.EnumSet<CardData.Trait> traits) {
+				for (int i = 0; i < p1ForwardCards.size(); i++) {
+					if (p1ForwardCards.get(i).name().equals(source.name())) {
+						p1ForwardPowerBoost.set(i, p1ForwardPowerBoost.get(i) + amount);
+						p1ForwardTempTraits.get(i).addAll(traits);
+						logEntry(source.name() + " gains +" + amount + " power until end of turn");
+						refreshP1ForwardSlot(i);
+						return;
+					}
+				}
 			}
 
 			@Override
@@ -5881,6 +5956,8 @@ public class MainWindow {
 		p1ForwardStates.add(CardState.ACTIVE);
 		p1ForwardPlayedOnTurn.add(gameState.getTurnNumber());
 		p1ForwardDamage.add(0);
+		p1ForwardPowerBoost.add(0);
+		p1ForwardTempTraits.add(java.util.EnumSet.noneOf(CardData.Trait.class));
 		p1ForwardPrimedTop.add(null);
 		p1ForwardFrozen.add(false);
 		p1ForwardLabels.add(lbl);
@@ -6047,13 +6124,12 @@ public class MainWindow {
 		CardState state  = p1ForwardStates.get(idx);
 		JLabel    slot   = p1ForwardLabels.get(idx);
 		if (url == null) return;
-		boolean hasHaste  = p1ForwardCards.get(idx).hasTrait(CardData.Trait.HASTE)
-				|| (primed && topCard.hasTrait(CardData.Trait.HASTE));
+		boolean hasHaste  = effectiveP1HasTrait(idx, CardData.Trait.HASTE);
 		boolean canAttack = gameState.getCurrentPhase() == GameState.GamePhase.ATTACK
 				&& state == CardState.ACTIVE
 				&& (hasHaste || p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber());
 		int damage = p1ForwardDamage.get(idx);
-		int power  = primed ? topCard.power() : p1ForwardCards.get(idx).power();
+		int power  = effectiveP1ForwardPower(idx);
 		boolean selected = p1AttackSelection.contains(idx);
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
@@ -6081,8 +6157,8 @@ public class MainWindow {
 		if (gameState.getCurrentPhase() != GameState.GamePhase.ATTACK) return false;
 		if (idx < 0 || idx >= p1ForwardStates.size()) return false;
 		if (p1ForwardStates.get(idx) != CardState.ACTIVE) return false;
-		boolean hasHaste = p1ForwardCards.get(idx).hasTrait(CardData.Trait.HASTE);
-		return hasHaste || p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber();
+		return effectiveP1HasTrait(idx, CardData.Trait.HASTE)
+				|| p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber();
 	}
 
 	private void toggleAttackSelection(int idx) {
@@ -6117,8 +6193,7 @@ public class MainWindow {
 	private void executeP1Attack(List<Integer> selection) {
 		if (selection.isEmpty()) return;
 		for (int idx : selection) {
-			CardData c = p1ForwardCards.get(idx);
-			if (c.hasTrait(CardData.Trait.BRAVE)) {
+			if (effectiveP1HasTrait(idx, CardData.Trait.BRAVE)) {
 				p1ForwardStates.set(idx, CardState.BRAVE_ATTACKED);
 				refreshP1ForwardSlot(idx);
 			} else {
@@ -6135,7 +6210,7 @@ public class MainWindow {
 			int combinedPower = 0;
 			StringBuilder names = new StringBuilder();
 			for (int idx : selection) {
-				combinedPower += p1ForwardCards.get(idx).power();
+				combinedPower += effectiveP1ForwardPower(idx);
 				if (names.length() > 0) names.append(", ");
 				names.append(p1ForwardCards.get(idx).name());
 			}
@@ -6150,11 +6225,11 @@ public class MainWindow {
 		for (int idx : attackerIndices) {
 			if (idx < p1ForwardCards.size())
 				minAttackerPower = Math.min(minAttackerPower,
-						p1ForwardCards.get(idx).power() - p1ForwardDamage.get(idx));
+						effectiveP1ForwardPower(idx) - p1ForwardDamage.get(idx));
 		}
 		for (int i = 0; i < p2ForwardStates.size(); i++) {
 			if (p2ForwardStates.get(i) != CardState.ACTIVE) continue;
-			int pw = p2ForwardCards.get(i).power();
+			int pw = effectiveP2ForwardPower(i);
 			if (pw >= minAttackerPower && pw > bestBlockerPower) {
 				bestBlockerPower = pw;
 				bestBlockerIdx = i;
@@ -6162,7 +6237,7 @@ public class MainWindow {
 		}
 		if (bestBlockerIdx >= 0) {
 			CardData blocker = p2ForwardCards.get(bestBlockerIdx);
-			int blockerPower = blocker.power();
+			int blockerPower = effectiveP2ForwardPower(bestBlockerIdx);
 			logEntry("[P2] " + blocker.name() + " blocks the party!");
 			if (combinedPower >= blockerPower) breakP2Forward(bestBlockerIdx);
 			p2AiDistributeDamage(attackerIndices, blockerPower);
@@ -6176,7 +6251,7 @@ public class MainWindow {
 		List<int[]> targets = new ArrayList<>();
 		for (int idx : attackerIndices) {
 			if (idx < p1ForwardCards.size()) {
-				int hp = p1ForwardCards.get(idx).power() - p1ForwardDamage.get(idx);
+				int hp = effectiveP1ForwardPower(idx) - p1ForwardDamage.get(idx);
 				targets.add(new int[]{ idx, hp });
 			}
 		}
@@ -6205,7 +6280,7 @@ public class MainWindow {
 
 		List<Integer> toBreak = new ArrayList<>();
 		for (int idx : damageMap.keySet()) {
-			if (p1ForwardDamage.get(idx) >= p1ForwardCards.get(idx).power()) toBreak.add(idx);
+			if (p1ForwardDamage.get(idx) >= effectiveP1ForwardPower(idx)) toBreak.add(idx);
 		}
 		toBreak.sort(Collections.reverseOrder());
 		for (int idx : toBreak) breakP1Forward(idx);
@@ -6226,7 +6301,7 @@ public class MainWindow {
 		int turn = gameState.getTurnNumber();
 		for (int i = 0; i < p1ForwardStates.size(); i++) {
 			if (p1ForwardStates.get(i) == CardState.ACTIVE
-					&& (p1ForwardCards.get(i).hasTrait(CardData.Trait.HASTE)
+					&& (effectiveP1HasTrait(i, CardData.Trait.HASTE)
 					    || p1ForwardPlayedOnTurn.get(i) != turn))
 				return true;
 		}
@@ -7164,6 +7239,8 @@ public class MainWindow {
 		p2ForwardStates.add(CardState.ACTIVE);
 		p2ForwardPlayedOnTurn.add(gameState.getTurnNumber());
 		p2ForwardDamage.add(0);
+		p2ForwardPowerBoost.add(0);
+		p2ForwardTempTraits.add(java.util.EnumSet.noneOf(CardData.Trait.class));
 		p2ForwardFrozen.add(false);
 		p2ForwardLabels.add(lbl);
 
@@ -7211,7 +7288,7 @@ public class MainWindow {
 		JLabel slot     = p2ForwardLabels.get(idx);
 		if (url == null) return;
 		int damage = p2ForwardDamage.get(idx);
-		int power  = p2ForwardCards.get(idx).power();
+		int power  = effectiveP2ForwardPower(idx);
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
@@ -7406,7 +7483,7 @@ public class MainWindow {
 				if (!p2ForwardCanAttack(i)) continue;
 				CardData attacker = p2ForwardCards.get(i);
 				logEntry("[P2] " + attacker.name() + " attacks!");
-				if (attacker.hasTrait(CardData.Trait.BRAVE)) {
+				if (effectiveP2HasTrait(i, CardData.Trait.BRAVE)) {
 					p2ForwardStates.set(i, CardState.BRAVE_ATTACKED);
 					refreshP2ForwardSlot(i);
 				} else {
@@ -7434,8 +7511,12 @@ public class MainWindow {
 			refreshP2BreakLabel();
 			refreshP2HandCountLabel();
 			for (int i = 0; i < p2ForwardDamage.size(); i++) p2ForwardDamage.set(i, 0);
+			for (int i = 0; i < p2ForwardPowerBoost.size(); i++) p2ForwardPowerBoost.set(i, 0);
+			p2ForwardTempTraits.forEach(java.util.EnumSet::clear);
 			for (int i = 0; i < p2ForwardCards.size(); i++) refreshP2ForwardSlot(i);
 			for (int i = 0; i < p1ForwardDamage.size(); i++) p1ForwardDamage.set(i, 0);
+			for (int i = 0; i < p1ForwardPowerBoost.size(); i++) p1ForwardPowerBoost.set(i, 0);
+			p1ForwardTempTraits.forEach(java.util.EnumSet::clear);
 			for (int i = 0; i < p1ForwardCards.size(); i++) refreshP1ForwardSlot(i);
 			gameState.advancePhase(); // MAIN_2 → END
 			logEntry("[P2] End Phase");
@@ -7494,7 +7575,7 @@ public class MainWindow {
 
 		private boolean p2ForwardCanAttack(int idx) {
 			return p2ForwardStates.get(idx) == CardState.ACTIVE
-				&& (p2ForwardCards.get(idx).hasTrait(CardData.Trait.HASTE)
+				&& (effectiveP2HasTrait(idx, CardData.Trait.HASTE)
 					|| p2ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber());
 		}
 

@@ -1,6 +1,7 @@
 package fftcg;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -97,6 +98,48 @@ public class ActionResolver {
     );
 
     /**
+     * Matches "it/they gains/gain +N power [, Haste[, First Strike[, and Brave]]] until end of turn".
+     * <ul>
+     *   <li>Group 1 — numeric power amount</li>
+     *   <li>Group 2 — optional traits string, e.g. {@code ", Haste, and First Strike"}</li>
+     * </ul>
+     */
+    private static final Pattern FOLLOWUP_POWER_BOOST = Pattern.compile(
+        "(?i)(?:it|they)\\s+gains?\\s+\\+(\\d+)\\s+[Pp]ower" +
+        "((?:\\s*,?\\s*(?:and\\s+)?(?:Haste|First\\s+Strike|Brave))*)" +
+        "\\s+until\\s+(?:the\\s+)?end\\s+of\\s+(?:the\\s+)?turn"
+    );
+
+    /**
+     * Matches "Until the end of the turn, it/they gains/gain +N power [and traits]".
+     * <ul>
+     *   <li>Group 1 — numeric power amount</li>
+     *   <li>Group 2 — optional traits string</li>
+     * </ul>
+     */
+    private static final Pattern FOLLOWUP_POWER_BOOST_UNTIL = Pattern.compile(
+        "(?i)Until\\s+(?:the\\s+)?end\\s+of\\s+(?:the\\s+)?turn\\s*,\\s+" +
+        "(?:it|they)\\s+gains?\\s+\\+(\\d+)\\s+[Pp]ower" +
+        "((?:\\s*,?\\s*(?:and\\s+)?(?:Haste|First\\s+Strike|Brave))*)"
+    );
+
+    /**
+     * Matches standalone "Until the end of the turn, &lt;subject&gt; gains +N power [and traits]".
+     * Used when the subject is a specific card name rather than "it"/"they".
+     * <ul>
+     *   <li>Group {@code subject} — card name or pronoun before "gains"</li>
+     *   <li>Group {@code amount}  — numeric power amount</li>
+     *   <li>Group {@code traits}  — optional traits string</li>
+     * </ul>
+     */
+    private static final Pattern STANDALONE_POWER_BOOST_UNTIL = Pattern.compile(
+        "(?i)Until\\s+(?:the\\s+)?end\\s+of\\s+(?:the\\s+)?turn\\s*,\\s+" +
+        "(?<subject>.+?)\\s+gains?\\s+\\+(?<amount>\\d+)\\s+[Pp]ower" +
+        "(?<traits>(?:\\s*,?\\s*(?:and\\s+)?(?:Haste|First\\s+Strike|Brave))*)" +
+        "[.\\s]*$"
+    );
+
+    /**
      * Matches mass-effect actions on all field cards of a given type:
      * "[action] all [the] [element] [targets] [of cost X [or less|more]] [control]"
      * <ul>
@@ -143,6 +186,17 @@ public class ActionResolver {
      * @return the effect consumer, or {@code null} if the text is not yet supported
      */
     public static Consumer<GameContext> parse(String effectText) {
+        return parse(effectText, null);
+    }
+
+    /**
+     * Attempts to parse {@code effectText} into a ready-to-execute
+     * {@link Consumer}{@code <GameContext>}.
+     *
+     * @param source the card that owns this ability; required for standalone self-buff effects
+     * @return the effect consumer, or {@code null} if the text is not yet supported
+     */
+    public static Consumer<GameContext> parse(String effectText, CardData source) {
         Consumer<GameContext> result;
 
         result = tryParseDealDamageToForwards(effectText);
@@ -152,6 +206,9 @@ public class ActionResolver {
         if (result != null) return result;
 
         result = tryParseAllFieldEffect(effectText);
+        if (result != null) return result;
+
+        result = tryParseStandalonePowerBoostUntil(effectText, source);
         if (result != null) return result;
 
         // TODO: add more effect parsers here as they are implemented
@@ -177,7 +234,7 @@ public class ActionResolver {
         ctx.logEntry("[Stack] \"" + source.name() + "\" → " + ability.effectText());
         ctx.logEntry("[Stack] P2 passes — resolving");
 
-        Consumer<GameContext> effect = parse(ability.effectText());
+        Consumer<GameContext> effect = parse(ability.effectText(), source);
         if (effect != null) {
             effect.accept(ctx);
         } else {
@@ -424,6 +481,38 @@ public class ActionResolver {
             };
         }
 
+        // --- Power boost followup (standard order: "it/they gains +N power [, traits] until…") ---
+        Matcher boostM = FOLLOWUP_POWER_BOOST.matcher(followup);
+        if (boostM.find()) {
+            int boost = Integer.parseInt(boostM.group(1));
+            EnumSet<CardData.Trait> traits = parseTraits(boostM.group(2));
+            String logSuffix = boostLogSuffix(boost, traits);
+            return ctx -> {
+                ctx.logEntry(choosePrefix + logSuffix);
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                sortedByIdxDesc(ts, true) .forEach(t -> ctx.boostTarget(t, boost, traits));
+                sortedByIdxDesc(ts, false).forEach(t -> ctx.boostTarget(t, boost, traits));
+            };
+        }
+
+        // --- Power boost followup (until-prefix order: "Until…, it/they gains +N power [and traits]") ---
+        Matcher boostUntilM = FOLLOWUP_POWER_BOOST_UNTIL.matcher(followup);
+        if (boostUntilM.find()) {
+            int boost = Integer.parseInt(boostUntilM.group(1));
+            EnumSet<CardData.Trait> traits = parseTraits(boostUntilM.group(2));
+            String logSuffix = boostLogSuffix(boost, traits);
+            return ctx -> {
+                ctx.logEntry(choosePrefix + logSuffix);
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                sortedByIdxDesc(ts, true) .forEach(t -> ctx.boostTarget(t, boost, traits));
+                sortedByIdxDesc(ts, false).forEach(t -> ctx.boostTarget(t, boost, traits));
+            };
+        }
+
         // Recognised "Choose" header but followup not yet implemented
         return ctx -> ctx.logEntry(
                 "[ActionResolver] Choose effect — followup not yet implemented: " + followup);
@@ -435,6 +524,59 @@ public class ActionResolver {
         return targets.stream()
                 .filter(t -> t.isP1() == isP1)
                 .sorted((a, b) -> Integer.compare(b.idx(), a.idx()));
+    }
+
+    /** Builds a log suffix like " — Gain +1000 power, Haste, and First Strike until end of turn". */
+    private static String boostLogSuffix(int amount, EnumSet<CardData.Trait> traits) {
+        StringBuilder sb = new StringBuilder(" — Gain +").append(amount).append(" power");
+        List<String> names = new ArrayList<>();
+        if (traits.contains(CardData.Trait.HASTE))        names.add("Haste");
+        if (traits.contains(CardData.Trait.FIRST_STRIKE)) names.add("First Strike");
+        if (traits.contains(CardData.Trait.BRAVE))        names.add("Brave");
+        if (names.size() == 1) {
+            sb.append(" and ").append(names.get(0));
+        } else if (names.size() == 2) {
+            sb.append(", ").append(names.get(0)).append(", and ").append(names.get(1));
+        } else if (names.size() == 3) {
+            sb.append(", ").append(names.get(0))
+              .append(", ").append(names.get(1))
+              .append(", and ").append(names.get(2));
+        }
+        sb.append(" until end of turn");
+        return sb.toString();
+    }
+
+    /** Parses a traits string (e.g. {@code ", Haste, and First Strike"}) into a set of traits. */
+    private static EnumSet<CardData.Trait> parseTraits(String traitStr) {
+        EnumSet<CardData.Trait> traits = EnumSet.noneOf(CardData.Trait.class);
+        if (traitStr == null || traitStr.isEmpty()) return traits;
+        String s = traitStr.toLowerCase();
+        if (s.contains("haste"))         traits.add(CardData.Trait.HASTE);
+        if (s.contains("first strike"))  traits.add(CardData.Trait.FIRST_STRIKE);
+        if (s.contains("brave"))         traits.add(CardData.Trait.BRAVE);
+        return traits;
+    }
+
+    /**
+     * Parses "Until the end of the turn, &lt;cardName&gt; gains +N power [and traits]" as a
+     * standalone self-buff.  The subject must match {@code source.name()} (case-insensitive);
+     * pronoun subjects ("it", "they") are ignored here — they are handled as Choose followups.
+     */
+    private static Consumer<GameContext> tryParseStandalonePowerBoostUntil(
+            String text, CardData source) {
+        if (source == null) return null;
+        Matcher m = STANDALONE_POWER_BOOST_UNTIL.matcher(text);
+        if (!m.find()) return null;
+        String subject = m.group("subject").trim();
+        if (subject.equalsIgnoreCase("it") || subject.equalsIgnoreCase("they")) return null;
+        if (!subject.equalsIgnoreCase(source.name())) return null;
+        int boost = Integer.parseInt(m.group("amount"));
+        EnumSet<CardData.Trait> traits = parseTraits(m.group("traits"));
+        String logSuffix = boostLogSuffix(boost, traits);
+        return ctx -> {
+            ctx.logEntry(source.name() + logSuffix);
+            ctx.boostSourceForward(source, boost, traits);
+        };
     }
 
     // -------------------------------------------------------------------------
