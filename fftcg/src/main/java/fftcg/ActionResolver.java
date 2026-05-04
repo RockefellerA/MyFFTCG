@@ -130,6 +130,22 @@ public class ActionResolver {
     );
 
     /**
+     * Matches "&lt;subject&gt; gains [+N power] [, traits] until end of turn" where the subject
+     * may be a card name (checked against the source at runtime) rather than "it"/"they".
+     * <ul>
+     *   <li>Group {@code selfsubject} — the word(s) before "gains"</li>
+     *   <li>Group {@code selfamount}  — optional numeric power amount</li>
+     *   <li>Group {@code selftraits}  — optional traits string</li>
+     * </ul>
+     */
+    private static final Pattern SELF_POWER_BOOST = Pattern.compile(
+        "(?i)(?<selfsubject>.+?)\\s+gains?\\s+" +
+        "(?:\\+(?<selfamount>\\d+)\\s+[Pp]ower)?" +
+        "(?<selftraits>(?:\\s*,?\\s*(?:and\\s+)?(?:Haste|First\\s+Strike|Brave))*)" +
+        "\\s+until\\s+(?:the\\s+)?end\\s+of\\s+(?:the\\s+)?turn[.!]?"
+    );
+
+    /**
      * Matches "it/they gains/gain +N power [, Haste[, First Strike[, and Brave]]] until end of turn".
      * <ul>
      *   <li>Group 1 — numeric power amount</li>
@@ -279,7 +295,7 @@ public class ActionResolver {
         result = tryParseDealDamageToForwards(effectText);
         if (result != null) return result;
 
-        result = tryParseChooseCharacter(effectText);
+        result = tryParseChooseCharacter(effectText, source);
         if (result != null) return result;
 
         result = tryParseAllFieldEffect(effectText);
@@ -289,6 +305,9 @@ public class ActionResolver {
         if (result != null) return result;
 
         result = tryParseStandalonePowerReduceUntil(effectText, source);
+        if (result != null) return result;
+
+        result = tryParseStandaloneSelfBoost(effectText, source);
         if (result != null) return result;
 
         result = tryParseOpponentDiscard(effectText);
@@ -434,7 +453,7 @@ public class ActionResolver {
      *   <li>"Add it/them to your hand"     — moves chosen targets to P1's hand</li>
      * </ul>
      */
-    private static Consumer<GameContext> tryParseChooseCharacter(String text) {
+    private static Consumer<GameContext> tryParseChooseCharacter(String text, CardData source) {
         Matcher m = CHOOSE_CHARACTER_PATTERN.matcher(text);
         if (!m.find()) return null;
 
@@ -693,6 +712,20 @@ public class ActionResolver {
             };
         }
 
+        // --- Self-referential boost followup: "<cardName> gains [+N power] [traits] until end of turn" ---
+        if (source != null) {
+            Matcher selfM = SELF_POWER_BOOST.matcher(followup);
+            if (selfM.find() && selfM.group("selfsubject").trim().equalsIgnoreCase(source.name())) {
+                int boost = selfM.group("selfamount") != null ? Integer.parseInt(selfM.group("selfamount")) : 0;
+                EnumSet<CardData.Trait> traits = parseTraits(selfM.group("selftraits"));
+                String logSuffix = boostLogSuffix(boost, traits);
+                return ctx -> {
+                    ctx.logEntry(choosePrefix + " — " + source.name() + logSuffix);
+                    ctx.boostSourceForward(source, boost, traits);
+                };
+            }
+        }
+
         // Recognised "Choose" header but followup not yet implemented
         return ctx -> ctx.logEntry(
                 "[ActionResolver] Choose effect — followup not yet implemented: " + followup);
@@ -800,6 +833,27 @@ public class ActionResolver {
         return ctx -> {
             ctx.logEntry(source.name() + logSuffix);
             ctx.reduceSourceForward(source, reduction, traits);
+        };
+    }
+
+    /**
+     * Parses "&lt;cardName&gt; gains [+N power] [, traits] until end of turn" as a standalone
+     * self-boost on the source card (standard order, no "Until" prefix).
+     * Pronoun subjects ("it", "they") are skipped — they are followup pronouns.
+     */
+    private static Consumer<GameContext> tryParseStandaloneSelfBoost(String text, CardData source) {
+        if (source == null) return null;
+        Matcher m = SELF_POWER_BOOST.matcher(text);
+        if (!m.find()) return null;
+        String subject = m.group("selfsubject").trim();
+        if (subject.equalsIgnoreCase("it") || subject.equalsIgnoreCase("they")) return null;
+        if (!subject.equalsIgnoreCase(source.name())) return null;
+        int boost = m.group("selfamount") != null ? Integer.parseInt(m.group("selfamount")) : 0;
+        EnumSet<CardData.Trait> traits = parseTraits(m.group("selftraits"));
+        String logSuffix = boostLogSuffix(boost, traits);
+        return ctx -> {
+            ctx.logEntry(source.name() + logSuffix);
+            ctx.boostSourceForward(source, boost, traits);
         };
     }
 
