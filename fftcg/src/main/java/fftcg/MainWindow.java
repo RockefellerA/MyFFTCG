@@ -150,10 +150,14 @@ public class MainWindow {
 	/** Per-slot frozen flags — independent of CardState (a card may be Dulled AND frozen). */
 	private final List<Boolean>   p1ForwardFrozen      = new ArrayList<>();
 	private final List<Boolean>   p2ForwardFrozen      = new ArrayList<>();
-	private final List<Integer>                         p1ForwardPowerBoost  = new ArrayList<>();
-	private final List<Integer>                         p2ForwardPowerBoost  = new ArrayList<>();
-	private final List<java.util.EnumSet<CardData.Trait>> p1ForwardTempTraits = new ArrayList<>();
-	private final List<java.util.EnumSet<CardData.Trait>> p2ForwardTempTraits = new ArrayList<>();
+	private final List<Integer>                           p1ForwardPowerBoost     = new ArrayList<>();
+	private final List<Integer>                           p2ForwardPowerBoost     = new ArrayList<>();
+	private final List<Integer>                           p1ForwardPowerReduction = new ArrayList<>();
+	private final List<Integer>                           p2ForwardPowerReduction = new ArrayList<>();
+	private final List<java.util.EnumSet<CardData.Trait>> p1ForwardTempTraits    = new ArrayList<>();
+	private final List<java.util.EnumSet<CardData.Trait>> p2ForwardTempTraits    = new ArrayList<>();
+	private final List<java.util.EnumSet<CardData.Trait>> p1ForwardRemovedTraits = new ArrayList<>();
+	private final List<java.util.EnumSet<CardData.Trait>> p2ForwardRemovedTraits = new ArrayList<>();
 	private final boolean[]       p1BackupFrozen       = new boolean[5];
 	private final boolean[]       p2BackupFrozen       = new boolean[5];
 	private final List<Boolean>   p1MonsterFrozen      = new ArrayList<>();
@@ -1247,11 +1251,15 @@ public class MainWindow {
                             logEntry("End Phase");
                             for (int i = 0; i < p1ForwardDamage.size(); i++) p1ForwardDamage.set(i, 0);
                             for (int i = 0; i < p1ForwardPowerBoost.size(); i++) p1ForwardPowerBoost.set(i, 0);
+                            for (int i = 0; i < p1ForwardPowerReduction.size(); i++) p1ForwardPowerReduction.set(i, 0);
                             p1ForwardTempTraits.forEach(java.util.EnumSet::clear);
+                            p1ForwardRemovedTraits.forEach(java.util.EnumSet::clear);
                             for (int i = 0; i < p1ForwardCards.size(); i++) refreshP1ForwardSlot(i);
                             for (int i = 0; i < p2ForwardDamage.size(); i++) p2ForwardDamage.set(i, 0);
                             for (int i = 0; i < p2ForwardPowerBoost.size(); i++) p2ForwardPowerBoost.set(i, 0);
+                            for (int i = 0; i < p2ForwardPowerReduction.size(); i++) p2ForwardPowerReduction.set(i, 0);
                             p2ForwardTempTraits.forEach(java.util.EnumSet::clear);
+                            p2ForwardRemovedTraits.forEach(java.util.EnumSet::clear);
                             for (int i = 0; i < p2ForwardCards.size(); i++) refreshP2ForwardSlot(i);
                             showEndPhaseDiscardDialog();
                             onNextPhase();             // END → ACTIVE (auto-advance)
@@ -1301,7 +1309,9 @@ public class MainWindow {
 		p1ForwardPlayedOnTurn.clear();
 		p1ForwardDamage.clear();
 		p1ForwardPowerBoost.clear();
+		p1ForwardPowerReduction.clear();
 		p1ForwardTempTraits.clear();
+		p1ForwardRemovedTraits.clear();
 		p1ForwardPrimedTop.clear();
 		p1ForwardFrozen.clear();
 		p1MonsterFrozen.clear();
@@ -1391,7 +1401,9 @@ public class MainWindow {
 		p2ForwardPlayedOnTurn.clear();
 		p2ForwardDamage.clear();
 		p2ForwardPowerBoost.clear();
+		p2ForwardPowerReduction.clear();
 		p2ForwardTempTraits.clear();
+		p2ForwardRemovedTraits.clear();
 		p2ForwardFrozen.clear();
 		java.util.Arrays.fill(p2BackupFrozen, false);
 
@@ -1858,7 +1870,9 @@ public class MainWindow {
 		p1ForwardPlayedOnTurn.remove(idx);
 		p1ForwardDamage.remove(idx);
 		p1ForwardPowerBoost.remove(idx);
+		p1ForwardPowerReduction.remove(idx);
 		p1ForwardTempTraits.remove(idx);
+		p1ForwardRemovedTraits.remove(idx);
 		p1ForwardPrimedTop.remove(idx);
 		p1ForwardFrozen.remove(idx);
 		p1ForwardLabels.remove(idx);
@@ -1915,7 +1929,9 @@ public class MainWindow {
 		p2ForwardPlayedOnTurn.remove(idx);
 		p2ForwardDamage.remove(idx);
 		p2ForwardPowerBoost.remove(idx);
+		p2ForwardPowerReduction.remove(idx);
 		p2ForwardTempTraits.remove(idx);
+		p2ForwardRemovedTraits.remove(idx);
 		p2ForwardFrozen.remove(idx);
 		p2ForwardLabels.remove(idx);
 
@@ -1949,18 +1965,20 @@ public class MainWindow {
 	private int effectiveP1ForwardPower(int idx) {
 		CardData top = p1ForwardPrimedTop.get(idx);
 		int base = top != null ? top.power() : p1ForwardCards.get(idx).power();
-		return base + p1ForwardPowerBoost.get(idx);
+		return base + p1ForwardPowerBoost.get(idx) - p1ForwardPowerReduction.get(idx);
 	}
 
 	private int effectiveP2ForwardPower(int idx) {
-		return p2ForwardCards.get(idx).power() + p2ForwardPowerBoost.get(idx);
+		return p2ForwardCards.get(idx).power() + p2ForwardPowerBoost.get(idx) - p2ForwardPowerReduction.get(idx);
 	}
 
 	private boolean effectiveP1HasTrait(int idx, CardData.Trait trait) {
+		if (p1ForwardRemovedTraits.get(idx).contains(trait)) return false;
 		return p1ForwardCards.get(idx).hasTrait(trait) || p1ForwardTempTraits.get(idx).contains(trait);
 	}
 
 	private boolean effectiveP2HasTrait(int idx, CardData.Trait trait) {
+		if (p2ForwardRemovedTraits.get(idx).contains(trait)) return false;
 		return p2ForwardCards.get(idx).hasTrait(trait) || p2ForwardTempTraits.get(idx).contains(trait);
 	}
 
@@ -2643,6 +2661,130 @@ public class MainWindow {
 		JPanel south = new JPanel(new BorderLayout());
 		south.add(statusLabel,  BorderLayout.CENTER);
 		south.add(confirmBtn,   BorderLayout.EAST);
+		south.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 8));
+
+		dlg.getContentPane().setLayout(new BorderLayout(0, 4));
+		dlg.getContentPane().add(scrollPane, BorderLayout.CENTER);
+		dlg.getContentPane().add(south,      BorderLayout.SOUTH);
+		dlg.pack();
+		dlg.setLocationRelativeTo(frame);
+		dlg.setVisible(true);
+	}
+
+	/**
+	 * Shows a modal dialog letting P1 choose exactly {@code count} cards
+	 * (or fewer if hand is smaller) to discard to the Break Zone.  No CP is generated.
+	 * Called when P2 activates a "Your opponent discards N cards" ability.
+	 */
+	private void showForcedDiscardDialog(int count) {
+		List<CardData> hand = gameState.getP1Hand();
+		int mustDiscard = Math.min(count, hand.size());
+		if (mustDiscard == 0) return;
+
+		JDialog dlg = new JDialog(frame, "Discard " + mustDiscard + " Card(s)", true);
+		dlg.setResizable(false);
+		dlg.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+
+		Set<Integer> selected = new java.util.HashSet<>();
+
+		JLabel statusLabel = new JLabel("Select " + mustDiscard + " card(s) to discard.", SwingConstants.CENTER);
+		statusLabel.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+
+		List<JLabel> cardLabels = new ArrayList<>();
+		JPanel cardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+
+		JButton confirmBtn = new JButton("Discard");
+		confirmBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		confirmBtn.setEnabled(false);
+
+		Runnable refresh = () -> {
+			int remaining = mustDiscard - selected.size();
+			statusLabel.setText(remaining > 0
+					? "Select " + remaining + " more card(s) to discard."
+					: "Ready — click Discard to confirm.");
+			confirmBtn.setEnabled(selected.size() == mustDiscard);
+			for (int i = 0; i < cardLabels.size(); i++) {
+				cardLabels.get(i).setBorder(BorderFactory.createLineBorder(
+						selected.contains(i) ? Color.RED : Color.LIGHT_GRAY,
+						selected.contains(i) ? 3 : 1));
+			}
+		};
+
+		for (int i = 0; i < hand.size(); i++) {
+			final int idx = i;
+			CardData cd = hand.get(i);
+
+			JPanel wrapper = new JPanel(new BorderLayout(0, 4));
+			wrapper.setBackground(cardsPanel.getBackground());
+
+			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
+			lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+			lbl.setOpaque(true);
+			lbl.setBackground(Color.DARK_GRAY);
+			lbl.setBorder(BorderFactory.createLineBorder(Color.LIGHT_GRAY, 1));
+			lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+			cardLabels.add(lbl);
+
+			lbl.addMouseListener(new MouseAdapter() {
+				@Override public void mouseEntered(MouseEvent e) { if (lbl.getIcon() != null) showZoomAt(cd.imageUrl(), lbl); }
+				@Override public void mouseExited(MouseEvent e)  { hideZoom(); }
+				@Override public void mousePressed(MouseEvent e) {
+					if (selected.contains(idx)) selected.remove(idx);
+					else if (selected.size() < mustDiscard) selected.add(idx);
+					refresh.run();
+				}
+			});
+
+			new SwingWorker<ImageIcon, Void>() {
+				@Override protected ImageIcon doInBackground() throws Exception {
+					Image img = ImageCache.load(cd.imageUrl());
+					if (img == null) return null;
+					BufferedImage buf = new BufferedImage(CARD_W, CARD_H, BufferedImage.TYPE_INT_ARGB);
+					Graphics2D g2 = buf.createGraphics();
+					g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+					g2.drawImage(img, 0, 0, CARD_W, CARD_H, null);
+					g2.dispose();
+					return new ImageIcon(buf);
+				}
+				@Override protected void done() {
+					try { ImageIcon icon = get(); if (icon != null) { lbl.setIcon(icon); lbl.setText(null); } }
+					catch (InterruptedException | ExecutionException ignored) {}
+				}
+			}.execute();
+
+			JLabel nameLabel = new JLabel(cd.name(), SwingConstants.CENTER);
+			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
+
+			wrapper.add(lbl,       BorderLayout.CENTER);
+			wrapper.add(nameLabel, BorderLayout.SOUTH);
+			cardsPanel.add(wrapper);
+		}
+
+		confirmBtn.addActionListener(ae -> {
+			hideZoom();
+			dlg.dispose();
+			List<Integer> toDiscard = new ArrayList<>(selected);
+			toDiscard.sort(Collections.reverseOrder());
+			for (int di : toDiscard) {
+				CardData d = gameState.breakFromHand(di);
+				if (d != null) logEntry("Discards " + d.name() + " (forced by opponent)");
+			}
+			refreshP1HandLabel();
+			refreshP1BreakLabel();
+		});
+
+		JScrollPane scrollPane = new JScrollPane(cardsPanel,
+				JScrollPane.VERTICAL_SCROLLBAR_NEVER,
+				JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+		scrollPane.setPreferredSize(new Dimension(
+				Math.min(hand.size() * (CARD_W + 16) + 16, 900),
+				CARD_H + 60));
+
+		JPanel south = new JPanel(new BorderLayout());
+		south.add(statusLabel, BorderLayout.CENTER);
+		south.add(confirmBtn,  BorderLayout.EAST);
 		south.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 8));
 
 		dlg.getContentPane().setLayout(new BorderLayout(0, 4));
@@ -5472,6 +5614,70 @@ public class MainWindow {
 				}
 			}
 
+			@Override public void reduceTarget(ForwardTarget t, int amount,
+					java.util.EnumSet<CardData.Trait> traits) {
+				if (t.zone() == ForwardTarget.CardZone.BACKUP) return;
+				if (t.isP1()) {
+					int idx = t.idx();
+					if (idx >= p1ForwardCards.size()) return;
+					p1ForwardPowerReduction.set(idx, p1ForwardPowerReduction.get(idx) + amount);
+					p1ForwardRemovedTraits.get(idx).addAll(traits);
+					int effPow = effectiveP1ForwardPower(idx);
+					logEntry(p1Forward(idx).name() + " loses " + (amount > 0 ? amount + " power" : "")
+							+ (!traits.isEmpty() ? (amount > 0 ? " and " : "") + traits : "") + " until end of turn");
+					if (effPow <= 0) {
+						// Power reduced to 0 — not treated as "broken" mechanically (distinction TBD)
+						logEntry(p1Forward(idx).name() + " reduced to 0 power → Break Zone");
+						breakP1Forward(idx);
+					} else {
+						refreshP1ForwardSlot(idx);
+					}
+				} else {
+					int idx = t.idx();
+					if (idx >= p2ForwardCards.size()) return;
+					p2ForwardPowerReduction.set(idx, p2ForwardPowerReduction.get(idx) + amount);
+					p2ForwardRemovedTraits.get(idx).addAll(traits);
+					int effPow = effectiveP2ForwardPower(idx);
+					logEntry("[P2] " + p2ForwardCards.get(idx).name() + " loses "
+							+ (amount > 0 ? amount + " power" : "")
+							+ (!traits.isEmpty() ? (amount > 0 ? " and " : "") + traits : "") + " until end of turn");
+					if (effPow <= 0) {
+						logEntry("[P2] " + p2ForwardCards.get(idx).name() + " reduced to 0 power → Break Zone");
+						breakP2Forward(idx);
+					} else {
+						refreshP2ForwardSlot(idx);
+					}
+				}
+			}
+
+			@Override public void reduceSourceForward(CardData source, int amount,
+					java.util.EnumSet<CardData.Trait> traits) {
+				for (int i = 0; i < p1ForwardCards.size(); i++) {
+					if (p1ForwardCards.get(i).name().equals(source.name())) {
+						reduceTarget(new ForwardTarget(true, i, ForwardTarget.CardZone.FORWARD), amount, traits);
+						return;
+					}
+				}
+			}
+
+			@Override public void forceOpponentDiscard(int count) {
+				if (isP1) {
+					// P1 activated — P2 AI discards worst cards automatically
+					List<CardData> hand = gameState.getP2Hand();
+					int actual = Math.min(count, hand.size());
+					for (int i = 0; i < actual; i++) {
+						int idx = pickWorstHandCard0(hand);
+						CardData d = gameState.breakP2FromHand(idx);
+						if (d != null) logEntry("[P2] Discards " + d.name() + " (forced)");
+					}
+					refreshP2HandCountLabel();
+					refreshP2BreakLabel();
+				} else {
+					// P2 activated — P1 selects cards to discard via dialog
+					showForcedDiscardDialog(count);
+				}
+			}
+
 			@Override
 			public void applyMassFieldEffect(GameContext.MassAction action,
 					boolean forwards, boolean backups, boolean monsters,
@@ -5957,7 +6163,9 @@ public class MainWindow {
 		p1ForwardPlayedOnTurn.add(gameState.getTurnNumber());
 		p1ForwardDamage.add(0);
 		p1ForwardPowerBoost.add(0);
+		p1ForwardPowerReduction.add(0);
 		p1ForwardTempTraits.add(java.util.EnumSet.noneOf(CardData.Trait.class));
+		p1ForwardRemovedTraits.add(java.util.EnumSet.noneOf(CardData.Trait.class));
 		p1ForwardPrimedTop.add(null);
 		p1ForwardFrozen.add(false);
 		p1ForwardLabels.add(lbl);
@@ -6290,6 +6498,17 @@ public class MainWindow {
 
 	private static int roundToThousand(int value) {
 		return ((value + 999) / 1000) * 1000;
+	}
+
+	/** Returns the index of the least-valuable card in {@code hand} (lowest cost; backups before forwards). */
+	private static int pickWorstHandCard0(List<CardData> hand) {
+		int worstIdx = 0, worstScore = Integer.MAX_VALUE;
+		for (int i = 0; i < hand.size(); i++) {
+			CardData c = hand.get(i);
+			int score = c.cost() + (c.isForward() ? 10 : 0);
+			if (score < worstScore) { worstScore = score; worstIdx = i; }
+		}
+		return worstIdx;
 	}
 
 	private boolean hasBackAttackInHand() {
@@ -7240,7 +7459,9 @@ public class MainWindow {
 		p2ForwardPlayedOnTurn.add(gameState.getTurnNumber());
 		p2ForwardDamage.add(0);
 		p2ForwardPowerBoost.add(0);
+		p2ForwardPowerReduction.add(0);
 		p2ForwardTempTraits.add(java.util.EnumSet.noneOf(CardData.Trait.class));
+		p2ForwardRemovedTraits.add(java.util.EnumSet.noneOf(CardData.Trait.class));
 		p2ForwardFrozen.add(false);
 		p2ForwardLabels.add(lbl);
 
@@ -7512,11 +7733,15 @@ public class MainWindow {
 			refreshP2HandCountLabel();
 			for (int i = 0; i < p2ForwardDamage.size(); i++) p2ForwardDamage.set(i, 0);
 			for (int i = 0; i < p2ForwardPowerBoost.size(); i++) p2ForwardPowerBoost.set(i, 0);
+			for (int i = 0; i < p2ForwardPowerReduction.size(); i++) p2ForwardPowerReduction.set(i, 0);
 			p2ForwardTempTraits.forEach(java.util.EnumSet::clear);
+			p2ForwardRemovedTraits.forEach(java.util.EnumSet::clear);
 			for (int i = 0; i < p2ForwardCards.size(); i++) refreshP2ForwardSlot(i);
 			for (int i = 0; i < p1ForwardDamage.size(); i++) p1ForwardDamage.set(i, 0);
 			for (int i = 0; i < p1ForwardPowerBoost.size(); i++) p1ForwardPowerBoost.set(i, 0);
+			for (int i = 0; i < p1ForwardPowerReduction.size(); i++) p1ForwardPowerReduction.set(i, 0);
 			p1ForwardTempTraits.forEach(java.util.EnumSet::clear);
+			p1ForwardRemovedTraits.forEach(java.util.EnumSet::clear);
 			for (int i = 0; i < p1ForwardCards.size(); i++) refreshP1ForwardSlot(i);
 			gameState.advancePhase(); // MAIN_2 → END
 			logEntry("[P2] End Phase");
@@ -7579,17 +7804,7 @@ public class MainWindow {
 					|| p2ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber());
 		}
 
-		/** Returns the index of the least-valuable card in {@code hand} for end-phase discard. */
-		private int pickWorstHandCard(List<CardData> hand) {
-			int worstIdx = 0, worstScore = Integer.MAX_VALUE;
-			for (int i = 0; i < hand.size(); i++) {
-				CardData c = hand.get(i);
-				// Prefer to keep forwards and higher-cost cards; sacrifice backups and cheap cards first
-				int score = c.cost() + (c.isForward() ? 10 : 0);
-				if (score < worstScore) { worstScore = score; worstIdx = i; }
-			}
-			return worstIdx;
-		}
+		private int pickWorstHandCard(List<CardData> hand) { return MainWindow.pickWorstHandCard0(hand); }
 
 		/**
 		 * Finds the best card P2 can play from hand, along with the minimum

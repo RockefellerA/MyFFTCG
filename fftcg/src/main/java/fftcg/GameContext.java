@@ -147,6 +147,27 @@ public interface GameContext {
      */
     void boostSourceForward(CardData source, int amount, EnumSet<CardData.Trait> traits);
 
+    /**
+     * Reduces the target's power by {@code amount} and temporarily removes {@code traits}
+     * until the end of the turn.  If effective power drops to 0 or below the card is sent
+     * to the break zone (not treated as "broken" mechanically — distinction TBD).
+     */
+    void reduceTarget(ForwardTarget t, int amount, EnumSet<CardData.Trait> traits);
+
+    /**
+     * Finds {@code source} on P1's forward zone and applies the same reduction as
+     * {@link #reduceTarget}.  No-op if the source card is not found on the field.
+     */
+    void reduceSourceForward(CardData source, int amount, EnumSet<CardData.Trait> traits);
+
+    /**
+     * Forces the ability-user's opponent to discard {@code count} cards from hand
+     * to their Break Zone.  No CP is generated.
+     * When P1 is the ability user, P2 AI discards automatically (worst cards first).
+     * When P2 is the ability user, P1 is prompted via a selection dialog.
+     */
+    void forceOpponentDiscard(int count);
+
     // ---- Dull effects (used by mass-effect; also available individually) ----
 
     /** Dulls P1's forward at {@code idx} and refreshes its slot. */

@@ -98,6 +98,17 @@ public class ActionResolver {
     );
 
     /**
+     * Matches "Your opponent discards N card(s) [from his/her/their hand]".
+     * <ul>
+     *   <li>Group 1 — number of cards to discard</li>
+     * </ul>
+     */
+    private static final Pattern OPPONENT_DISCARD = Pattern.compile(
+        "(?i)Your\\s+opponent\\s+discards?\\s+(\\d+)\\s+cards?" +
+        "(?:\\s+from\\s+(?:his|her|their)\\s+hand)?[.!]?"
+    );
+
+    /**
      * Matches "it/they gains/gain +N power [, Haste[, First Strike[, and Brave]]] until end of turn".
      * <ul>
      *   <li>Group 1 — numeric power amount</li>
@@ -135,6 +146,51 @@ public class ActionResolver {
     private static final Pattern STANDALONE_POWER_BOOST_UNTIL = Pattern.compile(
         "(?i)Until\\s+(?:the\\s+)?end\\s+of\\s+(?:the\\s+)?turn\\s*,\\s+" +
         "(?<subject>.+?)\\s+gains?\\s+\\+(?<amount>\\d+)\\s+[Pp]ower" +
+        "(?<traits>(?:\\s*,?\\s*(?:and\\s+)?(?:Haste|First\\s+Strike|Brave))*)" +
+        "[.\\s]*$"
+    );
+
+    /**
+     * Matches "it/they loses/lose [N power] [, traits] until end of turn".
+     * Both power and traits are optional, but at least one must be present in practice.
+     * <ul>
+     *   <li>Group 1 — optional numeric power amount (absent = traits-only)</li>
+     *   <li>Group 2 — optional traits string</li>
+     * </ul>
+     */
+    private static final Pattern FOLLOWUP_POWER_REDUCE = Pattern.compile(
+        "(?i)(?:it|they)\\s+loses?\\s+" +
+        "(?:(\\d+)\\s+[Pp]ower)?" +
+        "((?:\\s*,?\\s*(?:and\\s+)?(?:Haste|First\\s+Strike|Brave))*)" +
+        "\\s+until\\s+(?:the\\s+)?end\\s+of\\s+(?:the\\s+)?turn"
+    );
+
+    /**
+     * Matches "Until the end of the turn, it/they loses/lose [N power] [and traits]".
+     * <ul>
+     *   <li>Group 1 — optional numeric power amount</li>
+     *   <li>Group 2 — optional traits string</li>
+     * </ul>
+     */
+    private static final Pattern FOLLOWUP_POWER_REDUCE_UNTIL = Pattern.compile(
+        "(?i)Until\\s+(?:the\\s+)?end\\s+of\\s+(?:the\\s+)?turn\\s*,\\s+" +
+        "(?:it|they)\\s+loses?\\s+" +
+        "(?:(\\d+)\\s+[Pp]ower)?" +
+        "((?:\\s*,?\\s*(?:and\\s+)?(?:Haste|First\\s+Strike|Brave))*)"
+    );
+
+    /**
+     * Matches standalone "Until the end of the turn, &lt;subject&gt; loses [N power] [and traits]".
+     * <ul>
+     *   <li>Group {@code subject} — card name or pronoun before "loses"</li>
+     *   <li>Group {@code amount}  — optional numeric power amount</li>
+     *   <li>Group {@code traits}  — optional traits string</li>
+     * </ul>
+     */
+    private static final Pattern STANDALONE_POWER_REDUCE_UNTIL = Pattern.compile(
+        "(?i)Until\\s+(?:the\\s+)?end\\s+of\\s+(?:the\\s+)?turn\\s*,\\s+" +
+        "(?<subject>.+?)\\s+loses?\\s+" +
+        "(?:(?<amount>\\d+)\\s+[Pp]ower)?" +
         "(?<traits>(?:\\s*,?\\s*(?:and\\s+)?(?:Haste|First\\s+Strike|Brave))*)" +
         "[.\\s]*$"
     );
@@ -209,6 +265,12 @@ public class ActionResolver {
         if (result != null) return result;
 
         result = tryParseStandalonePowerBoostUntil(effectText, source);
+        if (result != null) return result;
+
+        result = tryParseStandalonePowerReduceUntil(effectText, source);
+        if (result != null) return result;
+
+        result = tryParseOpponentDiscard(effectText);
         if (result != null) return result;
 
         // TODO: add more effect parsers here as they are implemented
@@ -513,6 +575,48 @@ public class ActionResolver {
             };
         }
 
+        // --- Power / trait reduce followup (standard order: "it/they loses N power [, traits] until…") ---
+        Matcher reduceM = FOLLOWUP_POWER_REDUCE.matcher(followup);
+        if (reduceM.find()) {
+            int reduction = reduceM.group(1) != null ? Integer.parseInt(reduceM.group(1)) : 0;
+            EnumSet<CardData.Trait> traits = parseTraits(reduceM.group(2));
+            String logSuffix = reduceLogSuffix(reduction, traits);
+            return ctx -> {
+                ctx.logEntry(choosePrefix + logSuffix);
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                sortedByIdxDesc(ts, true) .forEach(t -> ctx.reduceTarget(t, reduction, traits));
+                sortedByIdxDesc(ts, false).forEach(t -> ctx.reduceTarget(t, reduction, traits));
+            };
+        }
+
+        // --- Power / trait reduce followup (until-prefix order: "Until…, it/they loses N power [and traits]") ---
+        Matcher reduceUntilM = FOLLOWUP_POWER_REDUCE_UNTIL.matcher(followup);
+        if (reduceUntilM.find()) {
+            int reduction = reduceUntilM.group(1) != null ? Integer.parseInt(reduceUntilM.group(1)) : 0;
+            EnumSet<CardData.Trait> traits = parseTraits(reduceUntilM.group(2));
+            String logSuffix = reduceLogSuffix(reduction, traits);
+            return ctx -> {
+                ctx.logEntry(choosePrefix + logSuffix);
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                sortedByIdxDesc(ts, true) .forEach(t -> ctx.reduceTarget(t, reduction, traits));
+                sortedByIdxDesc(ts, false).forEach(t -> ctx.reduceTarget(t, reduction, traits));
+            };
+        }
+
+        // --- Opponent discard followup ---
+        Matcher discardM = OPPONENT_DISCARD.matcher(followup);
+        if (discardM.find()) {
+            int count = Integer.parseInt(discardM.group(1));
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — Opponent discards " + count);
+                ctx.forceOpponentDiscard(count);
+            };
+        }
+
         // Recognised "Choose" header but followup not yet implemented
         return ctx -> ctx.logEntry(
                 "[ActionResolver] Choose effect — followup not yet implemented: " + followup);
@@ -576,6 +680,61 @@ public class ActionResolver {
         return ctx -> {
             ctx.logEntry(source.name() + logSuffix);
             ctx.boostSourceForward(source, boost, traits);
+        };
+    }
+
+    /**
+     * Builds a log suffix like " — Lose 1000 power, Haste, and First Strike until end of turn".
+     * Power and traits are listed in order; either may be absent.
+     */
+    private static String reduceLogSuffix(int amount, EnumSet<CardData.Trait> traits) {
+        List<String> parts = new ArrayList<>();
+        if (amount > 0) parts.add(amount + " power");
+        if (traits.contains(CardData.Trait.HASTE))        parts.add("Haste");
+        if (traits.contains(CardData.Trait.FIRST_STRIKE)) parts.add("First Strike");
+        if (traits.contains(CardData.Trait.BRAVE))        parts.add("Brave");
+        StringBuilder sb = new StringBuilder(" — Lose ");
+        if (parts.size() == 1) {
+            sb.append(parts.get(0));
+        } else if (parts.size() == 2) {
+            sb.append(parts.get(0)).append(" and ").append(parts.get(1));
+        } else {
+            for (int i = 0; i < parts.size() - 1; i++) sb.append(parts.get(i)).append(", ");
+            sb.append("and ").append(parts.get(parts.size() - 1));
+        }
+        return sb.append(" until end of turn").toString();
+    }
+
+    /**
+     * Parses "Until the end of the turn, &lt;cardName&gt; loses [N power] [and traits]" as a
+     * standalone self-debuff on the source card.  Pronoun subjects are ignored here.
+     */
+    private static Consumer<GameContext> tryParseStandalonePowerReduceUntil(
+            String text, CardData source) {
+        if (source == null) return null;
+        Matcher m = STANDALONE_POWER_REDUCE_UNTIL.matcher(text);
+        if (!m.find()) return null;
+        String subject = m.group("subject").trim();
+        if (subject.equalsIgnoreCase("it") || subject.equalsIgnoreCase("they")) return null;
+        if (!subject.equalsIgnoreCase(source.name())) return null;
+        String amountStr = m.group("amount");
+        int reduction = amountStr != null ? Integer.parseInt(amountStr) : 0;
+        EnumSet<CardData.Trait> traits = parseTraits(m.group("traits"));
+        String logSuffix = reduceLogSuffix(reduction, traits);
+        return ctx -> {
+            ctx.logEntry(source.name() + logSuffix);
+            ctx.reduceSourceForward(source, reduction, traits);
+        };
+    }
+
+    /** Parses "Your opponent discards N card(s) [from his/her/their hand]" as a standalone effect. */
+    private static Consumer<GameContext> tryParseOpponentDiscard(String text) {
+        Matcher m = OPPONENT_DISCARD.matcher(text);
+        if (!m.find()) return null;
+        int count = Integer.parseInt(m.group(1));
+        return ctx -> {
+            ctx.logEntry("Effect: Opponent discards " + count + " card(s)");
+            ctx.forceOpponentDiscard(count);
         };
     }
 
