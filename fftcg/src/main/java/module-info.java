@@ -1,5 +1,5 @@
 /**
- * @author arkeb
+ * @author Andrew Rockefeller
  *
  */
 module fftcg {
@@ -8,4 +8,7 @@ module fftcg {
 	requires java.sql;
 	requires org.json;
 	requires org.xerial.sqlitejdbc;
+
+	exports fftcg;
+	exports scraper;
 }
