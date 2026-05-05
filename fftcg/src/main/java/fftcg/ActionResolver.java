@@ -821,7 +821,7 @@ public class ActionResolver {
             sb.append(parts.get(0));
         } else if (parts.size() == 2) {
             sb.append(parts.get(0)).append(" and ").append(parts.get(1));
-        } else {
+        } else if (parts.size() >= 3) {
             for (int i = 0; i < parts.size() - 1; i++) sb.append(parts.get(i)).append(", ");
             sb.append("and ").append(parts.get(parts.size() - 1));
         }
