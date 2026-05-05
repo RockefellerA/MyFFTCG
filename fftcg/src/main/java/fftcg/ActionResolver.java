@@ -118,6 +118,16 @@ public class ActionResolver {
         "(?i)Add\\s+(?:it|them)\\s+to\\s+your\\s+hand"
     );
 
+    /** Matches "it cannot block this turn". */
+    private static final Pattern FOLLOWUP_CANNOT_BLOCK = Pattern.compile(
+        "(?i)it\\s+cannot\\s+block\\s+this\\s+turn\\.?"
+    );
+
+    /** Matches "if possible, it must block this turn". */
+    private static final Pattern FOLLOWUP_MUST_BLOCK = Pattern.compile(
+        "(?i)if\\s+possible[,]?\\s+it\\s+must\\s+block\\s+this\\s+turn\\.?"
+    );
+
     /**
      * Matches "Your opponent discards N card(s) [from his/her/their hand]".
      * <ul>
@@ -465,6 +475,8 @@ public class ActionResolver {
      *   <li>"Remove it/them from the game" — removes each chosen target from the game</li>
      *   <li>"Play it/them onto the field"  — moves chosen targets from their zone onto the field</li>
      *   <li>"Add it/them to your hand"     — moves chosen targets to P1's hand</li>
+     *   <li>"it cannot block this turn"    — marks chosen forward as ineligible to block this turn</li>
+     *   <li>"If possible, it must block this turn" — marks chosen forward as required to block if eligible</li>
      * </ul>
      */
     private static Consumer<GameContext> tryParseChooseCharacter(String text, CardData source) {
@@ -649,6 +661,36 @@ public class ActionResolver {
                         costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.addTargetToHand(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.addTargetToHand(t));
+            };
+        }
+
+        // --- Cannot block followup ---
+        if (FOLLOWUP_CANNOT_BLOCK.matcher(followup).find()) {
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — Cannot block this turn");
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                for (ForwardTarget t : ts) {
+                    if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
+                    if (t.isP1()) ctx.setP1ForwardCannotBlock(t.idx());
+                    else          ctx.setP2ForwardCannotBlock(t.idx());
+                }
+            };
+        }
+
+        // --- Must block followup ---
+        if (FOLLOWUP_MUST_BLOCK.matcher(followup).find()) {
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — Must block if possible this turn");
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                for (ForwardTarget t : ts) {
+                    if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
+                    if (t.isP1()) ctx.setP1ForwardMustBlock(t.idx());
+                    else          ctx.setP2ForwardMustBlock(t.idx());
+                }
             };
         }
 

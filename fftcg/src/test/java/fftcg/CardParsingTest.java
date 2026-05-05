@@ -25,6 +25,10 @@ public class CardParsingTest {
         int partiallyParsed = 0;
         int noneParsed      = 0;
 
+        String exampleFully   = null;
+        String examplePartial = null;
+        String exampleNone    = null;
+
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + dbFile.getAbsolutePath());
              Statement  stmt = conn.createStatement();
              ResultSet  rs   = stmt.executeQuery(
@@ -72,10 +76,16 @@ public class CardParsingTest {
 
                 if (parsed == abilities.size()) {
                     fullyParsed++;
+                    if (exampleFully == null)
+                        exampleFully = formatExample(source.name(),  abilities, source, true);
                 } else if (parsed > 0) {
                     partiallyParsed++;
+                    if (examplePartial == null)
+                        examplePartial = formatExample(source.name(), abilities, source, false);
                 } else {
                     noneParsed++;
+                    if (exampleNone == null)
+                        exampleNone = formatExample(source.name(), abilities, source, false);
                 }
             }
         }
@@ -89,6 +99,19 @@ public class CardParsingTest {
         System.out.printf("  Partially parsed:   %5d  (%.1f%%)%n", partiallyParsed,  pct(partiallyParsed,  withAbilities));
         System.out.printf("  None parsed:        %5d  (%.1f%%)%n", noneParsed,       pct(noneParsed,       withAbilities));
         System.out.println();
+        System.out.printf("--- Example: Fully parsed ---%n%s%n", exampleFully   != null ? exampleFully   : "(none)");
+        System.out.printf("--- Example: Partially parsed ---%n%s%n", examplePartial != null ? examplePartial : "(none)");
+        System.out.printf("--- Example: Unrecognized ---%n%s%n",    exampleNone    != null ? exampleNone    : "(none)");
+    }
+
+    private static String formatExample(String name, List<ActionAbility> abilities, CardData source, boolean allParsed) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("  Card: ").append(name).append('\n');
+        for (ActionAbility ab : abilities) {
+            boolean ok = ActionResolver.parse(ab.effectText(), source) != null;
+            sb.append("  [").append(ok ? "OK" : "--").append("] ").append(ab.effectText()).append('\n');
+        }
+        return sb.toString();
     }
 
     private static double pct(int n, int total) {

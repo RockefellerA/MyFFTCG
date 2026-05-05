@@ -213,6 +213,20 @@ public interface GameContext {
     /** Freezes P2's forward at {@code idx} (blue tint; skips activation next Active Phase). */
     void freezeP2Forward(int idx);
 
+    // ---- Block restrictions -------------------------------------------------
+
+    /** Prevents P1's forward at {@code idx} from being chosen as a blocker this turn. */
+    void setP1ForwardCannotBlock(int idx);
+
+    /** Prevents P2's forward at {@code idx} from being chosen as a blocker this turn. */
+    void setP2ForwardCannotBlock(int idx);
+
+    /** Requires P1's forward at {@code idx} to block this turn if it is eligible to do so. */
+    void setP1ForwardMustBlock(int idx);
+
+    /** Requires P2's forward at {@code idx} to block this turn if it is eligible to do so. */
+    void setP2ForwardMustBlock(int idx);
+
     // ---- Attack / block state queries ---------------------------------------
 
     /** Returns {@code true} if P1's forward at {@code idx} is currently declared as an attacker. */

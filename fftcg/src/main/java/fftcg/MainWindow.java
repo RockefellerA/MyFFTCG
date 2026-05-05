@@ -156,6 +156,12 @@ public class MainWindow {
 	private final List<java.util.EnumSet<CardData.Trait>> p2ForwardTempTraits    = new ArrayList<>();
 	private final List<java.util.EnumSet<CardData.Trait>> p1ForwardRemovedTraits = new ArrayList<>();
 	private final List<java.util.EnumSet<CardData.Trait>> p2ForwardRemovedTraits = new ArrayList<>();
+	/** Forwards that may not be chosen as a blocker for the remainder of this turn. */
+	private final Set<Integer> p1ForwardCannotBlock = new HashSet<>();
+	private final Set<Integer> p2ForwardCannotBlock = new HashSet<>();
+	/** Forwards that must be chosen as a blocker this turn if they are eligible. */
+	private final Set<Integer> p1ForwardMustBlock   = new HashSet<>();
+	private final Set<Integer> p2ForwardMustBlock   = new HashSet<>();
 	private final boolean[]       p1BackupFrozen       = new boolean[5];
 	private final boolean[]       p2BackupFrozen       = new boolean[5];
 	private final List<Boolean>   p1MonsterFrozen      = new ArrayList<>();
@@ -1258,6 +1264,8 @@ public class MainWindow {
                             for (int i = 0; i < p2ForwardPowerReduction.size(); i++) p2ForwardPowerReduction.set(i, 0);
                             p2ForwardTempTraits.forEach(java.util.EnumSet::clear);
                             p2ForwardRemovedTraits.forEach(java.util.EnumSet::clear);
+                            p1ForwardCannotBlock.clear(); p2ForwardCannotBlock.clear();
+                            p1ForwardMustBlock.clear();   p2ForwardMustBlock.clear();
                             for (int i = 0; i < p2ForwardCards.size(); i++) refreshP2ForwardSlot(i);
                             showEndPhaseDiscardDialog();
                             onNextPhase();             // END â†’ ACTIVE (auto-advance)
@@ -1844,6 +1852,17 @@ public class MainWindow {
 	// -------------------------------------------------------------------------
 
 	/** Removes P1's forward at {@code idx} from the field and sends it to P1's Break Zone. */
+	/** Removes {@code removedIdx} from {@code set} and decrements all higher indices by 1. */
+	private static void shiftBlockSet(Set<Integer> set, int removedIdx) {
+		Set<Integer> updated = new HashSet<>();
+		for (int i : set) {
+			if      (i < removedIdx) updated.add(i);
+			else if (i > removedIdx) updated.add(i - 1);
+		}
+		set.clear();
+		set.addAll(updated);
+	}
+
 	private void breakP1Forward(int idx) {
 		if (idx < 0 || idx >= p1ForwardCards.size()) return;
 		CardData card    = p1ForwardCards.get(idx);
@@ -1874,6 +1893,8 @@ public class MainWindow {
 		p1ForwardPrimedTop.remove(idx);
 		p1ForwardFrozen.remove(idx);
 		p1ForwardLabels.remove(idx);
+		shiftBlockSet(p1ForwardCannotBlock, idx);
+		shiftBlockSet(p1ForwardMustBlock,   idx);
 
 		if (p1ForwardPanel != null) {
 			p1ForwardPanel.removeAll();
@@ -1932,6 +1953,8 @@ public class MainWindow {
 		p2ForwardRemovedTraits.remove(idx);
 		p2ForwardFrozen.remove(idx);
 		p2ForwardLabels.remove(idx);
+		shiftBlockSet(p2ForwardCannotBlock, idx);
+		shiftBlockSet(p2ForwardMustBlock,   idx);
 
 		if (p2ForwardPanel != null) {
 			p2ForwardPanel.removeAll();
@@ -2054,8 +2077,28 @@ public class MainWindow {
 	 * Strategy: block with the highest-power active forward that can survive (power >= attacker) or trade evenly.
 	 */
 	private int p2ChooseBlocker(int effectiveAttackerPower) {
+		// Honour must-block forwards first: if any eligible must-block forward exists, the AI
+		// must use one of them (preferring one that can survive the attack).
+		if (!p2ForwardMustBlock.isEmpty()) {
+			int bestIdx = -1, bestPower = -1;
+			for (int i = 0; i < p2ForwardStates.size(); i++) {
+				if (!p2ForwardMustBlock.contains(i))   continue;
+				if (p2ForwardCannotBlock.contains(i))  continue;
+				if (p2ForwardStates.get(i) != CardState.ACTIVE) continue;
+				int effPow = effectiveP2ForwardPower(i);
+				// Prefer a blocker that can survive; among those, the weakest (to preserve stronger ones)
+				if (effPow >= effectiveAttackerPower && (bestIdx < 0 || effPow < bestPower)) {
+					bestPower = effPow;
+					bestIdx = i;
+				}
+			}
+			if (bestIdx >= 0) return bestIdx;
+			// Fall through: all must-block forwards are ineligible — constraint is lifted
+		}
+
 		int bestIdx = -1, bestPower = -1;
 		for (int i = 0; i < p2ForwardStates.size(); i++) {
+			if (p2ForwardCannotBlock.contains(i)) continue;
 			if (p2ForwardStates.get(i) != CardState.ACTIVE) continue;
 			int effPow = effectiveP2ForwardPower(i);
 			if (effPow >= effectiveAttackerPower && effPow > bestPower) {
@@ -2088,8 +2131,23 @@ public class MainWindow {
 			CardState s = p1ForwardStates.get(i);
 			// ACTIVE forwards can always block; BRAVE_ATTACKED forwards can block because
 			// Brave allows acting again even after attacking
-			if (s == CardState.ACTIVE || s == CardState.BRAVE_ATTACKED) eligible.add(i);
+			if ((s == CardState.ACTIVE || s == CardState.BRAVE_ATTACKED)
+					&& !p1ForwardCannotBlock.contains(i))
+				eligible.add(i);
 		}
+
+		// If any eligible forward has a must-block restriction, restrict choices to those forwards
+		// and prevent the player from declining to block.
+		boolean mustBlockOnly = false;
+		if (!p1ForwardMustBlock.isEmpty()) {
+			List<Integer> mustEligible = new ArrayList<>();
+			for (int i : eligible) if (p1ForwardMustBlock.contains(i)) mustEligible.add(i);
+			if (!mustEligible.isEmpty()) {
+				eligible = mustEligible;
+				mustBlockOnly = true;
+			}
+		}
+
 		if (eligible.isEmpty()) {
 			p1TakeDamage();
 			onDone.run();
@@ -2123,10 +2181,12 @@ public class MainWindow {
 		}
 		panel.add(forwardPanel, BorderLayout.CENTER);
 
-		JButton noBlockBtn = new JButton("No Block (Take Damage)");
-		noBlockBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
-		noBlockBtn.addActionListener(ae -> dlg.dispose());
-		panel.add(noBlockBtn, BorderLayout.SOUTH);
+		if (!mustBlockOnly) {
+			JButton noBlockBtn = new JButton("No Block (Take Damage)");
+			noBlockBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+			noBlockBtn.addActionListener(ae -> dlg.dispose());
+			panel.add(noBlockBtn, BorderLayout.SOUTH);
+		}
 
 		dlg.setContentPane(panel);
 		dlg.pack();
@@ -5375,6 +5435,19 @@ public class MainWindow {
 				refreshP2ForwardSlot(idx);
 			}
 
+			@Override public void setP1ForwardCannotBlock(int idx) {
+				if (idx >= 0 && idx < p1ForwardCards.size()) p1ForwardCannotBlock.add(idx);
+			}
+			@Override public void setP2ForwardCannotBlock(int idx) {
+				if (idx >= 0 && idx < p2ForwardCards.size()) p2ForwardCannotBlock.add(idx);
+			}
+			@Override public void setP1ForwardMustBlock(int idx) {
+				if (idx >= 0 && idx < p1ForwardCards.size()) p1ForwardMustBlock.add(idx);
+			}
+			@Override public void setP2ForwardMustBlock(int idx) {
+				if (idx >= 0 && idx < p2ForwardCards.size()) p2ForwardMustBlock.add(idx);
+			}
+
 			// P1 attack selection is tracked; P2 attacking and all blocking states are not
 			// yet persisted outside of momentary combat resolution.
 			@Override public boolean isP1ForwardAttacking(int idx) { return p1AttackSelection.contains(idx); }
@@ -7804,6 +7877,8 @@ public class MainWindow {
 			p1ForwardTempTraits.forEach(java.util.EnumSet::clear);
 			p1ForwardRemovedTraits.forEach(java.util.EnumSet::clear);
 			for (int i = 0; i < p1ForwardCards.size(); i++) refreshP1ForwardSlot(i);
+			p1ForwardCannotBlock.clear(); p2ForwardCannotBlock.clear();
+			p1ForwardMustBlock.clear();   p2ForwardMustBlock.clear();
 			gameState.advancePhase(); // MAIN_2 â†’ END
 			logEntry("[P2] End Phase");
 			gameState.advancePhase(); // END â†’ ACTIVE (switches to P1, increments turn)
