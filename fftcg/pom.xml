@@ -28,10 +28,6 @@
         <version>3.5.1</version>
         <configuration>
           <mainClass>fftcg.MainWindow</mainClass>
-          <jvmArgs>
-            <jvmArg>--enable-native-access=ALL-UNNAMED</jvmArg>
-            <jvmArg>--enable-native-access=org.xerial.sqlitejdbc</jvmArg>
-          </jvmArgs>
         </configuration>
       </plugin>
       <plugin>
