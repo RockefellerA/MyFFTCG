@@ -77,7 +77,7 @@ public class CardParsingTest {
                 if (parsed == abilities.size()) {
                     fullyParsed++;
                     if (exampleFully == null)
-                        exampleFully = formatExample(source.name(),  abilities, source, true);
+                        exampleFully = formatExample(source.name(), abilities, source, true);
                 } else if (parsed > 0) {
                     partiallyParsed++;
                     if (examplePartial == null)
