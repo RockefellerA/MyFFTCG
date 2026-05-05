@@ -186,6 +186,19 @@ public interface GameContext {
      */
     void forceOpponentDiscard(int count);
 
+    /**
+     * Draws {@code count} cards from the top of the ability user's deck into their hand.
+     */
+    void drawCards(int count);
+
+    /**
+     * Prompts the ability user to discard {@code count} cards from their hand to
+     * their Break Zone.  No CP is generated.
+     * When P1 is the ability user, a selection dialog is shown.
+     * When P2 is the ability user, the AI discards automatically (worst cards first).
+     */
+    void selfDiscard(int count);
+
     // ---- Dull effects (used by mass-effect; also available individually) ----
 
     /** Dulls P1's forward at {@code idx} and refreshes its slot. */

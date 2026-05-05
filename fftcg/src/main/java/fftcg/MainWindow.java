@@ -5714,6 +5714,34 @@ public class MainWindow {
 				}
 			}
 
+			@Override public void drawCards(int count) {
+				if (isP1) {
+					gameState.drawToHand(count);
+					refreshP1HandLabel();
+					refreshP1DeckLabel();
+				} else {
+					gameState.drawP2ToHand(count);
+					refreshP2DeckLabel();
+					refreshP2HandCountLabel();
+				}
+			}
+
+			@Override public void selfDiscard(int count) {
+				if (isP1) {
+					showForcedDiscardDialog(count);
+				} else {
+					List<CardData> hand = gameState.getP2Hand();
+					int actual = Math.min(count, hand.size());
+					for (int i = 0; i < actual; i++) {
+						int idx = pickWorstHandCard0(hand);
+						CardData d = gameState.breakP2FromHand(idx);
+						if (d != null) logEntry("[P2] Discards " + d.name());
+					}
+					refreshP2HandCountLabel();
+					refreshP2BreakLabel();
+				}
+			}
+
 			@Override
 			public void applyMassFieldEffect(GameContext.MassAction action,
 					boolean forwards, boolean backups, boolean monsters,

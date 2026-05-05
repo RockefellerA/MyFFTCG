@@ -255,6 +255,17 @@ public class ActionResolver {
     );
 
     /**
+     * Matches "Draw N card(s)[, then discard M card(s)]".
+     * <ul>
+     *   <li>Group 1 — number of cards to draw</li>
+     *   <li>Group 2 — optional discard count afterward (absent = draw only)</li>
+     * </ul>
+     */
+    private static final Pattern DRAW_CARDS = Pattern.compile(
+        "(?i)Draw\\s+(\\d+)\\s+cards?(?:\\s*[,.]?\\s*then\\s+discard\\s+(\\d+)\\s+cards?)?[.!]?"
+    );
+
+    /**
      * Matches: "Deal X damage to all [the] [condition] Forwards[.] [opponent controls]"
      * <ul>
      *   <li>Group {@code amount}    — numeric damage value</li>
@@ -311,6 +322,9 @@ public class ActionResolver {
         if (result != null) return result;
 
         result = tryParseOpponentDiscard(effectText);
+        if (result != null) return result;
+
+        result = tryParseDrawCards(effectText);
         if (result != null) return result;
 
         // TODO: add more effect parsers here as they are implemented
@@ -854,6 +868,26 @@ public class ActionResolver {
         return ctx -> {
             ctx.logEntry(source.name() + logSuffix);
             ctx.boostSourceForward(source, boost, traits);
+        };
+    }
+
+    /** Parses "Draw N card(s)[, then discard M card(s)]" as a standalone effect. */
+    private static Consumer<GameContext> tryParseDrawCards(String text) {
+        Matcher m = DRAW_CARDS.matcher(text);
+        if (!m.find()) return null;
+        int drawCount = Integer.parseInt(m.group(1));
+        String discardStr = m.group(2);
+        if (discardStr == null) {
+            return ctx -> {
+                ctx.logEntry("Effect: Draw " + drawCount + " card(s)");
+                ctx.drawCards(drawCount);
+            };
+        }
+        int discardCount = Integer.parseInt(discardStr);
+        return ctx -> {
+            ctx.logEntry("Effect: Draw " + drawCount + ", then discard " + discardCount);
+            ctx.drawCards(drawCount);
+            ctx.selfDiscard(discardCount);
         };
     }
 
