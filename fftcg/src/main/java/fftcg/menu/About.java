@@ -49,7 +49,9 @@ public class About extends JDialog {
 		{
 			JPanel buttonPane = new JPanel();
 			buttonPane.setLayout(new FlowLayout(FlowLayout.RIGHT));
-			JLabel lblNewLabel = new JLabel("<html>Author: Andrew Rockefeller © 2023<br/>Pixel NES font by Neale Davidson</html>");
+			JLabel lblNewLabel = new JLabel("<html>Author: Andrew Rockefeller © 2023<br/>" +
+			"Pixel NES font by Neale Davidson<br/><br/>" +
+			"This is an unofficial fan tool — it is not affiliated with Square Enix.</html>");
 			lblNewLabel.setHorizontalAlignment(SwingConstants.CENTER);
 			getContentPane().add(lblNewLabel, BorderLayout.CENTER);
 		}

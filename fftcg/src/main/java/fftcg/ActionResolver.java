@@ -1028,14 +1028,14 @@ public class ActionResolver {
         if (traits.contains(CardData.Trait.HASTE))        names.add("Haste");
         if (traits.contains(CardData.Trait.FIRST_STRIKE)) names.add("First Strike");
         if (traits.contains(CardData.Trait.BRAVE))        names.add("Brave");
-        if (names.size() == 1) {
-            sb.append(" and ").append(names.get(0));
-        } else if (names.size() == 2) {
-            sb.append(", ").append(names.get(0)).append(", and ").append(names.get(1));
-        } else if (names.size() == 3) {
-            sb.append(", ").append(names.get(0))
-              .append(", ").append(names.get(1))
-              .append(", and ").append(names.get(2));
+        switch (names.size()) {
+            case 1 -> sb.append(" and ").append(names.get(0));
+            case 2 -> sb.append(", ").append(names.get(0)).append(", and ").append(names.get(1));
+            case 3 -> sb.append(", ").append(names.get(0))
+                        .append(", ").append(names.get(1))
+                        .append(", and ").append(names.get(2));
+            default -> {
+            }
         }
         sb.append(" until end of turn");
         return sb.toString();
