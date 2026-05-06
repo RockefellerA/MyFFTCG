@@ -5598,6 +5598,15 @@ public class MainWindow {
 					p2ForwardCannotBlockPersistent.add(idx);
 				}
 			}
+			@Override public boolean askTopOrBottom(String cardName) {
+				Object[] options = { "Top", "Bottom" };
+				int result = JOptionPane.showOptionDialog(frame,
+						"Place " + cardName + " at the top or bottom of the deck?",
+						"Choose Deck Position",
+						JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE,
+						null, options, options[0]);
+				return result != 1;
+			}
 			@Override public void returnP1ForwardToDeckBottom(int idx) { returnP1ForwardToDeck(idx, true);  }
 			@Override public void returnP2ForwardToDeckBottom(int idx) { returnP2ForwardToDeck(idx, true);  }
 			@Override public void returnP1ForwardToDeckTop(int idx)    { returnP1ForwardToDeck(idx, false); }

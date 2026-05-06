@@ -128,6 +128,11 @@ public class ActionResolver {
         "(?i)if\\s+possible[,]?\\s+it\\s+must\\s+block\\s+this\\s+turn\\.?"
     );
 
+    /** Matches "Put it at the top or bottom of its owner's deck." — player chooses placement. */
+    private static final Pattern FOLLOWUP_PUT_TOP_OR_BOTTOM_OF_DECK = Pattern.compile(
+        "(?i)Put\\s+it\\s+at\\s+the\\s+top\\s+or\\s+bottom\\s+of\\s+its\\s+owner's\\s+deck\\.?"
+    );
+
     /** Matches "Put it at the bottom of its owner's deck." */
     private static final Pattern FOLLOWUP_PUT_BOTTOM_OF_DECK = Pattern.compile(
         "(?i)Put\\s+it\\s+at\\s+the\\s+bottom\\s+of\\s+its\\s+owner's\\s+deck\\.?"
@@ -511,6 +516,7 @@ public class ActionResolver {
      *   <li>"Add it/them to your hand"     — moves chosen targets to P1's hand</li>
      *   <li>"it cannot block this turn"    — marks chosen forward as ineligible to block this turn</li>
      *   <li>"If possible, it must block this turn" — marks chosen forward as required to block if eligible</li>
+     *   <li>"Put it at the top or bottom of its owner's deck" — player chooses placement</li>
      * </ul>
      */
     private static Consumer<GameContext> tryParseChooseCharacter(String text, CardData source) {
@@ -695,6 +701,30 @@ public class ActionResolver {
                         costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.addTargetToHand(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.addTargetToHand(t));
+            };
+        }
+
+        // --- Put at top or bottom of owner's deck followup (player chooses) ---
+        if (FOLLOWUP_PUT_TOP_OR_BOTTOM_OF_DECK.matcher(followup).find()) {
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — Put at top or bottom of owner's deck (player chooses)");
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                for (ForwardTarget t : ts) {
+                    if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
+                    if (t.isP1()) {
+                        String cardName = ctx.p1Forward(t.idx()).name();
+                        boolean toTop = ctx.askTopOrBottom(cardName);
+                        if (toTop) ctx.returnP1ForwardToDeckTop(t.idx());
+                        else       ctx.returnP1ForwardToDeckBottom(t.idx());
+                    } else {
+                        String cardName = ctx.p2Forward(t.idx()).name();
+                        boolean toTop = ctx.askTopOrBottom(cardName);
+                        if (toTop) ctx.returnP2ForwardToDeckTop(t.idx());
+                        else       ctx.returnP2ForwardToDeckBottom(t.idx());
+                    }
+                }
             };
         }
 

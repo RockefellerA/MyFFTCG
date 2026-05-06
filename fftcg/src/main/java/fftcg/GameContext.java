@@ -229,6 +229,14 @@ public interface GameContext {
 
     // ---- Return to deck -----------------------------------------------------
 
+    /**
+     * Prompts the active player to choose whether {@code cardName} should be placed on top
+     * or at the bottom of the deck.
+     *
+     * @return {@code true} if the player chose "Top", {@code false} for "Bottom"
+     */
+    boolean askTopOrBottom(String cardName);
+
     /** Removes P1's forward at {@code idx} from the field and places it at the bottom of P1's deck. */
     void returnP1ForwardToDeckBottom(int idx);
 
