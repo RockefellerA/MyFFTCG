@@ -325,6 +325,17 @@ public class ActionResolver {
     );
 
     /**
+     * Matches "Discard N card(s)[,] then draw M card(s)".
+     * <ul>
+     *   <li>Group 1 — number of cards to discard</li>
+     *   <li>Group 2 — number of cards to draw afterward</li>
+     * </ul>
+     */
+    private static final Pattern DISCARD_THEN_DRAW = Pattern.compile(
+        "(?i)Discard\\s+(\\d+)\\s+cards?[,.]?\\s+then\\s+draw\\s+(\\d+)\\s+cards?[.!]?"
+    );
+
+    /**
      * Matches: "Deal X damage to all [the] [condition] Forwards[.] [opponent controls]"
      * <ul>
      *   <li>Group {@code amount}    — numeric damage value</li>
@@ -384,6 +395,9 @@ public class ActionResolver {
         if (result != null) return result;
 
         result = tryParseDrawCards(effectText);
+        if (result != null) return result;
+
+        result = tryParseDiscardThenDraw(effectText);
         if (result != null) return result;
 
         // TODO: add more effect parsers here as they are implemented
@@ -1125,6 +1139,19 @@ public class ActionResolver {
             ctx.logEntry("Effect: Draw " + drawCount + ", then discard " + discardCount);
             ctx.drawCards(drawCount);
             ctx.selfDiscard(discardCount);
+        };
+    }
+
+    /** Parses "Discard N card(s), then draw M card(s)" as a standalone effect. */
+    private static Consumer<GameContext> tryParseDiscardThenDraw(String text) {
+        Matcher m = DISCARD_THEN_DRAW.matcher(text);
+        if (!m.find()) return null;
+        int discardCount = Integer.parseInt(m.group(1));
+        int drawCount    = Integer.parseInt(m.group(2));
+        return ctx -> {
+            ctx.logEntry("Effect: Discard " + discardCount + ", then draw " + drawCount);
+            ctx.selfDiscard(discardCount);
+            ctx.drawCards(drawCount);
         };
     }
 
