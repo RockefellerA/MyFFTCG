@@ -128,6 +128,30 @@ public class ActionResolver {
         "(?i)if\\s+possible[,]?\\s+it\\s+must\\s+block\\s+this\\s+turn\\.?"
     );
 
+    /** Matches "it cannot attack this turn" or "they cannot attack this turn". */
+    private static final Pattern FOLLOWUP_CANNOT_ATTACK = Pattern.compile(
+        "(?i)(?:it|they)\\s+cannot\\s+attack\\s+this\\s+turn\\.?"
+    );
+
+    /** Matches "it must attack this turn if possible". */
+    private static final Pattern FOLLOWUP_MUST_ATTACK = Pattern.compile(
+        "(?i)it\\s+must\\s+attack\\s+this\\s+turn\\s+if\\s+possible\\.?"
+    );
+
+    /** Matches "it/they cannot attack or block this turn". */
+    private static final Pattern FOLLOWUP_CANNOT_ATTACK_OR_BLOCK = Pattern.compile(
+        "(?i)(?:it|they)\\s+cannot\\s+attack\\s+or\\s+block\\s+this\\s+turn\\.?"
+    );
+
+    /**
+     * Matches "it cannot attack or block until the end of your opponent's turn" or
+     * "…until the end of the next turn".
+     */
+    private static final Pattern FOLLOWUP_CANNOT_ATTACK_OR_BLOCK_PERSISTENT = Pattern.compile(
+        "(?i)it\\s+cannot\\s+attack\\s+or\\s+block\\s+until\\s+the\\s+end\\s+of\\s+" +
+        "(?:your\\s+opponent's|the\\s+next)\\s+turn\\.?"
+    );
+
     /**
      * Matches "Your opponent discards N card(s) [from his/her/their hand]".
      * <ul>
@@ -690,6 +714,66 @@ public class ActionResolver {
                     if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
                     if (t.isP1()) ctx.setP1ForwardMustBlock(t.idx());
                     else          ctx.setP2ForwardMustBlock(t.idx());
+                }
+            };
+        }
+
+        // --- Cannot attack (this turn) followup ---
+        if (FOLLOWUP_CANNOT_ATTACK.matcher(followup).find()) {
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — Cannot attack this turn");
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                for (ForwardTarget t : ts) {
+                    if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
+                    if (t.isP1()) ctx.setP1ForwardCannotAttack(t.idx());
+                    else          ctx.setP2ForwardCannotAttack(t.idx());
+                }
+            };
+        }
+
+        // --- Must attack (this turn) followup ---
+        if (FOLLOWUP_MUST_ATTACK.matcher(followup).find()) {
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — Must attack if possible this turn");
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                for (ForwardTarget t : ts) {
+                    if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
+                    if (t.isP1()) ctx.setP1ForwardMustAttack(t.idx());
+                    else          ctx.setP2ForwardMustAttack(t.idx());
+                }
+            };
+        }
+
+        // --- Cannot attack or block (this turn) followup ---
+        if (FOLLOWUP_CANNOT_ATTACK_OR_BLOCK.matcher(followup).find()) {
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — Cannot attack or block this turn");
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                for (ForwardTarget t : ts) {
+                    if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
+                    if (t.isP1()) { ctx.setP1ForwardCannotAttack(t.idx()); ctx.setP1ForwardCannotBlock(t.idx()); }
+                    else          { ctx.setP2ForwardCannotAttack(t.idx()); ctx.setP2ForwardCannotBlock(t.idx()); }
+                }
+            };
+        }
+
+        // --- Cannot attack or block until end of opponent's/next turn (persistent) followup ---
+        if (FOLLOWUP_CANNOT_ATTACK_OR_BLOCK_PERSISTENT.matcher(followup).find()) {
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — Cannot attack or block until end of next turn");
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                for (ForwardTarget t : ts) {
+                    if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
+                    if (t.isP1()) ctx.setP1ForwardCannotAttackOrBlockPersistent(t.idx());
+                    else          ctx.setP2ForwardCannotAttackOrBlockPersistent(t.idx());
                 }
             };
         }

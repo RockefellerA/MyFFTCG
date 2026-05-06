@@ -145,7 +145,7 @@ public class MainWindow {
 	private final List<Integer>   p1ForwardDamage       = new ArrayList<>();
 	/** Top card of a Primed stack; {@code null} at each index means not primed. */
 	private final List<CardData>  p1ForwardPrimedTop   = new ArrayList<>();
-	/** Per-slot frozen flags â€” independent of CardState (a card may be Dulled AND frozen). */
+	/** Per-slot frozen flags — independent of CardState (a card may be Dulled AND frozen). */
 	private final List<Boolean>   p1ForwardFrozen      = new ArrayList<>();
 	private final List<Boolean>   p2ForwardFrozen      = new ArrayList<>();
 	private final List<Integer>                           p1ForwardPowerBoost     = new ArrayList<>();
@@ -162,6 +162,18 @@ public class MainWindow {
 	/** Forwards that must be chosen as a blocker this turn if they are eligible. */
 	private final Set<Integer> p1ForwardMustBlock   = new HashSet<>();
 	private final Set<Integer> p2ForwardMustBlock   = new HashSet<>();
+	/** Forwards that may not attack for the remainder of this turn. */
+	private final Set<Integer> p1ForwardCannotAttack = new HashSet<>();
+	private final Set<Integer> p2ForwardCannotAttack = new HashSet<>();
+	/** Forwards that must attack this turn if they are eligible. */
+	private final Set<Integer> p1ForwardMustAttack   = new HashSet<>();
+	private final Set<Integer> p2ForwardMustAttack   = new HashSet<>();
+	/** Forwards restricted from attacking until the end of their owner's turn (survives one end-phase). */
+	private final Set<Integer> p1ForwardCannotAttackPersistent = new HashSet<>();
+	private final Set<Integer> p2ForwardCannotAttackPersistent = new HashSet<>();
+	/** Forwards restricted from blocking until the end of their owner's turn (survives one end-phase). */
+	private final Set<Integer> p1ForwardCannotBlockPersistent  = new HashSet<>();
+	private final Set<Integer> p2ForwardCannotBlockPersistent  = new HashSet<>();
 	private final boolean[]       p1BackupFrozen       = new boolean[5];
 	private final boolean[]       p2BackupFrozen       = new boolean[5];
 	private final List<Boolean>   p1MonsterFrozen      = new ArrayList<>();
@@ -453,7 +465,7 @@ public class MainWindow {
 		JComboBox<String> p1ColorBox = buildColorDropdown();
 		JPanel p1DamagePanel = buildDamageZonePanel("P1", p1ColorBox);
 
-		// P1 deck label â€” interactive
+		// P1 deck label — interactive
 		p1DeckLabel = new JLabel("DECK");
 		p1DeckLabel.setFont(new Font("Pixel NES", Font.PLAIN, 18));
 		p1DeckLabel.setToolTipText("Player 1 Deck");
@@ -490,7 +502,7 @@ public class MainWindow {
 			}
 		});
 
-		// P1 limit button â€” gold, 3/4 of card width
+		// P1 limit button — gold, 3/4 of card width
 		p1LimitLabel = new JButton("LIMIT");
 		p1LimitLabel.setToolTipText("Player 1 LB Deck");
 		p1LimitLabel.setFont(new Font("Pixel NES", Font.PLAIN, 10));
@@ -592,7 +604,7 @@ public class MainWindow {
 		nextPhaseButton.setFocusPainted(false);
 		nextPhaseButton.addActionListener(e -> onNextPhase());
 
-		// Pulsing glow border â€” runs continuously, only paints when enabled
+		// Pulsing glow border — runs continuously, only paints when enabled
 		glowTimer = new javax.swing.Timer(40, e -> {
 			if (nextPhaseButton == null || !nextPhaseButton.isEnabled()) return;
 			glowAngle[0] += 0.09f;
@@ -674,7 +686,7 @@ public class MainWindow {
 
 		// --- Side Panel (card preview + Next button + Game Log) ---
 
-		// Card preview â€” custom-painted panel that draws previewImage at native size
+		// Card preview — custom-painted panel that draws previewImage at native size
 		cardPreviewPanel = new JPanel() {
 			@Override
 			protected void paintComponent(Graphics g) {
@@ -828,7 +840,7 @@ public class MainWindow {
 
 	/**
 	 * Docks the side info panel to the left or right of the frame.
-	 * Safe to call at any time after {@code initialize()} â€” removes the panel
+	 * Safe to call at any time after {@code initialize()} — removes the panel
 	 * from its current position, flips its separator border, then re-adds it.
 	 *
 	 * @param side {@code "left"} or {@code "right"}
@@ -969,7 +981,7 @@ public class MainWindow {
 		if (openingHandPopup != null) openingHandPopup.dispose();
 		openingHandPopup = new JWindow(frame);
 
-		// Mutable display order â€” swapped in-place when player reorders
+		// Mutable display order — swapped in-place when player reorders
 		List<CardData> handOrder = new ArrayList<>(cards);
 
 		// â”€â”€ Card labels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -1078,7 +1090,7 @@ public class MainWindow {
 			refreshP1HandLabel();
 			if (p1GoesFirst) {
 				logEntry("Coin flip: You go first!");
-				logEntry("Turn 1 â€” Active Phase");
+				logEntry("Turn 1 — Active Phase");
 				if (nextPhaseButton != null) nextPhaseButton.setEnabled(true);
 				onNextPhase();
 			} else {
@@ -1214,13 +1226,13 @@ public class MainWindow {
 				List<CardData> drawn = gameState.drawToHand(drawCount);
 				refreshP1HandLabel();
 				refreshP1DeckLabel();
-				logEntry("Draw Phase â€” Drew " + drawn.size()
+				logEntry("Draw Phase — Drew " + drawn.size()
 						+ " card" + (drawn.size() != 1 ? "s" : ""));
 				if (drawn.size() < drawCount) {
 					triggerGameOver("Milled Out - You Lose!");
 					return;
 				}
-				// No choices to make during Draw phase â€” advance automatically
+				// No choices to make during Draw phase — advance automatically
 				onNextPhase();
 			}
 
@@ -1237,7 +1249,7 @@ public class MainWindow {
                             logEntry("Attack Phase");
                             refreshAllForwardSlots();
                             if (!hasAttackableForward() && !hasBackAttackInHand()) {
-                                logEntry("No attackers available â€” skipping to Main Phase 2");
+                                logEntry("No attackers available — skipping to Main Phase 2");
                                 onNextPhase();
                             }
             }
@@ -1264,8 +1276,12 @@ public class MainWindow {
                             for (int i = 0; i < p2ForwardPowerReduction.size(); i++) p2ForwardPowerReduction.set(i, 0);
                             p2ForwardTempTraits.forEach(java.util.EnumSet::clear);
                             p2ForwardRemovedTraits.forEach(java.util.EnumSet::clear);
-                            p1ForwardCannotBlock.clear(); p2ForwardCannotBlock.clear();
-                            p1ForwardMustBlock.clear();   p2ForwardMustBlock.clear();
+                            p1ForwardCannotBlock.clear();           p2ForwardCannotBlock.clear();
+                            p1ForwardMustBlock.clear();             p2ForwardMustBlock.clear();
+                            p1ForwardCannotAttack.clear();          p2ForwardCannotAttack.clear();
+                            p1ForwardMustAttack.clear();            p2ForwardMustAttack.clear();
+                            p1ForwardCannotAttackPersistent.clear(); // P1's own; P2's persists to P2's end phase
+                            p1ForwardCannotBlockPersistent.clear();  // P1's own
                             for (int i = 0; i < p2ForwardCards.size(); i++) refreshP2ForwardSlot(i);
                             showEndPhaseDiscardDialog();
                             onNextPhase();             // END â†’ ACTIVE (auto-advance)
@@ -1606,7 +1622,7 @@ public class MainWindow {
 				if (hasAvailableBackupSlot()) placeCardInFirstBackupSlot(card);
 				else {
 					gameState.getP1BreakZone().add(card);
-					logEntry("  No backup slot â€” \"" + card.name() + "\" â†’ Break Zone");
+					logEntry("  No backup slot — \"" + card.name() + "\" â†’ Break Zone");
 				}
 			} else if (card.isMonster()) {
 				placeCardInMonsterZone(card);
@@ -1622,7 +1638,7 @@ public class MainWindow {
 		if (warpZone.isEmpty() && permZone.isEmpty()) return;
 
 		int total = warpZone.size() + permZone.size();
-		JDialog dlg = new JDialog(frame, player + " â€” Removed From Play (" + total
+		JDialog dlg = new JDialog(frame, player + " — Removed From Play (" + total
 				+ " card" + (total != 1 ? "s" : "") + ")", true);
 		dlg.setResizable(false);
 		dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
@@ -1776,14 +1792,14 @@ public class MainWindow {
 		if (gameState.isP1GameOver()) return;
 		CardData drawn = gameState.drawToDamageZone();
 		if (drawn == null) {
-			triggerGameOver("P1 milled out â€” You Lose!");
+			triggerGameOver("P1 milled out — You Lose!");
 			return;
 		}
 		int idx = gameState.getP1DamageZone().size() - 1;
 		boolean isEx = drawn.exBurst();
 
 		refreshP1DeckLabel();
-		logEntry("P1 takes 1 damage â€” " + drawn.name() + (isEx ? " [EX BURST!]" : ""));
+		logEntry("P1 takes 1 damage — " + drawn.name() + (isEx ? " [EX BURST!]" : ""));
 
 		if (gameState.getP1DamageZone().size() >= 7) {
 			triggerGameOver("7 Damage Taken - You Lose!");
@@ -1818,7 +1834,7 @@ public class MainWindow {
 		CardData drawn = gameState.drawToP2DamageZone();
 		p2DamageCount++;
 		boolean isEx = drawn != null && drawn.exBurst();
-		String cardInfo = drawn != null ? " â€” " + drawn.name() + (isEx ? " [EX BURST!]" : "") : "";
+		String cardInfo = drawn != null ? " — " + drawn.name() + (isEx ? " [EX BURST!]" : "") : "";
 		logEntry("P2 takes 1 damage (" + p2DamageCount + "/7)" + cardInfo);
 
 		int slotIdx = p2DamageCount - 1;
@@ -1893,8 +1909,12 @@ public class MainWindow {
 		p1ForwardPrimedTop.remove(idx);
 		p1ForwardFrozen.remove(idx);
 		p1ForwardLabels.remove(idx);
-		shiftBlockSet(p1ForwardCannotBlock, idx);
-		shiftBlockSet(p1ForwardMustBlock,   idx);
+		shiftBlockSet(p1ForwardCannotBlock,              idx);
+		shiftBlockSet(p1ForwardMustBlock,                idx);
+		shiftBlockSet(p1ForwardCannotAttack,             idx);
+		shiftBlockSet(p1ForwardMustAttack,               idx);
+		shiftBlockSet(p1ForwardCannotAttackPersistent,   idx);
+		shiftBlockSet(p1ForwardCannotBlockPersistent,    idx);
 
 		if (p1ForwardPanel != null) {
 			p1ForwardPanel.removeAll();
@@ -1953,8 +1973,12 @@ public class MainWindow {
 		p2ForwardRemovedTraits.remove(idx);
 		p2ForwardFrozen.remove(idx);
 		p2ForwardLabels.remove(idx);
-		shiftBlockSet(p2ForwardCannotBlock, idx);
-		shiftBlockSet(p2ForwardMustBlock,   idx);
+		shiftBlockSet(p2ForwardCannotBlock,              idx);
+		shiftBlockSet(p2ForwardMustBlock,                idx);
+		shiftBlockSet(p2ForwardCannotAttack,             idx);
+		shiftBlockSet(p2ForwardMustAttack,               idx);
+		shiftBlockSet(p2ForwardCannotAttackPersistent,   idx);
+		shiftBlockSet(p2ForwardCannotBlockPersistent,    idx);
 
 		if (p2ForwardPanel != null) {
 			p2ForwardPanel.removeAll();
@@ -2038,7 +2062,7 @@ public class MainWindow {
 			if (attackerIsP1) breakP1Forward(attackerIdx);
 			else              breakP2Forward(attackerIdx);
 		} else {
-			// Attacker survives â€” accumulate damage it received from the blocker
+			// Attacker survives — accumulate damage it received from the blocker
 			int received = blockerFirst ? 0 : effBlockerPow;
 			if (received > 0) {
 				if (attackerIsP1) {
@@ -2054,7 +2078,7 @@ public class MainWindow {
 			if (blockerIsP1) breakP1Forward(blockerIdx);
 			else             breakP2Forward(blockerIdx);
 		} else {
-			// Blocker survives â€” accumulate damage it received from the attacker
+			// Blocker survives — accumulate damage it received from the attacker
 			int received = attackerFirst ? 0 : effAttackerPow;
 			if (received > 0) {
 				if (blockerIsP1) {
@@ -2083,7 +2107,7 @@ public class MainWindow {
 			int bestIdx = -1, bestPower = -1;
 			for (int i = 0; i < p2ForwardStates.size(); i++) {
 				if (!p2ForwardMustBlock.contains(i))   continue;
-				if (p2ForwardCannotBlock.contains(i))  continue;
+				if (p2ForwardCannotBlock.contains(i) || p2ForwardCannotBlockPersistent.contains(i)) continue;
 				if (p2ForwardStates.get(i) != CardState.ACTIVE) continue;
 				int effPow = effectiveP2ForwardPower(i);
 				// Prefer a blocker that can survive; among those, the weakest (to preserve stronger ones)
@@ -2098,7 +2122,7 @@ public class MainWindow {
 
 		int bestIdx = -1, bestPower = -1;
 		for (int i = 0; i < p2ForwardStates.size(); i++) {
-			if (p2ForwardCannotBlock.contains(i)) continue;
+			if (p2ForwardCannotBlock.contains(i) || p2ForwardCannotBlockPersistent.contains(i)) continue;
 			if (p2ForwardStates.get(i) != CardState.ACTIVE) continue;
 			int effPow = effectiveP2ForwardPower(i);
 			if (effPow >= effectiveAttackerPower && effPow > bestPower) {
@@ -2132,7 +2156,8 @@ public class MainWindow {
 			// ACTIVE forwards can always block; BRAVE_ATTACKED forwards can block because
 			// Brave allows acting again even after attacking
 			if ((s == CardState.ACTIVE || s == CardState.BRAVE_ATTACKED)
-					&& !p1ForwardCannotBlock.contains(i))
+					&& !p1ForwardCannotBlock.contains(i)
+					&& !p1ForwardCannotBlockPersistent.contains(i))
 				eligible.add(i);
 		}
 
@@ -2456,7 +2481,7 @@ public class MainWindow {
 				int needed = lbDeck.get(castingIdx[0]).lbCost() - paymentSet.size();
 				statusLabel.setText(needed > 0
 						? "Choose " + needed + " more LB card(s) as payment"
-						: "Ready â€” click Confirm Cast");
+						: "Ready — click Confirm Cast");
 				confirmCastBtn.setEnabled(needed <= 0);
 			} else {
 				statusLabel.setText(" ");
@@ -2467,7 +2492,7 @@ public class MainWindow {
 			CardData cast = lbDeck.get(castingIdx[0]);
 			dlg.dispose();
 			if (cast.cost() == 0) {
-				// No CP dialog â€” commit immediately
+				// No CP dialog — commit immediately
 				spentLbIndices.add(castingIdx[0]);
 				spentLbIndices.addAll(paymentSet);
 				logEntry("Cast LB \"" + cast.name() + "\"");
@@ -2528,7 +2553,7 @@ public class MainWindow {
 						cancelCastBtn.setVisible(true);
 						confirmCastBtn.setEnabled(cd.lbCost() == 0);
 					} else if (castingIdx[0] == idx) {
-						// Click on casting card â€” cancel
+						// Click on casting card — cancel
 						castingIdx[0] = -1;
 						paymentSet.clear();
 						confirmCastBtn.setVisible(false);
@@ -2615,7 +2640,7 @@ public class MainWindow {
 		List<CardData> hand = gameState.getP1Hand();
 		if (hand.size() <= 5) return;
 
-		JDialog dlg = new JDialog(frame, "End Phase â€” Discard to 5", true);
+		JDialog dlg = new JDialog(frame, "End Phase — Discard to 5", true);
 		dlg.setResizable(false);
 		dlg.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
 
@@ -2636,7 +2661,7 @@ public class MainWindow {
 			int remaining = mustDiscard - selected.size();
 			statusLabel.setText(remaining > 0
 					? "Select " + remaining + " more card(s) to discard."
-					: "Ready â€” click Confirm to discard.");
+					: "Ready — click Confirm to discard.");
 			confirmBtn.setEnabled(selected.size() == mustDiscard);
 			for (int i = 0; i < cardLabels.size(); i++) {
 				cardLabels.get(i).setBorder(BorderFactory.createLineBorder(
@@ -2704,7 +2729,7 @@ public class MainWindow {
 			for (int di : toDiscard) {
 				gameState.breakFromHand(di);
 			}
-			logEntry("Discarded " + toDiscard.size() + " card(s) â€” hand reduced to 5");
+			logEntry("Discarded " + toDiscard.size() + " card(s) — hand reduced to 5");
 			refreshP1HandLabel();
 			refreshP1BreakLabel();
 		});
@@ -2759,7 +2784,7 @@ public class MainWindow {
 			int remaining = mustDiscard - selected.size();
 			statusLabel.setText(remaining > 0
 					? "Select " + remaining + " more card(s) to discard."
-					: "Ready â€” click Discard to confirm.");
+					: "Ready — click Discard to confirm.");
 			confirmBtn.setEnabled(selected.size() == mustDiscard);
 			for (int i = 0; i < cardLabels.size(); i++) {
 				cardLabels.get(i).setBorder(BorderFactory.createLineBorder(
@@ -3211,7 +3236,7 @@ public class MainWindow {
 		int totalGenerate = 0;
 
 		if (card.isLightOrDark()) {
-			// L/D cards accept any element â€” sum all banked CP and all available sources
+			// L/D cards accept any element — sum all banked CP and all available sources
 			int totalExisting = gameState.getP1CpByElement().values().stream().mapToInt(Integer::intValue).sum();
 			for (int i = 0; i < hand.size(); i++) {
 				if (i == excludeHandIdx) continue;
@@ -3437,7 +3462,7 @@ public class MainWindow {
 		centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
 
 		if (!eligibleBackupSlots.isEmpty()) {
-			JLabel hdr = new JLabel("Backups â€” dull for 1 CP each:");
+			JLabel hdr = new JLabel("Backups — dull for 1 CP each:");
 			hdr.setFont(new Font("Pixel NES", Font.PLAIN, 9));
 			hdr.setAlignmentX(Component.LEFT_ALIGNMENT);
 			JPanel backupCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
@@ -3483,7 +3508,7 @@ public class MainWindow {
 			centerPanel.add(backupCardsPanel);
 		}
 
-		JLabel discardHdr = new JLabel("Hand â€” discard for 2 CP each:");
+		JLabel discardHdr = new JLabel("Hand — discard for 2 CP each:");
 		discardHdr.setFont(new Font("Pixel NES", Font.PLAIN, 9));
 		discardHdr.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JPanel discardCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
@@ -3617,7 +3642,7 @@ public class MainWindow {
 		gameState.removeFromHand(cardHandIdx);
 
 		gameState.addToP1WarpZone(card, card.warpValue());
-		logEntry("Played \"" + card.name() + "\" via Warp â€” " + card.warpValue()
+		logEntry("Played \"" + card.name() + "\" via Warp — " + card.warpValue()
 				+ " counter" + (card.warpValue() != 1 ? "s" : "") + " â†’ Removed From Play");
 		refreshP1HandLabel();
 		refreshP1BreakLabel();
@@ -3683,7 +3708,7 @@ public class MainWindow {
 		int            cost   = card.cost();
 		boolean        isLD   = card.isLightOrDark();
 
-		// Always start from 0 â€” CP is generated and spent within a single payment action
+		// Always start from 0 — CP is generated and spent within a single payment action
 		// and must never carry over from a previous play.
 		Map<String, Integer> bankCpByElem = new LinkedHashMap<>();
 		if (isLD) {
@@ -3787,7 +3812,7 @@ public class MainWindow {
 		centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
 
 		if (!eligibleBackupSlots.isEmpty()) {
-			JLabel backupHeader = new JLabel("Backups â€” dull for 1 CP each:");
+			JLabel backupHeader = new JLabel("Backups — dull for 1 CP each:");
 			backupHeader.setFont(new Font("Pixel NES", Font.PLAIN, 9));
 			backupHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
 			JPanel backupCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
@@ -3841,7 +3866,7 @@ public class MainWindow {
 		}
 
 		// â”€â”€ Hand discard section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-		JLabel discardHeader = new JLabel("Hand â€” discard for 2 CP each:");
+		JLabel discardHeader = new JLabel("Hand — discard for 2 CP each:");
 		discardHeader.setFont(new Font("Pixel NES", Font.PLAIN, 9));
 		discardHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JPanel discardCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
@@ -4013,7 +4038,7 @@ public class MainWindow {
 	}
 
 	/**
-	 * CP payment dialog for LB casting â€” mirrors showPaymentDialog but has no
+	 * CP payment dialog for LB casting — mirrors showPaymentDialog but has no
 	 * hand-card to exclude and calls executeLbPlay on confirm.
 	 */
 	private void showLbCpPaymentDialog(CardData card, int lbCastIdx, Set<Integer> pendingLbPayment) {
@@ -4027,7 +4052,7 @@ public class MainWindow {
 		int            cost   = card.cost();
 		boolean        isLD   = card.isLightOrDark();
 
-		// Always start from 0 â€” CP is generated and spent within a single payment action.
+		// Always start from 0 — CP is generated and spent within a single payment action.
 		Map<String, Integer> bankCpByElem = new LinkedHashMap<>();
 		if (isLD) {
 			bankCpByElem.put(elem, 0);
@@ -4128,7 +4153,7 @@ public class MainWindow {
 		centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
 
 		if (!eligibleBackupSlots.isEmpty()) {
-			JLabel backupHeader = new JLabel("Backups â€” dull for 1 CP each:");
+			JLabel backupHeader = new JLabel("Backups — dull for 1 CP each:");
 			backupHeader.setFont(new Font("Pixel NES", Font.PLAIN, 9));
 			backupHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
 			JPanel backupCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
@@ -4181,7 +4206,7 @@ public class MainWindow {
 			centerPanel.add(backupCardsPanel);
 		}
 
-		JLabel discardHeader = new JLabel("Hand â€” discard for 2 CP each:");
+		JLabel discardHeader = new JLabel("Hand — discard for 2 CP each:");
 		discardHeader.setFont(new Font("Pixel NES", Font.PLAIN, 9));
 		discardHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JPanel discardCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
@@ -4306,7 +4331,7 @@ public class MainWindow {
 
 	/**
 	 * Executes an LB cast: dulls selected backups, discards payment hand cards,
-	 * spends CP, and places the card â€” without removing it from hand.
+	 * spends CP, and places the card — without removing it from hand.
 	 */
 	private void executeLbPlay(CardData card, List<Integer> discardIndices,
 			List<Integer> backupDullIndices) {
@@ -5048,7 +5073,7 @@ public class MainWindow {
 		center.setLayout(new BoxLayout(center, BoxLayout.Y_AXIS));
 
 		if (!eligibleBackupSlots.isEmpty()) {
-			JLabel hdr = new JLabel("Backups â€” dull for 1 CP each:");
+			JLabel hdr = new JLabel("Backups — dull for 1 CP each:");
 			hdr.setFont(new Font("Pixel NES", Font.PLAIN, 9)); hdr.setAlignmentX(Component.LEFT_ALIGNMENT);
 			JPanel bp = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6)); bp.setAlignmentX(Component.LEFT_ALIGNMENT);
 			for (int slot : eligibleBackupSlots) {
@@ -5082,7 +5107,7 @@ public class MainWindow {
 			center.add(hdr); center.add(bp);
 		}
 
-		JLabel discHdr = new JLabel("Hand â€” discard for 2 CP each:");
+		JLabel discHdr = new JLabel("Hand — discard for 2 CP each:");
 		discHdr.setFont(new Font("Pixel NES", Font.PLAIN, 9)); discHdr.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JPanel dp = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6)); dp.setAlignmentX(Component.LEFT_ALIGNMENT);
 		for (int i = 0; i < hand.size(); i++) {
@@ -5211,7 +5236,7 @@ public class MainWindow {
 		}
 
 		JLabel titleLabel = new JLabel(
-				"<html><center>" + source.name() + " â€” " + (costDesc.length() > 0 ? costDesc : "free") + "</center></html>",
+				"<html><center>" + source.name() + " — " + (costDesc.length() > 0 ? costDesc : "free") + "</center></html>",
 				SwingConstants.CENTER);
 		titleLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
 
@@ -5446,6 +5471,30 @@ public class MainWindow {
 			}
 			@Override public void setP2ForwardMustBlock(int idx) {
 				if (idx >= 0 && idx < p2ForwardCards.size()) p2ForwardMustBlock.add(idx);
+			}
+			@Override public void setP1ForwardCannotAttack(int idx) {
+				if (idx >= 0 && idx < p1ForwardCards.size()) p1ForwardCannotAttack.add(idx);
+			}
+			@Override public void setP2ForwardCannotAttack(int idx) {
+				if (idx >= 0 && idx < p2ForwardCards.size()) p2ForwardCannotAttack.add(idx);
+			}
+			@Override public void setP1ForwardMustAttack(int idx) {
+				if (idx >= 0 && idx < p1ForwardCards.size()) p1ForwardMustAttack.add(idx);
+			}
+			@Override public void setP2ForwardMustAttack(int idx) {
+				if (idx >= 0 && idx < p2ForwardCards.size()) p2ForwardMustAttack.add(idx);
+			}
+			@Override public void setP1ForwardCannotAttackOrBlockPersistent(int idx) {
+				if (idx >= 0 && idx < p1ForwardCards.size()) {
+					p1ForwardCannotAttackPersistent.add(idx);
+					p1ForwardCannotBlockPersistent.add(idx);
+				}
+			}
+			@Override public void setP2ForwardCannotAttackOrBlockPersistent(int idx) {
+				if (idx >= 0 && idx < p2ForwardCards.size()) {
+					p2ForwardCannotAttackPersistent.add(idx);
+					p2ForwardCannotBlockPersistent.add(idx);
+				}
 			}
 
 			// P1 attack selection is tracked; P2 attacking and all blocking states are not
@@ -5696,7 +5745,7 @@ public class MainWindow {
 					logEntry(p1Forward(idx).name() + " loses " + (amount > 0 ? amount + " power" : "")
 							+ (!traits.isEmpty() ? (amount > 0 ? " and " : "") + traits : "") + " until end of turn");
 					if (effPow <= 0) {
-						// Power reduced to 0 â€” not treated as "broken" mechanically (distinction TBD)
+						// Power reduced to 0 — not treated as "broken" mechanically (distinction TBD)
 						logEntry(p1Forward(idx).name() + " reduced to 0 power â†’ Break Zone");
 						breakP1Forward(idx);
 					} else {
@@ -5768,7 +5817,7 @@ public class MainWindow {
 
 			@Override public void forceOpponentDiscard(int count) {
 				if (isP1) {
-					// P1 activated â€” P2 AI discards worst cards automatically
+					// P1 activated — P2 AI discards worst cards automatically
 					List<CardData> hand = gameState.getP2Hand();
 					int actual = Math.min(count, hand.size());
 					for (int i = 0; i < actual; i++) {
@@ -5779,7 +5828,7 @@ public class MainWindow {
 					refreshP2HandCountLabel();
 					refreshP2BreakLabel();
 				} else {
-					// P2 activated â€” P1 selects cards to discard via dialog
+					// P2 activated — P1 selects cards to discard via dialog
 					showForcedDiscardDialog(count);
 				}
 			}
@@ -6469,6 +6518,8 @@ public class MainWindow {
 		boolean hasHaste  = effectiveP1HasTrait(idx, CardData.Trait.HASTE);
 		boolean canAttack = gameState.getCurrentPhase() == GameState.GamePhase.ATTACK
 				&& state == CardState.ACTIVE
+				&& !p1ForwardCannotAttack.contains(idx)
+				&& !p1ForwardCannotAttackPersistent.contains(idx)
 				&& (hasHaste || p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber());
 		int damage = p1ForwardDamage.get(idx);
 		int power  = effectiveP1ForwardPower(idx);
@@ -6499,6 +6550,8 @@ public class MainWindow {
 		if (gameState.getCurrentPhase() != GameState.GamePhase.ATTACK) return false;
 		if (idx < 0 || idx >= p1ForwardStates.size()) return false;
 		if (p1ForwardStates.get(idx) != CardState.ACTIVE) return false;
+		if (p1ForwardCannotAttack.contains(idx)) return false;
+		if (p1ForwardCannotAttackPersistent.contains(idx)) return false;
 		return effectiveP1HasTrait(idx, CardData.Trait.HASTE)
 				|| p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber();
 	}
@@ -6514,7 +6567,7 @@ public class MainWindow {
 		if (!p1AttackSelection.isEmpty()) {
 			String partyElement = p1ForwardCards.get(p1AttackSelection.get(0)).elements()[0];
 			if (!p1ForwardCards.get(idx).containsElement(partyElement)) {
-				logEntry("Cannot add to party â€” different element");
+				logEntry("Cannot add to party — different element");
 				return;
 			}
 		}
@@ -6665,14 +6718,14 @@ public class MainWindow {
 	private void showForwardContextMenu(int idx, JLabel slot, MouseEvent e) {
 		JPopupMenu menu = new JPopupMenu();
 
-		// Action abilities (use effective card â€” top card when primed)
+		// Action abilities (use effective card — top card when primed)
 		CardData effectiveFwd = p1ForwardPrimedTop.get(idx) != null
 				? p1ForwardPrimedTop.get(idx) : p1ForwardCards.get(idx);
 		addAbilityMenuItems(menu, effectiveFwd, p1ForwardFrozen.get(idx),
 				p1ForwardStates.get(idx), p1ForwardPlayedOnTurn.get(idx),
 				() -> { p1ForwardStates.set(idx, CardState.DULL); animateDullForward(idx, null); }, true);
 
-		// Prime â€” visible whenever the forward has the Priming trait
+		// Prime — visible whenever the forward has the Priming trait
 		CardData fwd = p1ForwardCards.get(idx);
 		if (fwd.hasPriming()) {
 			boolean alreadyPrimed = p1ForwardPrimedTop.get(idx) != null;
@@ -6830,7 +6883,7 @@ public class MainWindow {
 		String[] elems   = costByElem.keySet().toArray(String[]::new);
 		int totalCost    = rawCost.size();
 
-		// If cost is empty, no dialog needed â€” go straight to execution
+		// If cost is empty, no dialog needed — go straight to execution
 		if (totalCost == 0) {
 			executePriming(card, slotIdx, new ArrayList<>(), new ArrayList<>());
 			return;
@@ -6925,7 +6978,7 @@ public class MainWindow {
 		centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
 
 		if (!eligibleBackupSlots.isEmpty()) {
-			JLabel hdr = new JLabel("Backups â€” dull for 1 CP each:");
+			JLabel hdr = new JLabel("Backups — dull for 1 CP each:");
 			hdr.setFont(new Font("Pixel NES", Font.PLAIN, 9)); hdr.setAlignmentX(Component.LEFT_ALIGNMENT);
 			JPanel bp = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6)); bp.setAlignmentX(Component.LEFT_ALIGNMENT);
 			for (int slot : eligibleBackupSlots) {
@@ -6959,7 +7012,7 @@ public class MainWindow {
 			centerPanel.add(hdr); centerPanel.add(bp);
 		}
 
-		JLabel discardHdr = new JLabel("Hand â€” discard for 2 CP each:");
+		JLabel discardHdr = new JLabel("Hand — discard for 2 CP each:");
 		discardHdr.setFont(new Font("Pixel NES", Font.PLAIN, 9)); discardHdr.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JPanel dp = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6)); dp.setAlignmentX(Component.LEFT_ALIGNMENT);
 		for (int i = 0; i < hand.size(); i++) {
@@ -7069,13 +7122,13 @@ public class MainWindow {
 		}
 		for (String e : elems) { gameState.spendP1Cp(e, gameState.getP1CpForElement(e)); gameState.clearP1Cp(e); }
 
-		// Search deck â€” find all versions of the target card
+		// Search deck — find all versions of the target card
 		String target = card.primingTarget();
 		List<CardData> matches = gameState.findMatchingNamesInP1MainDeck(target);
 
 		if (matches.isEmpty()) {
 			shuffleP1MainDeck();
-			logEntry("Priming: \"" + target + "\" not found in deck â€” no card placed");
+			logEntry("Priming: \"" + target + "\" not found in deck — no card placed");
 			refreshP1HandLabel();
 			refreshP1BreakLabel();
 		} else if (matches.size() == 1) {
@@ -7085,7 +7138,7 @@ public class MainWindow {
 			refreshP1HandLabel();
 			refreshP1BreakLabel();
 		} else {
-			// Multiple printings found â€” let the player choose; shuffle and refresh happen inside the dialog
+			// Multiple printings found — let the player choose; shuffle and refresh happen inside the dialog
 			showPrimingVersionSelectDialog(matches, card, slotIdx);
 		}
 	}
@@ -7301,7 +7354,7 @@ public class MainWindow {
 			p1DamageSlotPanel = slotsPanel;
 
 		} else {
-			// P2: mirrored damage slots â€” card on right, letter centred, EX in upper-left
+			// P2: mirrored damage slots — card on right, letter centred, EX in upper-left
 			String[] letters = { "D", "A", "M", "A", "G", "E", playerLabel };
 			slotsPanel = new JPanel(new GridLayout(7, 1, 2, 2)) {
 				@Override public void setBackground(Color c) { /* paintComponent owns background */ }
@@ -7427,11 +7480,11 @@ public class MainWindow {
 	// -------------------------------------------------------------------------
 
 	// -------------------------------------------------------------------------
-	// Grayscale label â€” auto-converts any icon set on it to grayscale
+	// Grayscale label — auto-converts any icon set on it to grayscale
 	// -------------------------------------------------------------------------
 
 	// -------------------------------------------------------------------------
-	// Crystal display â€” elongated upright hexagon badge with ": N" label
+	// Crystal display — elongated upright hexagon badge with ": N" label
 	// -------------------------------------------------------------------------
 
 	private static final int CRYSTAL_H = 36;  // component height
@@ -7454,7 +7507,7 @@ public class MainWindow {
 			setMinimumSize(new java.awt.Dimension(CARD_W, CRYSTAL_H));
 			setMaximumSize(new java.awt.Dimension(CARD_W, CRYSTAL_H));
 			setOpaque(false);
-			setToolTipText("Crystals â€” click to change element color");
+			setToolTipText("Crystals — click to change element color");
 			addMouseListener(new java.awt.event.MouseAdapter() {
 				@Override public void mousePressed(java.awt.event.MouseEvent e) {
 					colorIndex = (colorIndex + 1) % ElementColor.values().length;
@@ -7716,7 +7769,7 @@ public class MainWindow {
 				}
 			}
 
-			// Pass 2: remove freeze â€” card state is unchanged, only the frozen flag is cleared
+			// Pass 2: remove freeze — card state is unchanged, only the frozen flag is cleared
 			for (int i = 0; i < p2BackupStates.length; i++) {
 				if (p2BackupCards[i] == null) continue;
 				if (p2BackupFrozen[i]) { p2BackupFrozen[i] = false; refreshP2BackupSlot(i); thawed++; }
@@ -7727,7 +7780,7 @@ public class MainWindow {
 			for (int i = 0; i < p2MonsterStates.size(); i++) {
 				if (p2MonsterFrozen.get(i)) { p2MonsterFrozen.set(i, false); refreshP2MonsterSlot(i); thawed++; }
 			}
-			StringBuilder msg = new StringBuilder("Turn " + gameState.getTurnNumber() + " â€” P2 Active Phase");
+			StringBuilder msg = new StringBuilder("Turn " + gameState.getTurnNumber() + " — P2 Active Phase");
 			if (activated > 0) msg.append(" (").append(activated).append(" activated");
 			if (thawed > 0)    msg.append(activated > 0 ? ", " : " (").append(thawed).append(" thawed");
 			if (activated > 0 || thawed > 0) msg.append(")");
@@ -7745,10 +7798,10 @@ public class MainWindow {
 			refreshP2DeckLabel();
 			refreshP2HandCountLabel();
 			if (drawn.size() < drawCount) {
-				triggerGameOver("P2 milled out â€” You Win!");
+				triggerGameOver("P2 milled out — You Win!");
 				return;
 			}
-			logEntry("[P2] Draw Phase â€” Drew " + drawn.size() + " card(s) (hand: " + gameState.getP2Hand().size() + ")");
+			logEntry("[P2] Draw Phase — Drew " + drawn.size() + " card(s) (hand: " + gameState.getP2Hand().size() + ")");
 			gameState.advancePhase(); // DRAW â†’ MAIN_1
 			logEntry("[P2] Main Phase 1");
 			step(() -> doMainPhase(() -> {
@@ -7758,7 +7811,7 @@ public class MainWindow {
 					if (p2ForwardCanAttack(i)) { canAttack = true; break; }
 				}
 				if (!canAttack) {
-					logEntry("[P2] Attack Phase â€” No attackers, skipping");
+					logEntry("[P2] Attack Phase — No attackers, skipping");
 					gameState.advancePhase(); // ATTACK â†’ MAIN_2
 					logEntry("[P2] Main Phase 2");
 					step(() -> doMainPhase(this::doEndPhase));
@@ -7861,7 +7914,7 @@ public class MainWindow {
 			while (hand.size() > 5) {
 				int idx = pickWorstHandCard(hand);
 				CardData d = gameState.discardP2FromHand(idx);
-				if (d != null) logEntry("[P2] End Phase â€” discards " + d.name());
+				if (d != null) logEntry("[P2] End Phase — discards " + d.name());
 			}
 			refreshP2BreakLabel();
 			refreshP2HandCountLabel();
@@ -7877,8 +7930,12 @@ public class MainWindow {
 			p1ForwardTempTraits.forEach(java.util.EnumSet::clear);
 			p1ForwardRemovedTraits.forEach(java.util.EnumSet::clear);
 			for (int i = 0; i < p1ForwardCards.size(); i++) refreshP1ForwardSlot(i);
-			p1ForwardCannotBlock.clear(); p2ForwardCannotBlock.clear();
-			p1ForwardMustBlock.clear();   p2ForwardMustBlock.clear();
+			p1ForwardCannotBlock.clear();           p2ForwardCannotBlock.clear();
+			p1ForwardMustBlock.clear();             p2ForwardMustBlock.clear();
+			p1ForwardCannotAttack.clear();          p2ForwardCannotAttack.clear();
+			p1ForwardMustAttack.clear();            p2ForwardMustAttack.clear();
+			p2ForwardCannotAttackPersistent.clear(); // P2's own; P1's persists to P1's end phase
+			p2ForwardCannotBlockPersistent.clear();  // P2's own
 			gameState.advancePhase(); // MAIN_2 â†’ END
 			logEntry("[P2] End Phase");
 			gameState.advancePhase(); // END â†’ ACTIVE (switches to P1, increments turn)
@@ -7903,14 +7960,14 @@ public class MainWindow {
 				}
 			}
 
-			// Pass 2: remove freeze â€” card state is unchanged, only the frozen flag is cleared
+			// Pass 2: remove freeze — card state is unchanged, only the frozen flag is cleared
 			for (int i = 0; i < p1BackupStates.length; i++) {
 				if (p1BackupFrozen[i]) { p1BackupFrozen[i] = false; refreshP1BackupSlot(i); thawed++; }
 			}
 			for (int i = 0; i < p1ForwardStates.size(); i++) {
 				if (p1ForwardFrozen.get(i)) { p1ForwardFrozen.set(i, false); refreshP1ForwardSlot(i); thawed++; }
 			}
-			StringBuilder msg = new StringBuilder("Turn " + gameState.getTurnNumber() + " â€” Active Phase");
+			StringBuilder msg = new StringBuilder("Turn " + gameState.getTurnNumber() + " — Active Phase");
 			if (activated > 0) msg.append(" (").append(activated).append(" activated");
 			if (thawed > 0)    msg.append(activated > 0 ? ", " : " (").append(thawed).append(" thawed");
 			if (activated > 0 || thawed > 0) msg.append(")");
@@ -7925,7 +7982,7 @@ public class MainWindow {
 				triggerGameOver("Milled Out - You Lose!");
 				return;
 			}
-			logEntry("Draw Phase â€” Drew " + drawn.size() + " card(s)");
+			logEntry("Draw Phase — Drew " + drawn.size() + " card(s)");
 			gameState.advancePhase(); // DRAW â†’ MAIN_1
 			logEntry("Main Phase 1");
 			processWarpCounters();
@@ -7935,6 +7992,8 @@ public class MainWindow {
 		// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 		private boolean p2ForwardCanAttack(int idx) {
+			if (p2ForwardCannotAttack.contains(idx)) return false;
+			if (p2ForwardCannotAttackPersistent.contains(idx)) return false;
 			return p2ForwardStates.get(idx) == CardState.ACTIVE
 				&& (effectiveP2HasTrait(idx, CardData.Trait.HASTE)
 					|| p2ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber());
@@ -7957,7 +8016,7 @@ public class MainWindow {
 			for (int i = 0; i < lbDeck.size(); i++) {
 				if (p2SpentLbIndices.contains(i)) continue;
 				CardData card = lbDeck.get(i);
-				if (card.isSummon()) continue; // skip summons â€” no simple board placement
+				if (card.isSummon()) continue; // skip summons — no simple board placement
 				if (!card.multicard() && p2HasCharacterNameOnField(card.name())) continue;
 				if (card.isLightOrDark() && p2HasLD) continue;
 				if (card.isBackup() && !p2HasAvailableBackupSlot()) continue;

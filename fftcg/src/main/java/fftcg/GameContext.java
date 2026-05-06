@@ -227,6 +227,32 @@ public interface GameContext {
     /** Requires P2's forward at {@code idx} to block this turn if it is eligible to do so. */
     void setP2ForwardMustBlock(int idx);
 
+    // ---- Attack restrictions ------------------------------------------------
+
+    /** Prevents P1's forward at {@code idx} from attacking this turn. */
+    void setP1ForwardCannotAttack(int idx);
+
+    /** Prevents P2's forward at {@code idx} from attacking this turn. */
+    void setP2ForwardCannotAttack(int idx);
+
+    /** Requires P1's forward at {@code idx} to attack this turn if it is eligible to do so. */
+    void setP1ForwardMustAttack(int idx);
+
+    /** Requires P2's forward at {@code idx} to attack this turn if it is eligible to do so. */
+    void setP2ForwardMustAttack(int idx);
+
+    /**
+     * Prevents P1's forward at {@code idx} from attacking or blocking until the end of P1's turn
+     * (survives P2's end-phase clearing, cleared at P1's end phase).
+     */
+    void setP1ForwardCannotAttackOrBlockPersistent(int idx);
+
+    /**
+     * Prevents P2's forward at {@code idx} from attacking or blocking until the end of P2's turn
+     * (survives P1's end-phase clearing, cleared at P2's end phase).
+     */
+    void setP2ForwardCannotAttackOrBlockPersistent(int idx);
+
     // ---- Attack / block state queries ---------------------------------------
 
     /** Returns {@code true} if P1's forward at {@code idx} is currently declared as an attacker. */
