@@ -237,6 +237,12 @@ public interface GameContext {
      */
     boolean askTopOrBottom(String cardName);
 
+    /** Removes P1's forward at {@code idx} from the field and adds it to P1's hand. */
+    void returnP1ForwardToHand(int idx);
+
+    /** Removes P2's forward at {@code idx} from the field and adds it to P2's hand. */
+    void returnP2ForwardToHand(int idx);
+
     /** Removes P1's forward at {@code idx} from the field and places it at the bottom of P1's deck. */
     void returnP1ForwardToDeckBottom(int idx);
 

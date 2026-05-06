@@ -128,6 +128,16 @@ public class ActionResolver {
         "(?i)if\\s+possible[,]?\\s+it\\s+must\\s+block\\s+this\\s+turn\\.?"
     );
 
+    /** Matches "Return it to its owner's hand." */
+    private static final Pattern FOLLOWUP_RETURN_TO_OWNERS_HAND = Pattern.compile(
+        "(?i)Return\\s+it\\s+to\\s+its\\s+owner's\\s+hand\\.?"
+    );
+
+    /** Matches "Return it to your hand." */
+    private static final Pattern FOLLOWUP_RETURN_TO_YOUR_HAND = Pattern.compile(
+        "(?i)Return\\s+it\\s+to\\s+your\\s+hand\\.?"
+    );
+
     /** Matches "Put it at the top or bottom of its owner's deck." — player chooses placement. */
     private static final Pattern FOLLOWUP_PUT_TOP_OR_BOTTOM_OF_DECK = Pattern.compile(
         "(?i)Put\\s+it\\s+at\\s+the\\s+top\\s+or\\s+bottom\\s+of\\s+its\\s+owner's\\s+deck\\.?"
@@ -514,6 +524,8 @@ public class ActionResolver {
      *   <li>"Remove it/them from the game" — removes each chosen target from the game</li>
      *   <li>"Play it/them onto the field"  — moves chosen targets from their zone onto the field</li>
      *   <li>"Add it/them to your hand"     — moves chosen targets to P1's hand</li>
+     *   <li>"Return it to its owner's hand" — returns chosen forward to its owner's hand</li>
+     *   <li>"Return it to your hand"        — returns chosen forward to P1's hand</li>
      *   <li>"it cannot block this turn"    — marks chosen forward as ineligible to block this turn</li>
      *   <li>"If possible, it must block this turn" — marks chosen forward as required to block if eligible</li>
      *   <li>"Put it at the top or bottom of its owner's deck" — player chooses placement</li>
@@ -701,6 +713,35 @@ public class ActionResolver {
                         costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.addTargetToHand(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.addTargetToHand(t));
+            };
+        }
+
+        // --- Return to owner's hand followup ---
+        if (FOLLOWUP_RETURN_TO_OWNERS_HAND.matcher(followup).find()) {
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — Return to owner's hand");
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                for (ForwardTarget t : ts) {
+                    if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
+                    if (t.isP1()) ctx.returnP1ForwardToHand(t.idx());
+                    else          ctx.returnP2ForwardToHand(t.idx());
+                }
+            };
+        }
+
+        // --- Return to your hand followup ---
+        if (FOLLOWUP_RETURN_TO_YOUR_HAND.matcher(followup).find()) {
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — Return to your hand");
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                for (ForwardTarget t : ts) {
+                    if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
+                    if (t.isP1()) ctx.returnP1ForwardToHand(t.idx());
+                }
             };
         }
 
