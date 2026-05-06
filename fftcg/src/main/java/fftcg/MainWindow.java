@@ -750,7 +750,7 @@ public class MainWindow {
 				JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
 				JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 
-		// â”€â”€ Chat bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		// ── Chat bar ─────────────────────────────────────────────────────────
 		chatInput = new JTextField();
 		chatInput.setFont(new Font("Serif", Font.PLAIN, 11));
 		chatInput.setEnabled(false);
@@ -984,7 +984,7 @@ public class MainWindow {
 		// Mutable display order — swapped in-place when player reorders
 		List<CardData> handOrder = new ArrayList<>(cards);
 
-		// â”€â”€ Card labels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		// ── Card labels ──────────────────────────────────────────────────────
 		@SuppressWarnings("unchecked")
 		JLabel[] cardLabels = new JLabel[handOrder.size()];
 		int[] selectedIdx = { -1 };  // -1 = nothing selected
@@ -1068,13 +1068,13 @@ public class MainWindow {
 			}.execute();
 		}
 
-		// â”€â”€ Instructions label â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		// ── Instructions label ───────────────────────────────────────────────
 		JLabel instructions = new JLabel(
 				mulliganAvailable ? "Click a card to select it, then click another to swap positions." : " ",
 				SwingConstants.CENTER);
 		instructions.setFont(new Font("Pixel NES", Font.PLAIN, 10));
 
-		// â”€â”€ Buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		// ── Buttons ──────────────────────────────────────────────────────────
 		JButton keepBtn = new JButton(mulliganAvailable ? "Keep Hand" : "Take Hand");
 		keepBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
 		keepBtn.addActionListener(e -> {
@@ -1119,7 +1119,7 @@ public class MainWindow {
 		buttonsPanel.add(keepBtn);
 		buttonsPanel.add(mulliganBtn);
 
-		// â”€â”€ Assemble â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		// ── Assemble ─────────────────────────────────────────────────────────
 		JLabel titleLabel = new JLabel("Opening Hand", SwingConstants.CENTER);
 		titleLabel.setFont(new Font("Pixel NES", Font.PLAIN, 14));
 
@@ -1203,12 +1203,12 @@ public class MainWindow {
 	 * phase in GameState, and logs the transition to the game log.
 	 *
 	 * <ul>
-	 *   <li>ACTIVE  â†’ DRAW   : activate dull cards, draw 1 (turn 1) or 2 cards</li>
-	 *   <li>DRAW    â†’ MAIN_1 : nothing automatic</li>
-	 *   <li>MAIN_1  â†’ ATTACK : nothing automatic</li>
-	 *   <li>ATTACK  â†’ MAIN_2 : nothing automatic</li>
-	 *   <li>MAIN_2  â†’ END    : nothing automatic</li>
-	 *   <li>END     â†’ ACTIVE : increment turn, immediately activate cards</li>
+	 *   <li>ACTIVE  → DRAW   : activate dull cards, draw 1 (turn 1) or 2 cards</li>
+	 *   <li>DRAW    → MAIN_1 : nothing automatic</li>
+	 *   <li>MAIN_1  → ATTACK : nothing automatic</li>
+	 *   <li>ATTACK  → MAIN_2 : nothing automatic</li>
+	 *   <li>MAIN_2  → END    : nothing automatic</li>
+	 *   <li>END     → ACTIVE : increment turn, immediately activate cards</li>
 	 * </ul>
 	 */
 	private void onNextPhase() {
@@ -1221,7 +1221,7 @@ public class MainWindow {
 
 			case ACTIVE ->  {
 				// Advance first so getTurnNumber() still reflects the current turn
-				gameState.advancePhase();   // ACTIVE â†’ DRAW
+				gameState.advancePhase();   // ACTIVE → DRAW
 				int drawCount = gameState.getTurnNumber() == 1 ? 1 : 2;
 				List<CardData> drawn = gameState.drawToHand(drawCount);
 				refreshP1HandLabel();
@@ -1237,14 +1237,14 @@ public class MainWindow {
 			}
 
 			case DRAW -> {
-                            gameState.advancePhase();   // DRAW â†’ MAIN_1
+                            gameState.advancePhase();   // DRAW → MAIN_1
                             logEntry("Main Phase 1");
                             processWarpCounters();
             }
 
 			case MAIN_1 -> {
                             p1AttackSelection.clear();
-                            gameState.advancePhase();   // MAIN_1 â†’ ATTACK
+                            gameState.advancePhase();   // MAIN_1 → ATTACK
                             refreshAttackButton();
                             logEntry("Attack Phase");
                             refreshAllForwardSlots();
@@ -1257,13 +1257,13 @@ public class MainWindow {
 			case ATTACK -> {
                             p1AttackSelection.clear();
                             refreshAttackButton();
-                            gameState.advancePhase();   // ATTACK â†’ MAIN_2
+                            gameState.advancePhase();   // ATTACK → MAIN_2
                             refreshAllForwardSlots();
                             logEntry("Main Phase 2");
 			}
 
 			case MAIN_2 -> {
-                            gameState.advancePhase();   // MAIN_2 â†’ END
+                            gameState.advancePhase();   // MAIN_2 → END
                             logEntry("End Phase");
                             for (int i = 0; i < p1ForwardDamage.size(); i++) p1ForwardDamage.set(i, 0);
                             for (int i = 0; i < p1ForwardPowerBoost.size(); i++) p1ForwardPowerBoost.set(i, 0);
@@ -1284,11 +1284,11 @@ public class MainWindow {
                             p1ForwardCannotBlockPersistent.clear();  // P1's own
                             for (int i = 0; i < p2ForwardCards.size(); i++) refreshP2ForwardSlot(i);
                             showEndPhaseDiscardDialog();
-                            onNextPhase();             // END â†’ ACTIVE (auto-advance)
+                            onNextPhase();             // END → ACTIVE (auto-advance)
             }
 
 			case END ->  {
-				// END â†’ ACTIVE: increments turn number and switches to P2
+				// END → ACTIVE: increments turn number and switches to P2
 				gameState.advancePhase();
 				nextPhaseButton.setEnabled(false);
 				computerPlayer.runTurn();
@@ -1607,7 +1607,7 @@ public class MainWindow {
 		for (GameState.WarpEntry entry : zone) {
 			int before = entry.counters;
 			int after  = before - 1;
-			logEntry("Warp: \"" + entry.card.name() + "\" counter " + before + " â†’ " + after
+			logEntry("Warp: \"" + entry.card.name() + "\" counter " + before + " → " + after
 					+ (after == 0 ? " (resolving!)" : ""));
 		}
 
@@ -1622,7 +1622,7 @@ public class MainWindow {
 				if (hasAvailableBackupSlot()) placeCardInFirstBackupSlot(card);
 				else {
 					gameState.getP1BreakZone().add(card);
-					logEntry("  No backup slot — \"" + card.name() + "\" â†’ Break Zone");
+					logEntry("  No backup slot — \"" + card.name() + "\" → Break Zone");
 				}
 			} else if (card.isMonster()) {
 				placeCardInMonsterZone(card);
@@ -1888,13 +1888,13 @@ public class MainWindow {
 			// Primed: both cards move to break zone, then top card is immediately RFP'd
 			gameState.getP1BreakZone().add(card);
 			gameState.getP1BreakZone().add(topCard);
-			logEntry(card.name() + " + " + topCard.name() + " â†’ Break Zone (Primed)");
+			logEntry(card.name() + " + " + topCard.name() + " → Break Zone (Primed)");
 			gameState.getP1BreakZone().remove(topCard);
 			gameState.addToP1PermanentRfp(topCard);
-			logEntry(topCard.name() + " â†’ Removed From Game");
+			logEntry(topCard.name() + " → Removed From Game");
 		} else {
 			gameState.getP1BreakZone().add(card);
-			logEntry(card.name() + " â†’ Break Zone");
+			logEntry(card.name() + " → Break Zone");
 		}
 
 		p1ForwardCards.remove(idx);
@@ -1960,7 +1960,7 @@ public class MainWindow {
 		if (idx < 0 || idx >= p2ForwardCards.size()) return;
 		CardData card = p2ForwardCards.get(idx);
 		gameState.getP2BreakZone().add(card);
-		logEntry("[P2] " + card.name() + " â†’ Break Zone");
+		logEntry("[P2] " + card.name() + " → Break Zone");
 
 		p2ForwardCards.remove(idx);
 		p2ForwardUrls.remove(idx);
@@ -3768,7 +3768,7 @@ public class MainWindow {
 
 		gameState.addToP1WarpZone(card, card.warpValue());
 		logEntry("Played \"" + card.name() + "\" via Warp — " + card.warpValue()
-				+ " counter" + (card.warpValue() != 1 ? "s" : "") + " â†’ Removed From Play");
+				+ " counter" + (card.warpValue() != 1 ? "s" : "") + " → Removed From Play");
 		refreshP1HandLabel();
 		refreshP1BreakLabel();
 		refreshP1WarpZoneUI();
@@ -3932,7 +3932,7 @@ public class MainWindow {
 		};
 		updateAll.run();
 
-		// â”€â”€ Backup section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		// ── Backup section ───────────────────────────────────────────────────
 		JPanel centerPanel = new JPanel();
 		centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.Y_AXIS));
 
@@ -3990,7 +3990,7 @@ public class MainWindow {
 			centerPanel.add(backupCardsPanel);
 		}
 
-		// â”€â”€ Hand discard section â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		// ── Hand discard section ─────────────────────────────────────────────
 		JLabel discardHeader = new JLabel("Hand — discard for 2 CP each:");
 		discardHeader.setFont(new Font("Pixel NES", Font.PLAIN, 9));
 		discardHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -4068,14 +4068,14 @@ public class MainWindow {
 		centerPanel.add(discardHeader);
 		centerPanel.add(discardCardsPanel);
 
-		// â”€â”€ Hint â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		// ── Hint ─────────────────────────────────────────────────────────────
 		JLabel hint = new JLabel(
 				"<html><center>Backups: dull for 1 CP. Hand cards (" + elem
 				+ ", non-Light/Dark): discard for 2 CP.</center></html>",
 				SwingConstants.CENTER);
 		hint.setFont(new Font("Pixel NES", Font.PLAIN, 9));
 
-		// â”€â”€ Buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		// ── Buttons ──────────────────────────────────────────────────────────
 		JButton cancelBtn = new JButton("Cancel");
 		cancelBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
 		cancelBtn.addActionListener(e -> dlg.dispose());
@@ -4089,7 +4089,7 @@ public class MainWindow {
 		buttonPanel.add(confirmBtn);
 		buttonPanel.add(cancelBtn);
 
-		// â”€â”€ Assemble â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		// ── Assemble ─────────────────────────────────────────────────────────
 		JLabel titleLabel = new JLabel(
 				"Pay for: " + card.name() + "  (Cost " + cost + " " + elem + " CP)",
 				SwingConstants.CENTER);
@@ -4155,7 +4155,7 @@ public class MainWindow {
 			gameState.pushStack(card);
 			CardData resolved = gameState.popStack();
 			gameState.getP1BreakZone().add(resolved);
-			logEntry("\"" + resolved.name() + "\" resolves â†’ Break Zone");
+			logEntry("\"" + resolved.name() + "\" resolves → Break Zone");
 		}
 
 		refreshP1HandLabel();
@@ -4741,7 +4741,7 @@ public class MainWindow {
 
 	/**
 	 * Returns a display label for an action ability menu item, e.g.
-	 * {@code "[Mug] Wind, Dull, S â†’ ...effect..."} (truncated to 60 chars).
+	 * {@code "[Mug] Wind, Dull, S → ...effect..."} (truncated to 60 chars).
 	 */
 	private String buildAbilityMenuLabel(ActionAbility ability) {
 		StringBuilder sb = new StringBuilder();
@@ -4762,10 +4762,10 @@ public class MainWindow {
 			sb.append("put ");
 			if (bz.name().isEmpty()) sb.append(bz.count()).append(' ').append(bz.cardType());
 			else sb.append(bz.name());
-			sb.append("â†’BZ");
+			sb.append("→BZ");
 			first = false;
 		}
-		sb.append("] â†’ ");
+		sb.append("] → ");
 		String fx = ability.effectText();
 		sb.append(fx.length() > 55 ? fx.substring(0, 52) + "..." : fx);
 		return sb.toString();
@@ -4881,7 +4881,7 @@ public class MainWindow {
 	private void breakP2BackupSlot(int idx) {
 		CardData c = p2BackupCards[idx];
 		if (c == null) return;
-		logEntry("[P2] " + c.name() + " â†’ Break Zone");
+		logEntry("[P2] " + c.name() + " → Break Zone");
 		gameState.getP2BreakZone().add(c);
 		p2BackupCards[idx]  = null;
 		p2BackupUrls[idx]   = null;
@@ -4897,7 +4897,7 @@ public class MainWindow {
 	private void breakP2MonsterSlot(int idx) {
 		if (idx >= p2MonsterCards.size()) return;
 		CardData c = p2MonsterCards.get(idx);
-		logEntry("[P2] " + c.name() + " â†’ Break Zone");
+		logEntry("[P2] " + c.name() + " → Break Zone");
 		gameState.getP2BreakZone().add(c);
 		p2MonsterCards.remove(idx);
 		p2MonsterStates.remove(idx);
@@ -5054,7 +5054,7 @@ public class MainWindow {
 	private void breakP1BackupSlot(int idx) {
 		CardData c = p1BackupCards[idx];
 		if (c == null) return;
-		logEntry(c.name() + " â†’ Break Zone");
+		logEntry(c.name() + " → Break Zone");
 		gameState.getP1BreakZone().add(c);
 		p1BackupCards[idx]   = null;
 		p1BackupUrls[idx]    = null;
@@ -5070,7 +5070,7 @@ public class MainWindow {
 	private void breakP1MonsterSlot(int idx) {
 		if (idx >= p1MonsterCards.size()) return;
 		CardData c = p1MonsterCards.get(idx);
-		logEntry(c.name() + " â†’ Break Zone");
+		logEntry(c.name() + " → Break Zone");
 		gameState.getP1BreakZone().add(c);
 		p1MonsterCards.remove(idx);
 		p1MonsterStates.remove(idx);
@@ -5620,11 +5620,11 @@ public class MainWindow {
 
 			@Override public void removeP1ForwardFromGame(int idx) {
 				if (idx >= p1ForwardCards.size()) return;
-				logEntry(p1Forward(idx).name() + " â†’ Removed From Game");
+				logEntry(p1Forward(idx).name() + " → Removed From Game");
 				List<CardData> bz = gameState.getP1BreakZone();
 				int before = bz.size();
 				MainWindow.this.breakP1Forward(idx);
-				// Redirect anything breakP1Forward sent to the break zone â†’ permanent RFP
+				// Redirect anything breakP1Forward sent to the break zone → permanent RFP
 				while (bz.size() > before)
 					gameState.addToP1PermanentRfp(bz.remove(bz.size() - 1));
 				refreshP1BreakLabel();
@@ -5633,11 +5633,11 @@ public class MainWindow {
 
 			@Override public void removeP2ForwardFromGame(int idx) {
 				if (idx >= p2ForwardCards.size()) return;
-				logEntry("[P2] " + p2ForwardCards.get(idx).name() + " â†’ Removed From Game");
+				logEntry("[P2] " + p2ForwardCards.get(idx).name() + " → Removed From Game");
 				List<CardData> bz = gameState.getP2BreakZone();
 				int before = bz.size();
 				MainWindow.this.breakP2Forward(idx);
-				// Redirect anything breakP2Forward sent to the break zone â†’ P2 permanent RFP
+				// Redirect anything breakP2Forward sent to the break zone → P2 permanent RFP
 				while (bz.size() > before)
 					gameState.addToP2PermanentRfp(bz.remove(bz.size() - 1));
 				refreshP2BreakLabel();
@@ -5759,7 +5759,7 @@ public class MainWindow {
 						CardData[] cards = t.isP1() ? p1BackupCards : p2BackupCards;
 						CardState[] states = t.isP1() ? p1BackupStates : p2BackupStates;
 						if (i >= cards.length || cards[i] == null) return;
-						logEntry((t.isP1() ? "" : "[P2] ") + cards[i].name() + " â†’ Removed From Game");
+						logEntry((t.isP1() ? "" : "[P2] ") + cards[i].name() + " → Removed From Game");
 						if (t.isP1()) gameState.addToP1PermanentRfp(cards[i]); else gameState.addToP2PermanentRfp(cards[i]);
 						cards[i] = null; states[i] = CardState.ACTIVE;
 						if (t.isP1()) refreshP1BackupSlot(i); else refreshP2BackupSlot(i);
@@ -5769,7 +5769,7 @@ public class MainWindow {
 						java.util.List<CardData> cards = t.isP1() ? p1MonsterCards : p2MonsterCards;
 						if (i >= cards.size()) return;
 						CardData c = cards.get(i);
-						logEntry((t.isP1() ? "" : "[P2] ") + c.name() + " â†’ Removed From Game");
+						logEntry((t.isP1() ? "" : "[P2] ") + c.name() + " → Removed From Game");
 						if (t.isP1()) gameState.addToP1PermanentRfp(c); else gameState.addToP2PermanentRfp(c);
 						cards.remove(i);
 						(t.isP1() ? p1MonsterStates : p2MonsterStates).remove(i);
@@ -5852,7 +5852,7 @@ public class MainWindow {
 							+ (!traits.isEmpty() ? (amount > 0 ? " and " : "") + traits : "") + " until end of turn");
 					if (effPow <= 0) {
 						// Power reduced to 0 — not treated as "broken" mechanically (distinction TBD)
-						logEntry(p1Forward(idx).name() + " reduced to 0 power â†’ Break Zone");
+						logEntry(p1Forward(idx).name() + " reduced to 0 power → Break Zone");
 						breakP1Forward(idx);
 					} else {
 						refreshP1ForwardSlot(idx);
@@ -5867,7 +5867,7 @@ public class MainWindow {
 							+ (amount > 0 ? amount + " power" : "")
 							+ (!traits.isEmpty() ? (amount > 0 ? " and " : "") + traits : "") + " until end of turn");
 					if (effPow <= 0) {
-						logEntry("[P2] " + p2ForwardCards.get(idx).name() + " reduced to 0 power â†’ Break Zone");
+						logEntry("[P2] " + p2ForwardCards.get(idx).name() + " reduced to 0 power → Break Zone");
 						breakP2Forward(idx);
 					} else {
 						refreshP2ForwardSlot(idx);
@@ -7845,7 +7845,7 @@ public class MainWindow {
 			step(this::doActivePhase);
 		}
 
-		// â”€â”€ Active Phase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		// ── Active Phase ─────────────────────────────────────────────────────
 
 		private void doActivePhase() {
 			int activated = 0, thawed = 0;
@@ -7892,11 +7892,11 @@ public class MainWindow {
 			if (activated > 0 || thawed > 0) msg.append(")");
 			logEntry(msg.toString());
 
-			gameState.advancePhase(); // ACTIVE â†’ DRAW
+			gameState.advancePhase(); // ACTIVE → DRAW
 			step(this::doDrawPhase);
 		}
 
-		// â”€â”€ Draw Phase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		// ── Draw Phase ───────────────────────────────────────────────────────
 
 		private void doDrawPhase() {
 			int drawCount = gameState.getTurnNumber() == 1 ? 1 : 2;
@@ -7908,24 +7908,24 @@ public class MainWindow {
 				return;
 			}
 			logEntry("[P2] Draw Phase — Drew " + drawn.size() + " card(s) (hand: " + gameState.getP2Hand().size() + ")");
-			gameState.advancePhase(); // DRAW â†’ MAIN_1
+			gameState.advancePhase(); // DRAW → MAIN_1
 			logEntry("[P2] Main Phase 1");
 			step(() -> doMainPhase(() -> {
-				gameState.advancePhase(); // MAIN_1 â†’ ATTACK
+				gameState.advancePhase(); // MAIN_1 → ATTACK
 				boolean canAttack = false;
 				for (int i = 0; i < p2ForwardStates.size(); i++) {
 					if (p2ForwardCanAttack(i)) { canAttack = true; break; }
 				}
 				if (!canAttack) {
 					logEntry("[P2] Attack Phase — No attackers, skipping");
-					gameState.advancePhase(); // ATTACK â†’ MAIN_2
+					gameState.advancePhase(); // ATTACK → MAIN_2
 					logEntry("[P2] Main Phase 2");
 					step(() -> doMainPhase(this::doEndPhase));
 				} else {
 					logEntry("[P2] Attack Phase");
 					refreshAllP2ForwardSlots();
 					step(() -> doAttackPhase(() -> {
-						gameState.advancePhase(); // ATTACK â†’ MAIN_2
+						gameState.advancePhase(); // ATTACK → MAIN_2
 						logEntry("[P2] Main Phase 2");
 						step(() -> doMainPhase(this::doEndPhase));
 					}));
@@ -7933,7 +7933,7 @@ public class MainWindow {
 			}));
 		}
 
-		// â”€â”€ Main Phase (shared for Main 1 and Main 2) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		// ── Main Phase (shared for Main 1 and Main 2) ────────────────────────
 
 		private void doMainPhase(Runnable onDone) {
 			if (gameState.isP1GameOver()) return;
@@ -7989,7 +7989,7 @@ public class MainWindow {
 			step(() -> doMainPhase(onDone));
 		}
 
-		// â”€â”€ Attack Phase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		// ── Attack Phase ─────────────────────────────────────────────────────
 
 		private void doAttackPhase(Runnable onDone) {
 			if (gameState.isP1GameOver()) return;
@@ -8013,7 +8013,7 @@ public class MainWindow {
 			onDone.run();
 		}
 
-		// â”€â”€ End Phase â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		// ── End Phase ────────────────────────────────────────────────────────
 
 		private void doEndPhase() {
 			List<CardData> hand = gameState.getP2Hand();
@@ -8042,13 +8042,13 @@ public class MainWindow {
 			p1ForwardMustAttack.clear();            p2ForwardMustAttack.clear();
 			p2ForwardCannotAttackPersistent.clear(); // P2's own; P1's persists to P1's end phase
 			p2ForwardCannotBlockPersistent.clear();  // P2's own
-			gameState.advancePhase(); // MAIN_2 â†’ END
+			gameState.advancePhase(); // MAIN_2 → END
 			logEntry("[P2] End Phase");
-			gameState.advancePhase(); // END â†’ ACTIVE (switches to P1, increments turn)
+			gameState.advancePhase(); // END → ACTIVE (switches to P1, increments turn)
 			step(this::startP1Turn);  // startP1Turn expects phase == ACTIVE
 		}
 
-		// â”€â”€ P1 turn start (Active + Draw, then hand control back to player) â”€â”€
+		// ── P1 turn start (Active + Draw, then hand control back to player) ──
 
 		private void startP1Turn() {
 			int activated = 0, thawed = 0;
@@ -8079,7 +8079,7 @@ public class MainWindow {
 			if (activated > 0 || thawed > 0) msg.append(")");
 			logEntry(msg.toString());
 
-			gameState.advancePhase(); // ACTIVE â†’ DRAW
+			gameState.advancePhase(); // ACTIVE → DRAW
 
 			List<CardData> drawn = gameState.drawToHand(2);
 			refreshP1HandLabel();
@@ -8089,13 +8089,13 @@ public class MainWindow {
 				return;
 			}
 			logEntry("Draw Phase — Drew " + drawn.size() + " card(s)");
-			gameState.advancePhase(); // DRAW â†’ MAIN_1
+			gameState.advancePhase(); // DRAW → MAIN_1
 			logEntry("Main Phase 1");
 			processWarpCounters();
 			nextPhaseButton.setEnabled(true);
 		}
 
-		// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+		// ── Helpers ──────────────────────────────────────────────────────────
 
 		private boolean p2ForwardCanAttack(int idx) {
 			if (p2ForwardCannotAttack.contains(idx)) return false;
