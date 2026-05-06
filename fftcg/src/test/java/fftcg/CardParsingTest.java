@@ -1,13 +1,13 @@
 package fftcg;
 
-import org.junit.jupiter.api.Test;
-
 import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.List;
+
+import org.junit.jupiter.api.Test;
 
 public class CardParsingTest {
 
@@ -67,7 +67,7 @@ public class CardParsingTest {
                         CardData.parseWarpCost(textEn),
                         CardData.parsePrimingTarget(textEn),
                         CardData.parsePrimingCost(textEn),
-                        abilities);
+                        abilities, textEn);
 
                 int parsed = 0;
                 for (ActionAbility ab : abilities) {
