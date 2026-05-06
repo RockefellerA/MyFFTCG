@@ -83,6 +83,11 @@ public class ActionResolver {
         ")"
     );
 
+    /** Matches "Activate it" or "Activate them". */
+    private static final Pattern FOLLOWUP_ACTIVATE = Pattern.compile(
+        "(?i)Activate\\s+(?:it|them)\\.?"
+    );
+
     /** Matches "dull it" or "dull them". */
     private static final Pattern FOLLOWUP_DULL = Pattern.compile(
         "(?i)dull\\s+(?:it|them)"
@@ -643,6 +648,18 @@ public class ActionResolver {
                     sortedByIdxDesc(ts, false).forEach(t -> ctx.damageTarget(t, damage));
                 };
             }
+        }
+
+        // --- Activate followup ---
+        if (FOLLOWUP_ACTIVATE.matcher(followup).find()) {
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — Activate");
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                sortedByIdxDesc(ts, true) .forEach(t -> ctx.activateTarget(t));
+                sortedByIdxDesc(ts, false).forEach(t -> ctx.activateTarget(t));
+            };
         }
 
         // --- Dull followup ---

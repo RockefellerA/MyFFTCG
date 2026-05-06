@@ -109,6 +109,9 @@ public interface GameContext {
      */
     void damageTarget(ForwardTarget t, int amount);
 
+    /** Sets the target back to Active state and refreshes its slot. */
+    void activateTarget(ForwardTarget t);
+
     /** Dulls the target and refreshes its slot. */
     void dullTarget(ForwardTarget t);
 

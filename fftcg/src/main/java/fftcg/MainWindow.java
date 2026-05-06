@@ -5962,6 +5962,26 @@ public class MainWindow {
 				else          damageP2Forward(t.idx(), amount);
 			}
 
+			@Override public void activateTarget(ForwardTarget t) {
+				switch (t.zone()) {
+					case FORWARD -> {
+						int i = t.idx();
+						if (t.isP1()) { if (i < p1ForwardCards.size()) { p1ForwardStates.set(i, CardState.ACTIVE); logEntry(p1Forward(i).name() + " is activated"); refreshP1ForwardSlot(i); } }
+						else          { if (i < p2ForwardCards.size()) { p2ForwardStates.set(i, CardState.ACTIVE); logEntry("[P2] " + p2ForwardCards.get(i).name() + " is activated"); refreshP2ForwardSlot(i); } }
+					}
+					case BACKUP -> {
+						int i = t.idx();
+						if (t.isP1()) { if (i < p1BackupCards.length && p1BackupCards[i] != null) { p1BackupStates[i] = CardState.ACTIVE; logEntry(p1BackupCards[i].name() + " is activated"); refreshP1BackupSlot(i); } }
+						else          { if (i < p2BackupCards.length && p2BackupCards[i] != null) { p2BackupStates[i] = CardState.ACTIVE; logEntry("[P2] " + p2BackupCards[i].name() + " is activated"); refreshP2BackupSlot(i); } }
+					}
+					case MONSTER -> {
+						int i = t.idx();
+						if (t.isP1()) { if (i < p1MonsterCards.size()) { p1MonsterStates.set(i, CardState.ACTIVE); logEntry(p1MonsterCards.get(i).name() + " is activated"); refreshP1MonsterSlot(i); } }
+						else          { if (i < p2MonsterCards.size()) { p2MonsterStates.set(i, CardState.ACTIVE); logEntry("[P2] " + p2MonsterCards.get(i).name() + " is activated"); refreshP2MonsterSlot(i); } }
+					}
+				}
+			}
+
 			@Override public void dullTarget(ForwardTarget t) {
 				switch (t.zone()) {
 					case FORWARD -> { if (t.isP1()) dullP1Forward(t.idx()); else dullP2Forward(t.idx()); }
