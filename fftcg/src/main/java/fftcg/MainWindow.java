@@ -6900,15 +6900,22 @@ public class MainWindow {
 				&& !p1ForwardCannotAttack.contains(idx)
 				&& !p1ForwardCannotAttackPersistent.contains(idx)
 				&& (hasHaste || p1ForwardPlayedOnTurn.get(idx) != gameState.getTurnNumber());
-		int damage = p1ForwardDamage.get(idx);
-		int power  = effectiveP1ForwardPower(idx);
+		int damage    = p1ForwardDamage.get(idx);
+		int power     = effectiveP1ForwardPower(idx);
+		int basePower = (topCard != null ? topCard : p1ForwardCards.get(idx)).power();
 		boolean selected = p1AttackSelection.contains(idx);
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
 				if (raw == null) return null;
 				BufferedImage canvas = CardAnimation.renderBackupCard(CardAnimation.toARGB(raw, CARD_W, CARD_H), state, canAttack, selected, Boolean.TRUE.equals(p1ForwardFrozen.get(idx)));
-				if (damage > 0 && power > 0) CardAnimation.renderDamageOverlay(canvas, power - damage);
+				if (damage > 0 && power > 0) {
+					CardAnimation.renderPowerOverlay(canvas, power - damage, new Color(255, 50, 50));
+				} else if (power > basePower) {
+					CardAnimation.renderPowerOverlay(canvas, power, new Color(80, 220, 80));
+				} else if (power < basePower) {
+					CardAnimation.renderPowerOverlay(canvas, power, new Color(230, 200, 60));
+				}
 				return new ImageIcon(canvas);
 			}
 			@Override protected void done() {
@@ -8074,14 +8081,21 @@ public class MainWindow {
 		CardState state = p2ForwardStates.get(idx);
 		JLabel slot     = p2ForwardLabels.get(idx);
 		if (url == null) return;
-		int damage = p2ForwardDamage.get(idx);
-		int power  = effectiveP2ForwardPower(idx);
+		int damage    = p2ForwardDamage.get(idx);
+		int power     = effectiveP2ForwardPower(idx);
+		int basePower = p2ForwardCards.get(idx).power();
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
 				if (raw == null) return null;
 				BufferedImage canvas = CardAnimation.renderBackupCard(CardAnimation.toARGB(raw, CARD_W, CARD_H), state, false, false, p2ForwardFrozen.get(idx));
-				if (damage > 0 && power > 0) CardAnimation.renderDamageOverlay(canvas, power - damage);
+				if (damage > 0 && power > 0) {
+					CardAnimation.renderPowerOverlay(canvas, power - damage, new Color(255, 50, 50));
+				} else if (power > basePower) {
+					CardAnimation.renderPowerOverlay(canvas, power, new Color(80, 220, 80));
+				} else if (power < basePower) {
+					CardAnimation.renderPowerOverlay(canvas, power, new Color(230, 200, 60));
+				}
 				return new ImageIcon(canvas);
 			}
 			@Override protected void done() {
