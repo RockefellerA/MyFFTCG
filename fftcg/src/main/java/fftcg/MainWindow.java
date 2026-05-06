@@ -4809,6 +4809,53 @@ public class MainWindow {
 		return canAffordAbilityCost(ability, isP1);
 	}
 
+	/**
+	 * Builds the BZ-target list for ability payment by finding the source card's
+	 * current field position.  The BZ cost is always "put itself into the Break Zone",
+	 * so no player selection is needed — one entry is added per cost item.
+	 */
+	private List<ForwardTarget> autoResolveBzTargets(CardData source, List<BreakZoneCost> bzCosts, boolean isP1) {
+		if (bzCosts.isEmpty()) return List.of();
+		ForwardTarget self = findSourceOnField(source, isP1);
+		if (self == null) return List.of();
+		List<ForwardTarget> result = new ArrayList<>();
+		for (int i = 0; i < bzCosts.size(); i++) result.add(self);
+		return result;
+	}
+
+	/** Finds the field position of {@code source} by object identity, or {@code null} if not found. */
+	private ForwardTarget findSourceOnField(CardData source, boolean isP1) {
+		if (isP1) {
+			for (int i = 0; i < p1ForwardCards.size(); i++) {
+				CardData top = p1ForwardPrimedTop.get(i);
+				if (top == source || p1ForwardCards.get(i) == source)
+					return new ForwardTarget(true, i, ForwardTarget.CardZone.FORWARD);
+			}
+			for (int i = 0; i < p1BackupCards.length; i++) {
+				if (p1BackupCards[i] == source)
+					return new ForwardTarget(true, i, ForwardTarget.CardZone.BACKUP);
+			}
+			for (int i = 0; i < p1MonsterCards.size(); i++) {
+				if (p1MonsterCards.get(i) == source)
+					return new ForwardTarget(true, i, ForwardTarget.CardZone.MONSTER);
+			}
+		} else {
+			for (int i = 0; i < p2ForwardCards.size(); i++) {
+				if (p2ForwardCards.get(i) == source)
+					return new ForwardTarget(false, i, ForwardTarget.CardZone.FORWARD);
+			}
+			for (int i = 0; i < p2BackupCards.length; i++) {
+				if (p2BackupCards[i] == source)
+					return new ForwardTarget(false, i, ForwardTarget.CardZone.BACKUP);
+			}
+			for (int i = 0; i < p2MonsterCards.size(); i++) {
+				if (p2MonsterCards.get(i) == source)
+					return new ForwardTarget(false, i, ForwardTarget.CardZone.MONSTER);
+			}
+		}
+		return null;
+	}
+
 	private boolean bzCostSatisfied(BreakZoneCost bz, boolean isP1) {
 		return eligibleBzFieldCards(bz, isP1).size() >= bz.count();
 	}
@@ -4957,9 +5004,9 @@ public class MainWindow {
 
 		List<BreakZoneCost> bzCosts = ability.breakZoneCosts();
 
-		// If zero CP cost and no break-zone costs, confirm immediately
-		if (totalCost == 0 && bzCosts.isEmpty()) {
-			executeAbilityPayment(ability, source, applyDull, new ArrayList<>(), new ArrayList<>(), List.of(), isP1);
+		// If zero CP cost, confirm immediately (BZ cost is always resolved automatically)
+		if (totalCost == 0) {
+			executeAbilityPayment(ability, source, applyDull, new ArrayList<>(), new ArrayList<>(), autoResolveBzTargets(source, bzCosts, isP1), isP1);
 			return;
 		}
 
@@ -4981,7 +5028,7 @@ public class MainWindow {
 
 		List<Integer> eligibleBackupSlots = new ArrayList<>();
 		for (int i = 0; i < bkpCards.length; i++) {
-			if (bkpCards[i] != null && bkpStates[i] == CardState.ACTIVE
+			if (bkpCards[i] != null && bkpCards[i] != source && bkpStates[i] == CardState.ACTIVE
 					&& (genericNeeded > 0 || matchesAnyElement(bkpCards[i], elems)))
 				eligibleBackupSlots.add(i);
 		}
@@ -4997,11 +5044,6 @@ public class MainWindow {
 		List<Integer> backupSlots = new ArrayList<>();
 		List<JLabel>  discardLbls = new ArrayList<>();
 		List<Integer> discardIdxs = new ArrayList<>();
-
-		// Break-zone cost tracking: one selected ForwardTarget per BZ cost item
-		ForwardTarget[] selectedBzTargets = new ForwardTarget[bzCosts.size()];
-		List<List<JLabel>>        bzSectionLbls     = new ArrayList<>();
-		List<List<ForwardTarget>> bzSectionEligible = new ArrayList<>();
 
 		boolean[] canAddDiscard = {false};
 		Runnable updateAll = () -> {
@@ -5025,10 +5067,7 @@ public class MainWindow {
 			canAddDiscard[0]     = (total + 2 <= maxAllowed) && (total < totalCost || unsatisfied > 0);
 			boolean satisfied    = cpByElem.entrySet().stream()
 					.allMatch(en -> en.getValue() >= costByElem.getOrDefault(en.getKey(), 0));
-			boolean bzSatisfied  = true;
-			for (int bzi = 0; bzi < bzCosts.size(); bzi++)
-				if (selectedBzTargets[bzi] == null) { bzSatisfied = false; break; }
-			confirmBtn.setEnabled(total >= totalCost && satisfied && bzSatisfied);
+			confirmBtn.setEnabled(total >= totalCost && satisfied);
 
 			StringBuilder sb = new StringBuilder("CP: " + total + " / " + totalCost + "  (");
 			boolean first = true;
@@ -5056,15 +5095,6 @@ public class MainWindow {
 				lbl.setBorder(BorderFactory.createLineBorder(sel ? Color.YELLOW : (canAddDiscard[0] ? Color.GRAY : new Color(80,80,80)), sel?3:1));
 				lbl.setBackground(sel || canAddDiscard[0] ? Color.DARK_GRAY : new Color(50,50,50));
 				lbl.setCursor(sel || canAddDiscard[0] ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
-			}
-			for (int bzi = 0; bzi < bzSectionLbls.size(); bzi++) {
-				ForwardTarget sel = selectedBzTargets[bzi];
-				List<ForwardTarget> elig = bzSectionEligible.get(bzi);
-				List<JLabel> lbls = bzSectionLbls.get(bzi);
-				for (int li = 0; li < lbls.size(); li++) {
-					boolean isSel = sel != null && sel.equals(elig.get(li));
-					lbls.get(li).setBorder(BorderFactory.createLineBorder(isSel ? Color.YELLOW : Color.GRAY, isSel ? 3 : 1));
-				}
 			}
 		};
 		updateAll.run();
@@ -5149,67 +5179,14 @@ public class MainWindow {
 		}
 		center.add(discHdr); center.add(dp);
 
-		// Break-zone cost sections
-		for (int bzi = 0; bzi < bzCosts.size(); bzi++) {
-			final int bzIdx = bzi;
-			BreakZoneCost bz = bzCosts.get(bzi);
-			List<ForwardTarget> eligible = eligibleBzFieldCards(bz, isP1);
-
-			String desc = bz.name().isEmpty()
-					? bz.count() + " " + bz.cardType()
-					: bz.name();
-			JLabel bzHdr = new JLabel("Put into Break Zone: " + desc);
-			bzHdr.setFont(new Font("Pixel NES", Font.PLAIN, 9));
-			bzHdr.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-			JPanel bzPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
-			bzPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-
-			List<JLabel> bzLbls = new ArrayList<>();
-			for (ForwardTarget ft : eligible) {
-				String imgUrl = fieldCardUrl(ft);
-				JLabel lbl = new JLabel("...", SwingConstants.CENTER);
-				lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
-				lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
-				lbl.setOpaque(true); lbl.setBackground(Color.DARK_GRAY); lbl.setForeground(Color.WHITE);
-				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
-				lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
-				lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-				lbl.addMouseListener(new MouseAdapter() {
-					@Override public void mousePressed(MouseEvent ev) {
-						selectedBzTargets[bzIdx] = ft.equals(selectedBzTargets[bzIdx]) ? null : ft;
-						updateAll.run();
-					}
-					@Override public void mouseEntered(MouseEvent ev) { if (lbl.getIcon() != null) showZoomAt(imgUrl); }
-					@Override public void mouseExited(MouseEvent ev)  { hideZoom(); }
-				});
-				new SwingWorker<ImageIcon, Void>() {
-					@Override protected ImageIcon doInBackground() throws Exception {
-						Image img = ImageCache.load(imgUrl);
-						return img == null ? null : new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
-					}
-					@Override protected void done() {
-						try { ImageIcon ic = get(); if (ic != null) { lbl.setIcon(ic); lbl.setText(null); } }
-						catch (InterruptedException | ExecutionException ignored) {}
-					}
-				}.execute();
-				bzLbls.add(lbl);
-				bzPanel.add(lbl);
-			}
-			bzSectionLbls.add(bzLbls);
-			bzSectionEligible.add(eligible);
-			center.add(bzHdr); center.add(bzPanel);
-		}
-
 		JButton cancelBtn = new JButton("Cancel");
 		cancelBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
 		cancelBtn.addActionListener(ev -> dlg.dispose());
 		confirmBtn.addActionListener(ev -> {
-			List<ForwardTarget> bzList = new ArrayList<>();
-			for (ForwardTarget t : selectedBzTargets) if (t != null) bzList.add(t);
 			dlg.dispose();
 			executeAbilityPayment(ability, source, applyDull,
-					new ArrayList<>(selectedDiscards), new ArrayList<>(selectedBackups), bzList, isP1);
+					new ArrayList<>(selectedDiscards), new ArrayList<>(selectedBackups),
+					autoResolveBzTargets(source, bzCosts, isP1), isP1);
 		});
 
 		JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
