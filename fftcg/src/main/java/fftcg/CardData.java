@@ -29,7 +29,8 @@ public record CardData(
         List<String> warpCost,
         String primingTarget,
         List<String> primingCost,
-        List<ActionAbility> actionAbilities
+        List<ActionAbility> actionAbilities,
+        String textEn
 ) {
 
     public Set<Trait> getTraits() {
@@ -50,6 +51,22 @@ public record CardData(
         warpCost        = List.copyOf(warpCost);
         primingCost     = List.copyOf(primingCost);
         actionAbilities = List.copyOf(actionAbilities);
+        textEn          = textEn != null ? textEn : "";
+    }
+
+    private static final Pattern SUMMON_EX_PREFIX =
+            Pattern.compile("(?i)^\\s*\\[\\[ex\\]\\]\\s*");
+    private static final Pattern SUMMON_MARKUP =
+            Pattern.compile("(?i)\\[\\[[a-z/0-9]+\\]\\]");
+
+    /**
+     * Returns cleaned effect text for a Summon: strips the {@code [[ex]]} exBurst
+     * prefix and all other inline markup tags, then collapses whitespace.
+     */
+    public String summonEffect() {
+        String t = SUMMON_EX_PREFIX.matcher(textEn).replaceFirst("");
+        t = SUMMON_MARKUP.matcher(t).replaceAll(" ");
+        return t.replaceAll("\\s+", " ").trim();
     }
 
     // Haste: start with [[br]] or (This descriptor, middle [[br]]…[[br]], or paired with other keywords

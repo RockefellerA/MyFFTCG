@@ -125,6 +125,8 @@ public class MainWindow {
 	private JWindow openingHandPopup;
 	// Hand hover popover (deck zone mouseover)
 	private JWindow handPopup;
+	// Summon stack overlay (shown while a Summon is on the stack)
+	private JWindow summonStackWindow;
 	private javax.swing.Timer handPopupHideTimer;
 	private boolean handCardMenuOpen = false;
 
@@ -923,7 +925,7 @@ public class MainWindow {
 							card.multicard(), CardData.parseTraits(tx),
 							CardData.parseWarpValue(tx), CardData.parseWarpCost(tx),
 							CardData.parsePrimingTarget(tx), CardData.parsePrimingCost(tx),
-							CardData.parseActionAbilities(tx));
+							CardData.parseActionAbilities(tx), tx);
 					if (card.isLb()) lb.add(cd);
 					else             main.add(cd);
 				}
@@ -942,7 +944,7 @@ public class MainWindow {
 								card.multicard(), CardData.parseTraits(tx),
 								CardData.parseWarpValue(tx), CardData.parseWarpCost(tx),
 								CardData.parsePrimingTarget(tx), CardData.parsePrimingCost(tx),
-								CardData.parseActionAbilities(tx));
+								CardData.parseActionAbilities(tx), tx);
 						if (card.isLb()) p2Lb.add(cd);
 						else             p2Main.add(cd);
 					}
@@ -4273,14 +4275,123 @@ public class MainWindow {
 		} else if (card.isMonster()) {
 			placeCardInMonsterZone(card);
 		} else if (card.isSummon()) {
-			gameState.pushStack(card);
-			CardData resolved = gameState.popStack();
-			gameState.getP1BreakZone().add(resolved);
-			logEntry("\"" + resolved.name() + "\" resolves → Break Zone");
+			showSummonOnStack(card);
 		}
 
 		refreshP1HandLabel();
 		refreshP1BreakLabel();
+	}
+
+	/**
+	 * Pushes {@code card} onto the stack and shows a floating overlay in the centre of the
+	 * board for up to 5 seconds so the opponent can read the card and respond.  The overlay
+	 * has a "Resolve Now" button that skips the countdown.  When the timer expires or the
+	 * button is clicked the Summon's effect is parsed and executed, then the card is popped
+	 * from the stack and sent to the Break Zone.
+	 */
+	private void showSummonOnStack(CardData card) {
+		gameState.pushStack(card);
+		logEntry("[Stack] \"" + card.name() + "\" — Summon on the stack");
+
+		if (summonStackWindow != null) summonStackWindow.dispose();
+		summonStackWindow = new JWindow(frame);
+
+		JPanel panel = new JPanel(new BorderLayout(6, 6));
+		panel.setBackground(new Color(28, 24, 40));
+		panel.setBorder(BorderFactory.createCompoundBorder(
+				BorderFactory.createLineBorder(new Color(160, 110, 220), 2),
+				BorderFactory.createEmptyBorder(10, 14, 10, 14)));
+
+		JLabel header = new JLabel("S U M M O N", SwingConstants.CENTER);
+		header.setFont(new Font("Pixel NES", Font.PLAIN, 13));
+		header.setForeground(new Color(210, 170, 255));
+		panel.add(header, BorderLayout.NORTH);
+
+		JLabel cardImg = new JLabel("", SwingConstants.CENTER);
+		cardImg.setPreferredSize(new Dimension(CardAnimation.CARD_W, CardAnimation.CARD_H));
+
+		JLabel nameLabel = new JLabel(card.name(), SwingConstants.CENTER);
+		nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+		nameLabel.setForeground(Color.WHITE);
+
+		JPanel imagePanel = new JPanel(new BorderLayout(3, 3));
+		imagePanel.setOpaque(false);
+		imagePanel.add(cardImg,    BorderLayout.CENTER);
+		imagePanel.add(nameLabel,  BorderLayout.SOUTH);
+		panel.add(imagePanel, BorderLayout.CENTER);
+
+		int[] countdown = { 5 };
+		JLabel countdownLabel = new JLabel("Resolving in 5...", SwingConstants.CENTER);
+		countdownLabel.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+		countdownLabel.setForeground(Color.LIGHT_GRAY);
+
+		JButton resolveBtn = new JButton("Resolve Now");
+		resolveBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+
+		JPanel bottomPanel = new JPanel(new BorderLayout(4, 4));
+		bottomPanel.setOpaque(false);
+		bottomPanel.add(countdownLabel, BorderLayout.NORTH);
+		bottomPanel.add(resolveBtn,     BorderLayout.CENTER);
+		panel.add(bottomPanel, BorderLayout.SOUTH);
+
+		summonStackWindow.getContentPane().add(panel);
+		summonStackWindow.pack();
+
+		// Centre over the game frame
+		Point loc = frame.getLocationOnScreen();
+		int wx = loc.x + (frame.getWidth()  - summonStackWindow.getWidth())  / 2;
+		int wy = loc.y + (frame.getHeight() - summonStackWindow.getHeight()) / 2;
+		summonStackWindow.setLocation(wx, wy);
+		summonStackWindow.setVisible(true);
+
+		// Load card image asynchronously
+		new SwingWorker<ImageIcon, Void>() {
+			@Override protected ImageIcon doInBackground() throws Exception {
+				Image img = ImageCache.load(card.imageUrl());
+				return img == null ? null
+						: new ImageIcon(img.getScaledInstance(
+								CardAnimation.CARD_W, CardAnimation.CARD_H, Image.SCALE_SMOOTH));
+			}
+			@Override protected void done() {
+				try {
+					ImageIcon icon = get();
+					if (icon != null) { cardImg.setIcon(icon); cardImg.setText(null); }
+				} catch (InterruptedException | ExecutionException ignored) {}
+			}
+		}.execute();
+
+		// Resolution: pop stack, run effect, send to break zone
+		Runnable resolve = () -> {
+			if (summonStackWindow != null) { summonStackWindow.dispose(); summonStackWindow = null; }
+			String effectText = card.summonEffect();
+			logEntry("[Summon] Resolving \"" + card.name() + "\": " + effectText);
+			java.util.function.Consumer<GameContext> effect = ActionResolver.parse(effectText, card);
+			GameContext ctx = buildGameContext(true);
+			if (effect != null) effect.accept(ctx);
+			else logEntry("[ActionResolver] Summon effect not yet implemented: " + effectText);
+			CardData resolved = gameState.popStack();
+			if (resolved != null) {
+				gameState.getP1BreakZone().add(resolved);
+				logEntry("\"" + resolved.name() + "\" → Break Zone");
+			}
+			refreshP1BreakLabel();
+		};
+
+		// 1-second countdown timer
+		javax.swing.Timer[] timerRef = { null };
+		timerRef[0] = new javax.swing.Timer(1000, null);
+		timerRef[0].addActionListener(e -> {
+			countdown[0]--;
+			if (countdown[0] <= 0) {
+				timerRef[0].stop();
+				resolve.run();
+			} else {
+				countdownLabel.setText("Resolving in " + countdown[0] + "...");
+			}
+		});
+		timerRef[0].start();
+
+		resolveBtn.addActionListener(e -> { timerRef[0].stop(); resolve.run(); });
 	}
 
 	/**
@@ -5550,9 +5661,21 @@ public class MainWindow {
 
 		logEntry("\"" + source.name() + "\" activated ability");
 
-		// Build a GameContext so ActionResolver can apply field effects without
-		// direct access to MainWindow's private fields.
-		GameContext ctx = new GameContext() {
+		GameContext ctx = buildGameContext(isP1);
+		ActionResolver.resolve(ability, source, gameState, ctx);
+		refreshP1HandLabel();
+		refreshP1BreakLabel();
+	}
+
+	/**
+	 * Builds the {@link GameContext} used by {@link ActionResolver} to apply field effects.
+	 * The returned instance is stateless (delegates to live MainWindow fields), so it is safe
+	 * to call multiple times and share between ability resolution and summon resolution.
+	 *
+	 * @param isP1 {@code true} when P1 is the ability user (affects discard/draw direction)
+	 */
+	private GameContext buildGameContext(boolean isP1) {
+		return new GameContext() {
 			@Override public void logEntry(String msg) { MainWindow.this.logEntry(msg); }
 
 			@Override public int p1ForwardCount()                    { return p1ForwardCards.size(); }
@@ -5735,20 +5858,13 @@ public class MainWindow {
 			@Override public void returnP1ForwardToDeckTop(int idx)    { returnP1ForwardToDeck(idx, false); }
 			@Override public void returnP2ForwardToDeckTop(int idx)    { returnP2ForwardToDeck(idx, false); }
 
-			// P1 attack selection is tracked; P2 attacking and all blocking states are not
-			// yet persisted outside of momentary combat resolution.
 			@Override public boolean isP1ForwardAttacking(int idx) { return p1AttackSelection.contains(idx); }
 			@Override public boolean isP2ForwardAttacking(int idx) { return false; }
 			@Override public boolean isP1ForwardBlocking(int idx)  { return false; }
 			@Override public boolean isP2ForwardBlocking(int idx)  { return false; }
 
-			@Override public void breakP1Forward(int idx) {
-				MainWindow.this.breakP1Forward(idx);
-			}
-
-			@Override public void breakP2Forward(int idx) {
-				MainWindow.this.breakP2Forward(idx);
-			}
+			@Override public void breakP1Forward(int idx) { MainWindow.this.breakP1Forward(idx); }
+			@Override public void breakP2Forward(int idx) { MainWindow.this.breakP2Forward(idx); }
 
 			@Override public void removeP1ForwardFromGame(int idx) {
 				if (idx >= p1ForwardCards.size()) return;
@@ -5756,7 +5872,6 @@ public class MainWindow {
 				List<CardData> bz = gameState.getP1BreakZone();
 				int before = bz.size();
 				MainWindow.this.breakP1Forward(idx);
-				// Redirect anything breakP1Forward sent to the break zone → permanent RFP
 				while (bz.size() > before)
 					gameState.addToP1PermanentRfp(bz.remove(bz.size() - 1));
 				refreshP1BreakLabel();
@@ -5769,7 +5884,6 @@ public class MainWindow {
 				List<CardData> bz = gameState.getP2BreakZone();
 				int before = bz.size();
 				MainWindow.this.breakP2Forward(idx);
-				// Redirect anything breakP2Forward sent to the break zone → P2 permanent RFP
 				while (bz.size() > before)
 					gameState.addToP2PermanentRfp(bz.remove(bz.size() - 1));
 				refreshP2BreakLabel();
@@ -5804,10 +5918,8 @@ public class MainWindow {
 				return showBreakZoneSelectDialog(eligible, bz, maxCount, upTo, title);
 			}
 
-			// ---- Zone-dispatch single-target effects ----------------------------
-
 			@Override public void damageTarget(ForwardTarget t, int amount) {
-				if (t.zone() == ForwardTarget.CardZone.BACKUP) return; // backups have no power
+				if (t.zone() == ForwardTarget.CardZone.BACKUP) return;
 				if (t.isP1()) damageP1Forward(t.idx(), amount);
 				else          damageP2Forward(t.idx(), amount);
 			}
@@ -5921,7 +6033,6 @@ public class MainWindow {
 				CardData card = bz.remove(t.idx());
 				String src = t.isP1() ? "Break Zone" : "opponent's Break Zone";
 				logEntry(card.name() + " played from " + src + " onto field");
-				// Always plays to P1's field (P1 activated the ability)
 				if (card.isBackup())       placeCardInFirstBackupSlot(card);
 				else if (card.isMonster()) placeCardInMonsterZone(card);
 				else                       placeCardInForwardZone(card);
@@ -5983,7 +6094,6 @@ public class MainWindow {
 					logEntry(p1Forward(idx).name() + " loses " + (amount > 0 ? amount + " power" : "")
 							+ (!traits.isEmpty() ? (amount > 0 ? " and " : "") + traits : "") + " until end of turn");
 					if (effPow <= 0) {
-						// Power reduced to 0 — not treated as "broken" mechanically (distinction TBD)
 						logEntry(p1Forward(idx).name() + " reduced to 0 power → Break Zone");
 						breakP1Forward(idx);
 					} else {
@@ -6047,7 +6157,6 @@ public class MainWindow {
 					return t.isP1()
 							? (t.idx() < p1ForwardCards.size() ? effectiveP1ForwardPower(t.idx()) : 0)
 							: (t.idx() < p2ForwardCards.size() ? effectiveP2ForwardPower(t.idx()) : 0);
-				// MONSTER zone
 				return t.isP1()
 						? (t.idx() < p1MonsterCards.size() ? p1MonsterCards.get(t.idx()).power() : 0)
 						: (t.idx() < p2MonsterCards.size() ? p2MonsterCards.get(t.idx()).power() : 0);
@@ -6055,7 +6164,6 @@ public class MainWindow {
 
 			@Override public void forceOpponentDiscard(int count) {
 				if (isP1) {
-					// P1 activated — P2 AI discards worst cards automatically
 					List<CardData> hand = gameState.getP2Hand();
 					int actual = Math.min(count, hand.size());
 					for (int i = 0; i < actual; i++) {
@@ -6066,7 +6174,6 @@ public class MainWindow {
 					refreshP2HandCountLabel();
 					refreshP2BreakLabel();
 				} else {
-					// P2 activated — P1 selects cards to discard via dialog
 					showForcedDiscardDialog(count);
 				}
 			}
@@ -6236,10 +6343,6 @@ public class MainWindow {
 				}
 			}
 		};
-
-		ActionResolver.resolve(ability, source, gameState, ctx);
-		refreshP1HandLabel();
-		refreshP1BreakLabel();
 	}
 
 	// -------------------------------------------------------------------------
