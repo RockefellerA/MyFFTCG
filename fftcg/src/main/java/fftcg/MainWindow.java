@@ -29,6 +29,7 @@ import java.awt.image.BufferedImage;
 import java.awt.image.ColorConvertOp;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -3988,23 +3989,36 @@ public class MainWindow {
 		List<JLabel>   discardLbls  = new ArrayList<>();
 		List<Integer>  discardIdxs  = new ArrayList<>();
 
+		// Required CP per element for the card being played (each element needs ≥ 1).
+		Map<String, Integer> costByElem = new LinkedHashMap<>();
+		if (!isLD) for (String e : elems) costByElem.put(e, 1);
+
 		boolean[] canAddDiscard = {false};
 		Runnable updateAll = () -> {
 			Map<String, Integer> cpByElem = new LinkedHashMap<>(bankCpByElem);
 			int extraCp = 0;
-			for (int slot : selectedBackups) {
+			// Sort: cards matching fewer required elements first → optimal greedy assignment.
+			List<Integer> sortedBackups = new ArrayList<>(selectedBackups);
+			if (!isLD) sortedBackups.sort(Comparator.comparingInt(s ->
+					(int) java.util.Arrays.stream(elems)
+							.filter(e -> p1BackupCards[s].containsElement(e)).count()));
+			for (int slot : sortedBackups) {
 				if (isLD)
 					cpByElem.merge(elem, 1, Integer::sum);
 				else if (matchesAnyElement(p1BackupCards[slot], elems))
-					cpByElem.merge(contributingElement(p1BackupCards[slot], elems), 1, Integer::sum);
+					cpByElem.merge(contributingElement(p1BackupCards[slot], elems, cpByElem, costByElem), 1, Integer::sum);
 				else
 					extraCp += 1;
 			}
-			for (int idx : selectedDiscards) {
+			List<Integer> sortedDiscards = new ArrayList<>(selectedDiscards);
+			if (!isLD) sortedDiscards.sort(Comparator.comparingInt(i ->
+					(int) java.util.Arrays.stream(elems)
+							.filter(e -> hand.get(i).containsElement(e)).count()));
+			for (int idx : sortedDiscards) {
 				if (isLD)
 					cpByElem.merge(elem, 2, Integer::sum);
 				else if (matchesAnyElement(hand.get(idx), elems))
-					cpByElem.merge(contributingElement(hand.get(idx), elems), 2, Integer::sum);
+					cpByElem.merge(contributingElement(hand.get(idx), elems, cpByElem, costByElem), 2, Integer::sum);
 				else
 					extraCp += 2;
 			}
@@ -4247,17 +4261,41 @@ public class MainWindow {
 			List<Integer> discardIndices, List<Integer> backupDullIndices) {
 		String[] elems = card.elements();
 		boolean  isLD  = card.isLightOrDark();
-		for (int bi : backupDullIndices) {
+		Map<String, Integer> execCostByElem = new LinkedHashMap<>();
+		if (!isLD) for (String e : elems) execCostByElem.put(e, 1);
+		Map<String, Integer> execCpAccum = new LinkedHashMap<>();
+
+		// Backups: sort by fewest element matches first for optimal assignment.
+		List<Integer> sortedBackups = new ArrayList<>(backupDullIndices);
+		if (!isLD) sortedBackups.sort(Comparator.comparingInt(s ->
+				(int) java.util.Arrays.stream(elems)
+						.filter(e -> p1BackupCards[s].containsElement(e)).count()));
+		for (int bi : sortedBackups) {
 			p1BackupStates[bi] = CardState.DULL;
 			animateDullBackup(bi, true);
-			String cpElem = isLD ? p1BackupCards[bi].elements()[0] : contributingElement(p1BackupCards[bi], elems);
+			String cpElem = isLD ? p1BackupCards[bi].elements()[0]
+					: contributingElement(p1BackupCards[bi], elems, execCpAccum, execCostByElem);
 			gameState.addP1Cp(cpElem, 1);
+			execCpAccum.merge(cpElem, 1, Integer::sum);
+		}
+
+		// Discards: pre-compute optimal element assignments (fewer matches first),
+		// then remove from hand in reverse-index order to avoid index shifting.
+		List<Integer> assignOrder = new ArrayList<>(discardIndices);
+		if (!isLD) assignOrder.sort(Comparator.comparingInt(i ->
+				(int) java.util.Arrays.stream(elems)
+						.filter(e -> gameState.getP1Hand().get(i).containsElement(e)).count()));
+		Map<Integer, String> cpAssignments = new LinkedHashMap<>();
+		for (int i : assignOrder) {
+			CardData d = gameState.getP1Hand().get(i);
+			String cpElem = isLD ? d.elements()[0]
+					: contributingElement(d, elems, execCpAccum, execCostByElem);
+			cpAssignments.put(i, cpElem);
+			execCpAccum.merge(cpElem, 2, Integer::sum);
 		}
 		discardIndices.sort(Collections.reverseOrder());
 		for (int di : discardIndices) {
-			CardData discarded = gameState.getP1Hand().get(di);
-			String cpElem = isLD ? discarded.elements()[0] : contributingElement(discarded, elems);
-			gameState.addP1Cp(cpElem, 2);
+			gameState.addP1Cp(cpAssignments.get(di), 2);
 			gameState.breakFromHand(di);
 			if (di < cardHandIdx) cardHandIdx--;
 		}
