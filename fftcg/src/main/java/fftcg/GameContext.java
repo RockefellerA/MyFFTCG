@@ -227,6 +227,20 @@ public interface GameContext {
     /** Requires P2's forward at {@code idx} to block this turn if it is eligible to do so. */
     void setP2ForwardMustBlock(int idx);
 
+    // ---- Return to deck -----------------------------------------------------
+
+    /** Removes P1's forward at {@code idx} from the field and places it at the bottom of P1's deck. */
+    void returnP1ForwardToDeckBottom(int idx);
+
+    /** Removes P2's forward at {@code idx} from the field and places it at the bottom of P2's deck. */
+    void returnP2ForwardToDeckBottom(int idx);
+
+    /** Removes P1's forward at {@code idx} from the field and places it on top of P1's deck. */
+    void returnP1ForwardToDeckTop(int idx);
+
+    /** Removes P2's forward at {@code idx} from the field and places it on top of P2's deck. */
+    void returnP2ForwardToDeckTop(int idx);
+
     // ---- Attack restrictions ------------------------------------------------
 
     /** Prevents P1's forward at {@code idx} from attacking this turn. */

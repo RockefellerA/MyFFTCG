@@ -128,6 +128,16 @@ public class ActionResolver {
         "(?i)if\\s+possible[,]?\\s+it\\s+must\\s+block\\s+this\\s+turn\\.?"
     );
 
+    /** Matches "Put it at the bottom of its owner's deck." */
+    private static final Pattern FOLLOWUP_PUT_BOTTOM_OF_DECK = Pattern.compile(
+        "(?i)Put\\s+it\\s+at\\s+the\\s+bottom\\s+of\\s+its\\s+owner's\\s+deck\\.?"
+    );
+
+    /** Matches "Put it on top of its owner's deck." */
+    private static final Pattern FOLLOWUP_PUT_TOP_OF_DECK = Pattern.compile(
+        "(?i)Put\\s+it\\s+on\\s+top\\s+of\\s+its\\s+owner's\\s+deck\\.?"
+    );
+
     /** Matches "it cannot attack this turn" or "they cannot attack this turn". */
     private static final Pattern FOLLOWUP_CANNOT_ATTACK = Pattern.compile(
         "(?i)(?:it|they)\\s+cannot\\s+attack\\s+this\\s+turn\\.?"
@@ -685,6 +695,36 @@ public class ActionResolver {
                         costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.addTargetToHand(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.addTargetToHand(t));
+            };
+        }
+
+        // --- Put at bottom of owner's deck followup ---
+        if (FOLLOWUP_PUT_BOTTOM_OF_DECK.matcher(followup).find()) {
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — Put at bottom of owner's deck");
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                for (ForwardTarget t : ts) {
+                    if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
+                    if (t.isP1()) ctx.returnP1ForwardToDeckBottom(t.idx());
+                    else          ctx.returnP2ForwardToDeckBottom(t.idx());
+                }
+            };
+        }
+
+        // --- Put on top of owner's deck followup ---
+        if (FOLLOWUP_PUT_TOP_OF_DECK.matcher(followup).find()) {
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — Put on top of owner's deck");
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters);
+                for (ForwardTarget t : ts) {
+                    if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
+                    if (t.isP1()) ctx.returnP1ForwardToDeckTop(t.idx());
+                    else          ctx.returnP2ForwardToDeckTop(t.idx());
+                }
             };
         }
 

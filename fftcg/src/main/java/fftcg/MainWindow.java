@@ -2007,6 +2007,131 @@ public class MainWindow {
 		refreshP2BreakLabel();
 	}
 
+	private void returnP1ForwardToDeck(int idx, boolean toBottom) {
+		if (idx < 0 || idx >= p1ForwardCards.size()) return;
+		CardData card    = p1ForwardCards.get(idx);
+		CardData topCard = p1ForwardPrimedTop.get(idx);
+		String   pos     = toBottom ? "bottom" : "top";
+		if (topCard != null) {
+			gameState.getP1BreakZone().add(topCard);
+			gameState.addToP1PermanentRfp(topCard);
+			logEntry(topCard.name() + " → Removed From Game");
+		}
+		if (toBottom) gameState.getP1MainDeck().addLast(card);
+		else          gameState.getP1MainDeck().addFirst(card);
+		logEntry(card.name() + " → " + pos + " of deck");
+
+		p1ForwardCards.remove(idx);
+		p1ForwardUrls.remove(idx);
+		p1ForwardStates.remove(idx);
+		p1ForwardPlayedOnTurn.remove(idx);
+		p1ForwardDamage.remove(idx);
+		p1ForwardPowerBoost.remove(idx);
+		p1ForwardPowerReduction.remove(idx);
+		p1ForwardTempTraits.remove(idx);
+		p1ForwardRemovedTraits.remove(idx);
+		p1ForwardPrimedTop.remove(idx);
+		p1ForwardFrozen.remove(idx);
+		p1ForwardLabels.remove(idx);
+		shiftBlockSet(p1ForwardCannotBlock,            idx);
+		shiftBlockSet(p1ForwardMustBlock,              idx);
+		shiftBlockSet(p1ForwardCannotAttack,           idx);
+		shiftBlockSet(p1ForwardMustAttack,             idx);
+		shiftBlockSet(p1ForwardCannotAttackPersistent, idx);
+		shiftBlockSet(p1ForwardCannotBlockPersistent,  idx);
+
+		if (p1ForwardPanel != null) {
+			p1ForwardPanel.removeAll();
+			p1ForwardLabels.clear();
+			for (int i = 0; i < p1ForwardCards.size(); i++) {
+				final int fi = i;
+				JLabel lbl = new JLabel("", SwingConstants.CENTER);
+				lbl.setPreferredSize(new Dimension(CARD_H, CARD_H));
+				lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
+				lbl.setOpaque(false);
+				lbl.setForeground(Color.DARK_GRAY);
+				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+				lbl.setBorder(BorderFactory.createEmptyBorder());
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mousePressed(MouseEvent e) {
+						if (lbl.getIcon() == null) return;
+						if (SwingUtilities.isLeftMouseButton(e)
+								&& gameState.getCurrentPhase() == GameState.GamePhase.ATTACK) {
+							toggleAttackSelection(fi);
+						} else {
+							showForwardContextMenu(fi, lbl, e);
+						}
+					}
+					@Override public void mouseEntered(MouseEvent e) {
+						if (lbl.getIcon() == null) return;
+						CardData top = p1ForwardPrimedTop.get(fi);
+						showZoomAt(top != null ? top.imageUrl() : p1ForwardUrls.get(fi));
+					}
+					@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+				});
+				p1ForwardLabels.add(lbl);
+				p1ForwardPanel.add(lbl);
+			}
+			p1ForwardPanel.revalidate();
+			p1ForwardPanel.repaint();
+			for (int i = 0; i < p1ForwardCards.size(); i++) refreshP1ForwardSlot(i);
+		}
+		refreshP1DeckLabel();
+	}
+
+	private void returnP2ForwardToDeck(int idx, boolean toBottom) {
+		if (idx < 0 || idx >= p2ForwardCards.size()) return;
+		CardData card = p2ForwardCards.get(idx);
+		String   pos  = toBottom ? "bottom" : "top";
+		if (toBottom) gameState.getP2MainDeck().addLast(card);
+		else          gameState.getP2MainDeck().addFirst(card);
+		logEntry("[P2] " + card.name() + " → " + pos + " of deck");
+
+		p2ForwardCards.remove(idx);
+		p2ForwardUrls.remove(idx);
+		p2ForwardStates.remove(idx);
+		p2ForwardPlayedOnTurn.remove(idx);
+		p2ForwardDamage.remove(idx);
+		p2ForwardPowerBoost.remove(idx);
+		p2ForwardPowerReduction.remove(idx);
+		p2ForwardTempTraits.remove(idx);
+		p2ForwardRemovedTraits.remove(idx);
+		p2ForwardFrozen.remove(idx);
+		p2ForwardLabels.remove(idx);
+		shiftBlockSet(p2ForwardCannotBlock,            idx);
+		shiftBlockSet(p2ForwardMustBlock,              idx);
+		shiftBlockSet(p2ForwardCannotAttack,           idx);
+		shiftBlockSet(p2ForwardMustAttack,             idx);
+		shiftBlockSet(p2ForwardCannotAttackPersistent, idx);
+		shiftBlockSet(p2ForwardCannotBlockPersistent,  idx);
+
+		if (p2ForwardPanel != null) {
+			p2ForwardPanel.removeAll();
+			p2ForwardLabels.clear();
+			for (int i = 0; i < p2ForwardCards.size(); i++) {
+				final int fi = i;
+				JLabel lbl = new JLabel("", SwingConstants.CENTER);
+				lbl.setPreferredSize(new Dimension(CARD_H, CARD_H));
+				lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
+				lbl.setOpaque(false);
+				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+				lbl.setBorder(BorderFactory.createEmptyBorder());
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mouseEntered(MouseEvent e) {
+						if (lbl.getIcon() != null) showZoomAt(p2ForwardUrls.get(fi));
+					}
+					@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+				});
+				p2ForwardLabels.add(lbl);
+				p2ForwardPanel.add(lbl);
+			}
+			p2ForwardPanel.revalidate();
+			p2ForwardPanel.repaint();
+			for (int i = 0; i < p2ForwardCards.size(); i++) refreshP2ForwardSlot(i);
+		}
+		refreshP2DeckLabel();
+	}
+
 	private int effectiveP1ForwardPower(int idx) {
 		CardData top = p1ForwardPrimedTop.get(idx);
 		int base = top != null ? top.power() : p1ForwardCards.get(idx).power();
@@ -5473,6 +5598,10 @@ public class MainWindow {
 					p2ForwardCannotBlockPersistent.add(idx);
 				}
 			}
+			@Override public void returnP1ForwardToDeckBottom(int idx) { returnP1ForwardToDeck(idx, true);  }
+			@Override public void returnP2ForwardToDeckBottom(int idx) { returnP2ForwardToDeck(idx, true);  }
+			@Override public void returnP1ForwardToDeckTop(int idx)    { returnP1ForwardToDeck(idx, false); }
+			@Override public void returnP2ForwardToDeckTop(int idx)    { returnP2ForwardToDeck(idx, false); }
 
 			// P1 attack selection is tracked; P2 attacking and all blocking states are not
 			// yet persisted outside of momentary combat resolution.
