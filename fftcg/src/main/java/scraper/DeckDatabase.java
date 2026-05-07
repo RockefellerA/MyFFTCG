@@ -155,7 +155,7 @@ public class DeckDatabase implements AutoCloseable {
 
     /**
      * Returns every copy of every card in the deck (count expanded to individual entries).
-     * Includes all fields needed to construct a {@link fftcg.CardData} for game state.
+     * Includes all fields needed to construct a {@link shufflingway.CardData} for game state.
      */
     public List<DeckCardDetail> getDeckCardsDetailed(int deckId) throws SQLException {
         List<DeckCardDetail> result = new ArrayList<>();
