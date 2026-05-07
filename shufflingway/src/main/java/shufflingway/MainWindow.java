@@ -1,6 +1,8 @@
 package shufflingway;
 
 import java.io.File;
+import java.io.IOException;
+import javax.imageio.ImageIO;
 import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;
@@ -7832,7 +7834,17 @@ public class MainWindow {
 		String customPath = AppSettings.getCustomCardbackPath();
 		if (!customPath.isEmpty()) {
 			File f = new File(customPath);
-			if (f.exists()) return new ImageIcon(customPath).getImage();
+			if (f.exists()) {
+				try {
+					BufferedImage img = ImageIO.read(f);
+					if (img != null) return img;
+					System.err.println("Failed to decode custom cardback (unsupported format?): " + customPath);
+				} catch (IOException e) {
+					System.err.println("Error loading custom cardback: " + customPath + " — " + e.getMessage());
+				}
+			} else {
+				System.err.println("Custom cardback file not found: " + customPath);
+			}
 		}
 		return new ImageIcon(getClass().getResource("/resources/cardback/default.jpg")).getImage();
 	}
