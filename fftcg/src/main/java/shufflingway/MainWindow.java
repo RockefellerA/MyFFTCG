@@ -1,5 +1,6 @@
 package shufflingway;
 
+import java.io.File;
 import java.awt.AlphaComposite;
 import java.awt.BasicStroke;
 import java.awt.BorderLayout;
@@ -1513,10 +1514,7 @@ public class MainWindow {
 			new SwingWorker<ImageIcon, Void>() {
 				final boolean loadFace = spent;
 				@Override protected ImageIcon doInBackground() throws Exception {
-					String url = loadFace ? cd.imageUrl()
-							: getClass().getResource("/resources/cardback/default.jpg").toString();
-					Image img = loadFace ? ImageCache.load(url)
-							: new ImageIcon(getClass().getResource("/resources/cardback/default.jpg")).getImage();
+					Image img = loadFace ? ImageCache.load(cd.imageUrl()) : loadCardbackImage();
 					return img == null ? null
 							: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
 				}
@@ -7830,8 +7828,17 @@ public class MainWindow {
 		return panel;
 	}
 
+	private Image loadCardbackImage() {
+		String customPath = AppSettings.getCustomCardbackPath();
+		if (!customPath.isEmpty()) {
+			File f = new File(customPath);
+			if (f.exists()) return new ImageIcon(customPath).getImage();
+		}
+		return new ImageIcon(getClass().getResource("/resources/cardback/default.jpg")).getImage();
+	}
+
 	private ImageIcon scaledCardbackWithCount(Dimension size, int count) {
-		Image base = new ImageIcon(getClass().getResource("/resources/cardback/default.jpg")).getImage();
+		Image base = loadCardbackImage();
 		BufferedImage buf = new BufferedImage(size.width, size.height, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = buf.createGraphics();
 		g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);

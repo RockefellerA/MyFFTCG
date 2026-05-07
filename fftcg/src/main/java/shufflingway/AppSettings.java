@@ -17,6 +17,8 @@ public final class AppSettings {
 
     private static final String DIR  = System.getProperty("user.home") + File.separator + ".fftcg";
     private static final String PATH = DIR + File.separator + "settings.ini";
+    private static final String CARDBACK_CUSTOM_DIR =
+            DIR + File.separator + "cardback" + File.separator + "custom";
 
     private static final Properties props = new Properties();
 
@@ -107,5 +109,20 @@ public final class AppSettings {
     /** Saves the side-panel pixel width (call {@link #save()} to persist). */
     public static void setSidePanelWidth(int w) {
         props.setProperty("side.panel.width", String.valueOf(w));
+    }
+
+    /** Returns the directory where custom card back images are stored. */
+    public static String getCardbackCustomDir() {
+        return CARDBACK_CUSTOM_DIR;
+    }
+
+    /** Returns the absolute path of the user's custom card back, or {@code ""} if none is set. */
+    public static String getCustomCardbackPath() {
+        return props.getProperty("cardback.custom.path", "");
+    }
+
+    /** Sets the custom card back path (call {@link #save()} to persist). Pass {@code ""} to reset. */
+    public static void setCustomCardbackPath(String path) {
+        props.setProperty("cardback.custom.path", path);
     }
 }

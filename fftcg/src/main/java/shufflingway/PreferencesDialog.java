@@ -4,6 +4,10 @@ import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.FlowLayout;
 import java.awt.Frame;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -12,11 +16,14 @@ import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
+import javax.swing.JFileChooser;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.KeyStroke;
 import javax.swing.border.EmptyBorder;
 import javax.swing.border.TitledBorder;
+import javax.swing.filechooser.FileNameExtensionFilter;
 
 @SuppressWarnings("serial")
 public class PreferencesDialog extends JDialog {
@@ -82,6 +89,73 @@ public class PreferencesDialog extends JDialog {
 
 		layoutPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
 		contentPanel.add(layoutPanel);
+		contentPanel.add(javax.swing.Box.createVerticalStrut(8));
+
+		// ── Card Back ────────────────────────────────────────────────────────
+		JPanel cardBackPanel = new JPanel();
+		cardBackPanel.setLayout(new BoxLayout(cardBackPanel, BoxLayout.Y_AXIS));
+		cardBackPanel.setBorder(BorderFactory.createTitledBorder(
+				BorderFactory.createEtchedBorder(), "Card Back",
+				TitledBorder.LEFT, TitledBorder.TOP));
+
+		String existingPath = AppSettings.getCustomCardbackPath();
+		String currentName = existingPath.isEmpty() ? "Default" : new File(existingPath).getName();
+		JLabel currentLabel = new JLabel("Current: " + currentName);
+		currentLabel.setBorder(new EmptyBorder(2, 4, 4, 4));
+		currentLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+		cardBackPanel.add(currentLabel);
+
+		JButton resetButton = new JButton("Reset to Default");
+		resetButton.setEnabled(!existingPath.isEmpty());
+
+		JButton chooseButton = new JButton("Choose File…");
+		chooseButton.addActionListener(e -> {
+			JFileChooser chooser = new JFileChooser();
+			chooser.setFileFilter(new FileNameExtensionFilter(
+					"Image files (JPG, PNG, GIF, BMP)", "jpg", "jpeg", "png", "gif", "bmp"));
+			if (chooser.showOpenDialog(cardBackPanel) != JFileChooser.APPROVE_OPTION) return;
+			File selected = chooser.getSelectedFile();
+			if (selected.length() > 5L * 1024 * 1024) {
+				JOptionPane.showMessageDialog(cardBackPanel,
+						"File must be under 5 MB.", "File Too Large", JOptionPane.WARNING_MESSAGE);
+				return;
+			}
+			try {
+				File destDir = new File(AppSettings.getCardbackCustomDir());
+				destDir.mkdirs();
+				File dest = new File(destDir, selected.getName());
+				Files.copy(selected.toPath(), dest.toPath(), StandardCopyOption.REPLACE_EXISTING);
+				AppSettings.setCustomCardbackPath(dest.getAbsolutePath());
+				AppSettings.save();
+				currentLabel.setText("Current: " + dest.getName());
+				resetButton.setEnabled(true);
+			} catch (IOException ex) {
+				JOptionPane.showMessageDialog(cardBackPanel,
+						"Could not copy file: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+			}
+		});
+
+		resetButton.addActionListener(e -> {
+			AppSettings.setCustomCardbackPath("");
+			AppSettings.save();
+			currentLabel.setText("Current: Default");
+			resetButton.setEnabled(false);
+		});
+
+		JPanel cardBackButtonRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+		cardBackButtonRow.add(chooseButton);
+		cardBackButtonRow.add(resetButton);
+		cardBackButtonRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+		cardBackPanel.add(cardBackButtonRow);
+
+		JLabel cardBackHint = new JLabel(
+				"<html><font color='gray' size='2'>Max 5 MB. Supported: JPG, PNG, GIF, BMP.</font></html>");
+		cardBackHint.setBorder(new EmptyBorder(2, 4, 4, 4));
+		cardBackHint.setAlignmentX(Component.LEFT_ALIGNMENT);
+		cardBackPanel.add(cardBackHint);
+
+		cardBackPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+		contentPanel.add(cardBackPanel);
 
 		// ── Buttons ──────────────────────────────────────────────────────────
 		JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
