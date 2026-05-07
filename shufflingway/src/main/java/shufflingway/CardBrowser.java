@@ -5,6 +5,7 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Image;
+import java.awt.event.KeyEvent;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -15,8 +16,6 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
-
-import scraper.CardScraper;
 
 import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
@@ -42,7 +41,7 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableRowSorter;
 
-import java.awt.event.KeyEvent;
+import scraper.CardScraper;
 
 public class CardBrowser extends JDialog {
 
@@ -119,7 +118,9 @@ public class CardBrowser extends JDialog {
         // Hide the Card Text column from the view (still searchable via model index 10)
         cardTable.removeColumn(cardTable.getColumnModel().getColumn(10));
 
-        // Narrow the Cost (4), Power (5), and Rarity (6) columns to roughly half their default width
+        // Widen Name (1), shrink Type (2), narrow Cost/Power/Rarity
+        cardTable.getColumnModel().getColumn(1).setPreferredWidth(86);
+        cardTable.getColumnModel().getColumn(2).setPreferredWidth(70);
         cardTable.getColumnModel().getColumn(4).setPreferredWidth(50);
         cardTable.getColumnModel().getColumn(4).setMaxWidth(60);
         cardTable.getColumnModel().getColumn(5).setPreferredWidth(60);

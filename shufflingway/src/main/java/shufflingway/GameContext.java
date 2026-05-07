@@ -202,6 +202,20 @@ public interface GameContext {
      */
     void selfDiscard(int count);
 
+    /**
+     * Flips {@code amount} cards from the opponent's deck into their damage zone,
+     * using the same mechanic as attack-phase damage (EX Burst triggers included).
+     * When P1 is the ability user the opponent is P2, and vice versa.
+     */
+    void dealDamageToOpponent(int amount);
+
+    /**
+     * Flips {@code amount} cards from the ability user's own deck into their damage zone,
+     * using the same mechanic as attack-phase damage (EX Burst triggers included).
+     * When P1 is the ability user the self is P1, and vice versa.
+     */
+    void dealDamageToSelf(int amount);
+
     // ---- Dull effects (used by mass-effect; also available individually) ----
 
     /** Dulls P1's forward at {@code idx} and refreshes its slot. */

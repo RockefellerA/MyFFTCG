@@ -1089,8 +1089,10 @@ public class DeckManager extends JDialog {
     // Column sizing
     // -------------------------------------------------------------------------
 
-    /** Constrains Cost (4), Power (5), and Rarity (6) to compact widths. */
+    /** Widens Name (1), shrinks Type (2), constrains Cost/Power/Rarity. */
     private void setNarrowColumns(JTable table) {
+        table.getColumnModel().getColumn(1).setPreferredWidth(86);
+        table.getColumnModel().getColumn(2).setPreferredWidth(70);
         int[][] specs = {
             {4, 45, 60},  // Cost
             {5, 55, 70},  // Power

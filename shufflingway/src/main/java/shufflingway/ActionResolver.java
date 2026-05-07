@@ -341,6 +341,26 @@ public class ActionResolver {
     );
 
     /**
+     * Matches "&lt;subject&gt; deals your opponent N point(s) of damage."
+     * <ul>
+     *   <li>Group {@code amount} — number of damage points dealt to the opponent player</li>
+     * </ul>
+     */
+    private static final Pattern DEAL_PLAYER_DAMAGE_TO_OPPONENT = Pattern.compile(
+        "(?i).+?\\s+deals?\\s+your\\s+opponent\\s+(?<amount>\\d+)\\s+points?\\s+of\\s+damage[.!]?"
+    );
+
+    /**
+     * Matches "&lt;subject&gt; deals you N point(s) of damage."
+     * <ul>
+     *   <li>Group {@code amount} — number of damage points dealt to the ability user</li>
+     * </ul>
+     */
+    private static final Pattern DEAL_PLAYER_DAMAGE_TO_SELF = Pattern.compile(
+        "(?i).+?\\s+deals?\\s+you\\s+(?<amount>\\d+)\\s+points?\\s+of\\s+damage[.!]?"
+    );
+
+    /**
      * Matches: "Deal X damage to all [the] [condition] Forwards[.] [opponent controls]"
      * <ul>
      *   <li>Group {@code amount}    — numeric damage value</li>
@@ -403,6 +423,12 @@ public class ActionResolver {
         if (result != null) return result;
 
         result = tryParseDiscardThenDraw(effectText);
+        if (result != null) return result;
+
+        result = tryParseDealPlayerDamageToOpponent(effectText);
+        if (result != null) return result;
+
+        result = tryParseDealPlayerDamageToSelf(effectText);
         if (result != null) return result;
 
         // TODO: add more effect parsers here as they are implemented
@@ -1169,6 +1195,28 @@ public class ActionResolver {
             ctx.logEntry("Effect: Discard " + discardCount + ", then draw " + drawCount);
             ctx.selfDiscard(discardCount);
             ctx.drawCards(drawCount);
+        };
+    }
+
+    /** Parses "&lt;name&gt; deals your opponent N point(s) of damage." — flips from opponent's deck to their damage zone. */
+    private static Consumer<GameContext> tryParseDealPlayerDamageToOpponent(String text) {
+        Matcher m = DEAL_PLAYER_DAMAGE_TO_OPPONENT.matcher(text);
+        if (!m.matches()) return null;
+        int amount = Integer.parseInt(m.group("amount"));
+        return ctx -> {
+            ctx.logEntry("Effect: Deal " + amount + " damage to opponent");
+            ctx.dealDamageToOpponent(amount);
+        };
+    }
+
+    /** Parses "&lt;name&gt; deals you N point(s) of damage." — flips from ability user's deck to their damage zone. */
+    private static Consumer<GameContext> tryParseDealPlayerDamageToSelf(String text) {
+        Matcher m = DEAL_PLAYER_DAMAGE_TO_SELF.matcher(text);
+        if (!m.matches()) return null;
+        int amount = Integer.parseInt(m.group("amount"));
+        return ctx -> {
+            ctx.logEntry("Effect: Deal " + amount + " damage to self");
+            ctx.dealDamageToSelf(amount);
         };
     }
 

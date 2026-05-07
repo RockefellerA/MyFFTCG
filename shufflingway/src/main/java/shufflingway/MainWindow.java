@@ -6264,6 +6264,18 @@ public class MainWindow {
 				}
 			}
 
+			@Override public void dealDamageToOpponent(int amount) {
+				for (int i = 0; i < amount; i++) {
+					if (isP1) p2TakeDamage(); else p1TakeDamage();
+				}
+			}
+
+			@Override public void dealDamageToSelf(int amount) {
+				for (int i = 0; i < amount; i++) {
+					if (isP1) p1TakeDamage(); else p2TakeDamage();
+				}
+			}
+
 			@Override
 			public void applyMassFieldEffect(GameContext.MassAction action,
 					boolean forwards, boolean backups, boolean monsters,
