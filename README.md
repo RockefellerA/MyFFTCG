@@ -1,4 +1,4 @@
-# MyFFTCG
+# Shufflingway
 Lightweight FFTCG client
 
 Includes a deck manager, full card browser, and a game board.
