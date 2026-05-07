@@ -1,18 +1,19 @@
 package fftcg.menu;
 
-import fftcg.CardBrowser;
-import fftcg.DeckManager;
-import fftcg.DeckSelectDialog;
-import fftcg.PreferencesDialog;
-
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.util.function.IntConsumer;
+
 import javax.swing.JFrame;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.KeyStroke;
+
+import fftcg.CardBrowser;
+import fftcg.DeckManager;
+import fftcg.DeckSelectDialog;
+import fftcg.PreferencesDialog;
 
 /**
  * File menu for the main window.
@@ -55,7 +56,7 @@ public class FileMenu extends JMenu {
 
         addSeparator();
 
-        JMenuItem exit = new JMenuItem("Exit MyFFTCG");
+        JMenuItem exit = new JMenuItem("Exit Shufflingway");
         exit.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0));
         add(exit);
         exit.addActionListener((ActionEvent e) -> {

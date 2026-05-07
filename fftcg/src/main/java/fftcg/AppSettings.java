@@ -42,7 +42,7 @@ public final class AppSettings {
         try {
             new File(DIR).mkdirs();
             try (FileOutputStream fos = new FileOutputStream(PATH)) {
-                props.store(fos, "MyFFTCG Settings");
+                props.store(fos, "Shufflingway Settings");
             }
         } catch (IOException ignored) {}
     }

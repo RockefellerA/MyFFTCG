@@ -4,7 +4,6 @@ import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.FlowLayout;
 import java.awt.Frame;
-import java.awt.Toolkit;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -28,7 +27,6 @@ public class PreferencesDialog extends JDialog {
 
 	public PreferencesDialog(Frame owner, Runnable onLayoutChanged) {
 		super(owner, "Preferences", true);
-		setIconImage(Toolkit.getDefaultToolkit().getImage(PreferencesDialog.class.getResource("/resources/MyFF20.png")));
 		setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
 		setResizable(false);
 

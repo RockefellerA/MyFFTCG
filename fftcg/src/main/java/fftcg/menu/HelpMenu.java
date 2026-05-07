@@ -5,6 +5,7 @@ import java.awt.event.ActionEvent;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
+
 import javax.swing.JFrame;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
@@ -37,7 +38,7 @@ public class HelpMenu extends JMenu {
 
         addSeparator();
 
-        JMenuItem about = new JMenuItem("About MyFFTCG");
+        JMenuItem about = new JMenuItem("About Shufflingway");
         add(about);
         about.addActionListener((ActionEvent e) -> {
             About dialog = new About();

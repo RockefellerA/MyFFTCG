@@ -243,7 +243,7 @@ public class MainWindow {
 				try {
 					MainWindow window = new MainWindow();
 					window.frame.setVisible(true);
-					ImageIcon icon40 = new ImageIcon(getClass().getResource("/resources/MyFF40.png"));
+					ImageIcon icon40 = new ImageIcon(getClass().getResource("/resources/shufflingway.png"));
 					window.frame.setIconImage(icon40.getImage());
 				} catch (Exception e) {
 					e.printStackTrace();
@@ -258,7 +258,7 @@ public class MainWindow {
 	}
 
 	private void initialize() {
-		frame = new JFrame("MyFFTCG");
+		frame = new JFrame("Shufflingway");
 		frame.getContentPane().setBackground(Color.LIGHT_GRAY);
 		frame.setBounds(0, 0, 1920, 1080);
 		frame.setLocationRelativeTo(null);
@@ -747,7 +747,7 @@ public class MainWindow {
 		gameLog.setForeground(Color.BLACK);
 		gameLog.setMargin(new Insets(4, 4, 4, 4));
 		gameLog.setCaretColor(Color.WHITE);
-		logEntry("Welcome to MyFFTCG!");
+		logEntry("Welcome to Shufflingway!");
 
 		JScrollPane logScrollPane = new JScrollPane(gameLog,
 				JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
