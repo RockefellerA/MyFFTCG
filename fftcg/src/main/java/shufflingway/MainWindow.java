@@ -64,6 +64,8 @@ import javax.swing.border.SoftBevelBorder;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 
+import scraper.DeckDatabase;
+import scraper.DeckDatabase.DeckCardDetail;
 import static shufflingway.CardAnimation.CARD_H;
 import static shufflingway.CardAnimation.CARD_W;
 import shufflingway.menu.FileMenu;
@@ -71,8 +73,6 @@ import shufflingway.menu.HelpMenu;
 import shufflingway.menu.MultiplayerMenu;
 import shufflingway.net.ActionType;
 import shufflingway.net.GameConnection;
-import scraper.DeckDatabase;
-import scraper.DeckDatabase.DeckCardDetail;
 
 public class MainWindow {
 
@@ -1514,9 +1514,9 @@ public class MainWindow {
 				final boolean loadFace = spent;
 				@Override protected ImageIcon doInBackground() throws Exception {
 					String url = loadFace ? cd.imageUrl()
-							: getClass().getResource("/resources/cardback.jpg").toString();
+							: getClass().getResource("/resources/cardback/default.jpg").toString();
 					Image img = loadFace ? ImageCache.load(url)
-							: new ImageIcon(getClass().getResource("/resources/cardback.jpg")).getImage();
+							: new ImageIcon(getClass().getResource("/resources/cardback/default.jpg")).getImage();
 					return img == null ? null
 							: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
 				}
@@ -7831,7 +7831,7 @@ public class MainWindow {
 	}
 
 	private ImageIcon scaledCardbackWithCount(Dimension size, int count) {
-		Image base = new ImageIcon(getClass().getResource("/resources/cardback.jpg")).getImage();
+		Image base = new ImageIcon(getClass().getResource("/resources/cardback/default.jpg")).getImage();
 		BufferedImage buf = new BufferedImage(size.width, size.height, BufferedImage.TYPE_INT_ARGB);
 		Graphics2D g = buf.createGraphics();
 		g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
