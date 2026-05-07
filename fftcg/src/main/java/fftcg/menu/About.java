@@ -2,6 +2,7 @@ package fftcg.menu;
 
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
+import java.awt.Toolkit;
 import java.awt.event.KeyEvent;
 
 import javax.swing.JComponent;
@@ -39,6 +40,7 @@ public class About extends JDialog {
 				e -> dispose(),
 				KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
 				JComponent.WHEN_IN_FOCUSED_WINDOW);
+		setIconImage(Toolkit.getDefaultToolkit().getImage(About.class.getResource("/resources/shufflingway.png")));
 		setBounds(0, 0, 350, 200);
 		getContentPane().setLayout(new BorderLayout());
 		contentPanel.setLayout(new FlowLayout());
