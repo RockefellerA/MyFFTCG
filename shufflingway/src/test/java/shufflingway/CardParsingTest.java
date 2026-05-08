@@ -5,6 +5,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -25,9 +26,10 @@ public class CardParsingTest {
         int partiallyParsed = 0;
         int noneParsed      = 0;
 
-        String exampleFully   = null;
-        String examplePartial = null;
-        String exampleNone    = null;
+        List<String> examplesFully   = new ArrayList<>();
+        List<String> examplesPartial = new ArrayList<>();
+        List<String> examplesNone    = new ArrayList<>();
+        java.util.Random rng         = new java.util.Random();
 
         try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + dbFile.getAbsolutePath());
              Statement  stmt = conn.createStatement();
@@ -77,16 +79,13 @@ public class CardParsingTest {
 
                 if (parsed == abilities.size()) {
                     fullyParsed++;
-                    if (exampleFully == null)
-                        exampleFully = formatExample(source.name(), abilities, source, true);
+                    reservoirAdd(examplesFully, formatExample(source.name(), abilities, source), fullyParsed, rng);
                 } else if (parsed > 0) {
                     partiallyParsed++;
-                    if (examplePartial == null)
-                        examplePartial = formatExample(source.name(), abilities, source, false);
+                    reservoirAdd(examplesPartial, formatExample(source.name(), abilities, source), partiallyParsed, rng);
                 } else {
                     noneParsed++;
-                    if (exampleNone == null)
-                        exampleNone = formatExample(source.name(), abilities, source, false);
+                    reservoirAdd(examplesNone, formatExample(source.name(), abilities, source), noneParsed, rng);
                 }
             }
         }
@@ -100,12 +99,12 @@ public class CardParsingTest {
         System.out.printf("  Partially parsed:   %5d  (%.1f%%)%n", partiallyParsed,  pct(partiallyParsed,  withAbilities));
         System.out.printf("  None parsed:        %5d  (%.1f%%)%n", noneParsed,       pct(noneParsed,       withAbilities));
         System.out.println();
-        System.out.printf("--- Example: Fully parsed ---%n%s%n", exampleFully   != null ? exampleFully   : "(none)");
-        System.out.printf("--- Example: Partially parsed ---%n%s%n", examplePartial != null ? examplePartial : "(none)");
-        System.out.printf("--- Example: Unrecognized ---%n%s%n",    exampleNone    != null ? exampleNone    : "(none)");
+        printExamples("Fully parsed",    examplesFully);
+        printExamples("Partially parsed", examplesPartial);
+        printExamples("Unrecognized",     examplesNone);
     }
 
-    private static String formatExample(String name, List<ActionAbility> abilities, CardData source, boolean allParsed) {
+    private static String formatExample(String name, List<ActionAbility> abilities, CardData source) {
         StringBuilder sb = new StringBuilder();
         sb.append("  Card: ").append(name).append('\n');
         for (ActionAbility ab : abilities) {
@@ -113,6 +112,24 @@ public class CardParsingTest {
             sb.append("  [").append(ok ? "OK" : "--").append("] ").append(ab.effectText()).append('\n');
         }
         return sb.toString();
+    }
+
+    /** Reservoir sampling (k=3): keeps up to 3 uniformly random items seen so far. */
+    private static void reservoirAdd(List<String> reservoir, String item, int seen, java.util.Random rng) {
+        if (reservoir.size() < 3) {
+            reservoir.add(item);
+        } else {
+            int j = rng.nextInt(seen);
+            if (j < 3) reservoir.set(j, item);
+        }
+    }
+
+    private static void printExamples(String label, List<String> examples) {
+        for (int i = 0; i < examples.size(); i++)
+            System.out.printf("--- Example: %s (%d/%d) ---%n%s%n",
+                    label, i + 1, examples.size(), examples.get(i));
+        if (examples.isEmpty())
+            System.out.printf("--- Example: %s ---%n(none)%n", label);
     }
 
     private static double pct(int n, int total) {
