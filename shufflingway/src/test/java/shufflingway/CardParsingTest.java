@@ -33,7 +33,7 @@ public class CardParsingTest {
              Statement  stmt = conn.createStatement();
              ResultSet  rs   = stmt.executeQuery(
                      "SELECT name_en, element, cost, power, type_en, ex_burst, multicard, " +
-                     "limit_break, lb_cost, image_url, text_en, job_en " +
+                     "limit_break, lb_cost, image_url, text_en, job_en, category_1, category_2 " +
                      "FROM cards ORDER BY serial")) {
 
             while (rs.next()) {
@@ -67,7 +67,8 @@ public class CardParsingTest {
                         CardData.parseWarpCost(textEn),
                         CardData.parsePrimingTarget(textEn),
                         CardData.parsePrimingCost(textEn),
-                        abilities, rs.getString("job_en"), textEn);
+                        abilities, rs.getString("job_en"),
+                        rs.getString("category_1"), rs.getString("category_2"), textEn);
 
                 int parsed = 0;
                 for (ActionAbility ab : abilities) {

@@ -213,7 +213,7 @@ public class ActionResolver {
      */
     private static final Pattern OPPONENT_DISCARD = Pattern.compile(
         "(?i)Your\\s+opponent\\s+discards?\\s+(\\d+)\\s+cards?" +
-        "(?:\\s+from\\s+(?:his|her|their)\\s+hand)?[.!]?"
+        "(?:\\s+from\\s+(?:his/her|his|her|their)\\s+hand)?[.!]?"
     );
 
     /**
@@ -246,13 +246,41 @@ public class ActionResolver {
      */
     private static final Pattern OPPONENT_MILL_PATTERN = Pattern.compile(
         "(?i)Your\\s+opponent\\s+puts?\\s+the\\s+top\\s+(?:(?<count>\\d+)\\s+cards?|card)\\s+" +
-        "of\\s+(?:his|her|their)\\s+deck\\s+into\\s+the\\s+Break\\s+Zone" +
+        "of\\s+(?:his/her|his|her|their)\\s+deck\\s+into\\s+the\\s+Break\\s+Zone" +
         "(?:[.!]?\\s*Draw\\s+(?<draw>\\d+)\\s+cards?[.!]?)?"
+    );
+
+    /**
+     * Matches "Play 1 [type] of cost N [or less|more] from your hand onto the field".
+     * <ul>
+     *   <li>Group {@code targets} — card type: "Forward(s)", "Backup(s)", "Monster(s)",
+     *                               "Character(s)", or "Character Card(s)"</li>
+     *   <li>Group {@code cost}    — numeric cost threshold</li>
+     *   <li>Group {@code costcmp} — optional comparison: "less" or "more"</li>
+     * </ul>
+     */
+    private static final Pattern PLAY_FROM_HAND_PATTERN = Pattern.compile(
+        "(?i)Play\\s+1\\s+" +
+        "(?:" +
+            // Bracket filter(s): [Job (x)] and/or [Card Name (x)]
+            "(?<f1>\\[(?:Job|Card\\s+Name)\\s+\\([^)]+\\)\\])" +
+            "(?:\\s+or\\s+(?<f2>\\[(?:Job|Card\\s+Name)\\s+\\([^)]+\\)\\]))?" +
+            "\\s+" +
+        "|" +
+            // Category filter: "Category <name> " — lookahead keeps the type in the targets group
+            "Category\\s+(?<category>.+?)\\s+(?=Forwards?|Backups?|Monsters?|Characters?)" +
+        "|" +
+            // Written job: "Job <name> " — lookahead keeps the type in the targets group
+            "Job\\s+(?<jobnm>.+?)\\s+(?=Forwards?|Backups?|Monsters?|Characters?)" +
+        ")?" +
+        "(?<targets>Forwards?|Backups?|Monsters?|Characters?(?:\\s+Cards?)?)\\s*" +
+        "(?:of\\s+cost\\s+(?<cost>\\d+)(?:\\s+or\\s+(?<costcmp>less|more))?\\s+)?" +
+        "from\\s+your\\s+hand\\s+onto\\s+(?:the\\s+)?field[.!]?"
     );
 
     /** Matches "Your opponent shows/reveals his/her/their hand". */
     private static final Pattern OPPONENT_REVEAL_HAND_PATTERN = Pattern.compile(
-        "(?i)Your\\s+opponent\\s+(?:shows?|reveals?)\\s+(?:his|her|their)\\s+hand[.!]?"
+        "(?i)Your\\s+opponent\\s+(?:shows?|reveals?)\\s+(?:his/her|his|her|their)\\s+hand[.!]?"
     );
 
     /**
@@ -499,6 +527,9 @@ public class ActionResolver {
         if (result != null) return result;
 
         result = tryParseDealPlayerDamageToSelf(effectText);
+        if (result != null) return result;
+
+        result = tryParsePlayFromHand(effectText);
         if (result != null) return result;
 
         result = tryParseOpponentSelects(effectText);
@@ -1457,6 +1488,67 @@ public class ActionResolver {
             ctx.logEntry("Effect: " + logMsg);
             ctx.applyMassFieldEffect(action, inclForwards, inclBackups, inclMonsters,
                     opponentOnly, selfOnly, element, costVal, costCmp);
+        };
+    }
+
+    /**
+     * Parses "Play 1 [type] of cost N [or less|more] from your hand onto the field".
+     */
+    private static Consumer<GameContext> tryParsePlayFromHand(String text) {
+        Matcher m = PLAY_FROM_HAND_PATTERN.matcher(text);
+        if (!m.find()) return null;
+
+        // --- Resolve filter groups ---
+        String jobFilter      = null;
+        String cardNameFilter = null;
+        String categoryFilter = m.group("category") != null ? m.group("category").trim() : null;
+
+        String writtenJob = m.group("jobnm");
+        if (writtenJob != null) {
+            jobFilter = writtenJob.trim();
+        } else {
+            String f1 = m.group("f1");
+            String f2 = m.group("f2");
+            if (f1 != null) {
+                Matcher jm = JOB_BRACKET_PATTERN.matcher(f1);
+                Matcher nm = CARD_NAME_BRACKET_PATTERN.matcher(f1);
+                if      (jm.find()) jobFilter      = jm.group(1).trim();
+                else if (nm.find()) cardNameFilter = nm.group(1).trim();
+            }
+            if (f2 != null) {
+                Matcher jm = JOB_BRACKET_PATTERN.matcher(f2);
+                Matcher nm = CARD_NAME_BRACKET_PATTERN.matcher(f2);
+                if (jm.find()) {
+                    String j2 = jm.group(1).trim();
+                    jobFilter = jobFilter != null ? jobFilter + "|" + j2 : j2;
+                } else if (nm.find()) {
+                    cardNameFilter = nm.group(1).trim();
+                }
+            }
+        }
+
+        // --- Resolve type, cost ---
+        String  targets      = m.group("targets");
+        String  tgtLower     = targets.toLowerCase();
+        boolean inclForwards = tgtLower.contains("forward") || tgtLower.contains("character");
+        boolean inclBackups  = tgtLower.contains("backup")  || tgtLower.contains("character");
+        boolean inclMonsters = tgtLower.contains("monster") || tgtLower.contains("character");
+
+        String costStr = m.group("cost");
+        int    costVal = costStr != null ? Integer.parseInt(costStr) : -1;
+        String costCmp = m.group("costcmp");
+
+        // Build log label
+        StringBuilder filterDesc = new StringBuilder();
+        if (jobFilter      != null) filterDesc.append(" [Job ").append(jobFilter).append("]");
+        if (cardNameFilter != null) filterDesc.append(" [Name ").append(cardNameFilter).append("]");
+        if (categoryFilter != null) filterDesc.append(" [Cat ").append(categoryFilter).append("]");
+        String costLabel = costVal >= 0 ? " of cost " + costVal + (costCmp != null ? " or " + costCmp : "") : "";
+
+        final String fJob = jobFilter, fName = cardNameFilter, fCat = categoryFilter;
+        return ctx -> {
+            ctx.logEntry("Effect: Play 1" + filterDesc + " " + targets + costLabel + " from hand");
+            ctx.playCharacterFromHand(inclForwards, inclBackups, inclMonsters, costVal, costCmp, fJob, fName, fCat);
         };
     }
 

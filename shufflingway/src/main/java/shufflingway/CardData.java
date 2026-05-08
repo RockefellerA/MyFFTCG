@@ -31,6 +31,8 @@ public record CardData(
         List<String> primingCost,
         List<ActionAbility> actionAbilities,
         String job,
+        String category1,
+        String category2,
         String textEn
 ) {
 
@@ -52,8 +54,10 @@ public record CardData(
         warpCost        = List.copyOf(warpCost);
         primingCost     = List.copyOf(primingCost);
         actionAbilities = List.copyOf(actionAbilities);
-        job             = job    != null ? job    : "";
-        textEn          = textEn != null ? textEn : "";
+        job       = job       != null ? job       : "";
+        category1 = category1 != null ? category1 : "";
+        category2 = category2 != null ? category2 : "";
+        textEn    = textEn    != null ? textEn    : "";
     }
 
     private static final Pattern SUMMON_EX_PREFIX =

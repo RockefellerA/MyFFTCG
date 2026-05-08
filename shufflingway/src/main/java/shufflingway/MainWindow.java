@@ -931,7 +931,7 @@ public class MainWindow {
 							card.multicard(), CardData.parseTraits(tx),
 							CardData.parseWarpValue(tx), CardData.parseWarpCost(tx),
 							CardData.parsePrimingTarget(tx), CardData.parsePrimingCost(tx),
-							CardData.parseActionAbilities(tx), card.job(), tx);
+							CardData.parseActionAbilities(tx), card.job(), card.category1(), card.category2(), tx);
 					if (card.isLb()) lb.add(cd);
 					else             main.add(cd);
 				}
@@ -950,7 +950,7 @@ public class MainWindow {
 								card.multicard(), CardData.parseTraits(tx),
 								CardData.parseWarpValue(tx), CardData.parseWarpCost(tx),
 								CardData.parsePrimingTarget(tx), CardData.parsePrimingCost(tx),
-								CardData.parseActionAbilities(tx), card.job(), tx);
+								CardData.parseActionAbilities(tx), card.job(), card.category1(), card.category2(), tx);
 						if (card.isLb()) p2Lb.add(cd);
 						else             p2Main.add(cd);
 					}
@@ -6146,6 +6146,49 @@ public class MainWindow {
 				timerRef[0].start();
 			}
 
+			@Override public void playCharacterFromHand(boolean inclForwards, boolean inclBackups,
+					boolean inclMonsters, int costVal, String costCmp,
+					String jobFilter, String cardNameFilter, String categoryFilter) {
+				java.util.List<CardData> hand = gameState.getP1Hand();
+				java.util.List<Integer> eligible = new ArrayList<>();
+				for (int i = 0; i < hand.size(); i++) {
+					CardData card = hand.get(i);
+					if (card.isForward()  && !inclForwards) continue;
+					if (card.isBackup()   && !inclBackups)  continue;
+					if (card.isMonster()  && !inclMonsters) continue;
+					if (card.isSummon()) continue;
+					if (!meetsCostConstraint(card.cost(), costVal, costCmp)) continue;
+					// Job+name: OR when both are set; AND otherwise
+					boolean passesNameJob = (jobFilter == null && cardNameFilter == null)
+						|| (jobFilter != null && cardNameFilter != null
+							? meetsJobFilter(card, jobFilter) || meetsCardNameFilter(card, cardNameFilter)
+							: meetsJobFilter(card, jobFilter) && meetsCardNameFilter(card, cardNameFilter));
+					if (!passesNameJob) continue;
+					if (!meetsCategoryFilter(card, categoryFilter)) continue;
+					eligible.add(i);
+				}
+				if (eligible.isEmpty()) {
+					logEntry("No eligible cards in hand to play.");
+					return;
+				}
+				String[] options = eligible.stream()
+						.map(i -> hand.get(i).name() + " (Cost: " + hand.get(i).cost() + ")")
+						.toArray(String[]::new);
+				String choice = (String) JOptionPane.showInputDialog(frame,
+						"Choose a card to play onto the field:", "Play from Hand",
+						JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+				if (choice == null) return;
+				int listIdx = java.util.Arrays.asList(options).indexOf(choice);
+				if (listIdx < 0) return;
+				int handIdx = eligible.get(listIdx);
+				CardData card = hand.remove(handIdx);
+				logEntry(card.name() + " played from hand onto field");
+				if (card.isBackup())       placeCardInFirstBackupSlot(card);
+				else if (card.isMonster()) placeCardInMonsterZone(card);
+				else                       placeCardInForwardZone(card);
+				refreshP1HandLabel();
+			}
+
 			@Override public void damageTarget(ForwardTarget t, int amount) {
 				if (t.zone() == ForwardTarget.CardZone.BACKUP) return;
 				if (t.isP1()) damageP1Forward(t.idx(), amount);
@@ -6644,6 +6687,14 @@ public class MainWindow {
 	/** Returns {@code true} if the card's name matches {@code cardNameFilter} (case-insensitive), or if the filter is {@code null}. */
 	private static boolean meetsCardNameFilter(CardData card, String cardNameFilter) {
 		return cardNameFilter == null || cardNameFilter.equalsIgnoreCase(card.name());
+	}
+
+	/** Returns {@code true} if the card belongs to {@code categoryFilter} (case-insensitive contains), or if the filter is {@code null}. */
+	private static boolean meetsCategoryFilter(CardData card, String categoryFilter) {
+		if (categoryFilter == null) return true;
+		String cf = categoryFilter.trim().toLowerCase();
+		return card.category1().toLowerCase().contains(cf)
+			|| card.category2().toLowerCase().contains(cf);
 	}
 
 	/**

@@ -130,6 +130,27 @@ public interface GameContext {
      */
     void revealOpponentHand();
 
+    /**
+     * Lets P1 choose one eligible card from their hand and places it onto the field
+     * without paying costs.
+     *
+     * @param inclForwards include Forwards as eligible choices
+     * @param inclBackups  include Backups as eligible choices
+     * @param inclMonsters include Monsters as eligible choices
+     * @param costVal      maximum (or exact) cost threshold
+     * @param costCmp      {@code "less"}, {@code "more"}, or {@code null} for exact match
+     */
+    /**
+     * @param jobFilter      bar-separated job name(s); {@code null} = any
+     * @param cardNameFilter exact card name; {@code null} = any
+     * @param categoryFilter category substring; {@code null} = any
+     *                       When both {@code jobFilter} and {@code cardNameFilter} are non-null
+     *                       a card is eligible if it matches <em>either</em> (OR logic).
+     */
+    void playCharacterFromHand(boolean inclForwards, boolean inclBackups, boolean inclMonsters,
+            int costVal, String costCmp,
+            String jobFilter, String cardNameFilter, String categoryFilter);
+
     // ---- Zone-dispatch single-target effects --------------------------------
 
     /**
