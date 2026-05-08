@@ -202,9 +202,10 @@ public record CardData(
      */
     private static final Pattern ACTION_ABILITY_PATTERN = Pattern.compile(
         "(?:(?i)\\[\\[s\\]\\]\\s*([^\\[]+?)\\s*\\[\\[/\\]\\]\\s*)?" +  // optional [[s]]Name[[/]]
-        "(?=(?:《|(?i:put)\\b))"                                      +  // lookahead: must start with 《 or put
+        "(?=(?:《|(?i:put)\\b|(?i:discard)\\b))"                     +  // lookahead: must start with 《, put, or discard
         "((?:《[^》]*》\\s*)*)"                                        +  // zero or more 《cost》 tokens
         "((?i)(?:,\\s*)?put\\s+.+?\\s+into\\s+the\\s+Break\\s+Zone\\s*)?" + // optional BZ cost phrase
+        "((?i)(?:,\\s*)?discard[^:]+)?"                               +  // optional discard cost phrase
         ":\\s*"                                                        +  // colon separator
         "((?:[^\\[]|\\[(?!\\[))*)"                                        // effect text (up to next [[markup]])
     );
@@ -212,6 +213,21 @@ public record CardData(
     // Captures the content between "put " and " into the Break Zone"
     private static final Pattern BREAK_ZONE_COST_PATTERN = Pattern.compile(
         "(?i)put\\s+(.+?)\\s+into\\s+the\\s+Break\\s+Zone"
+    );
+
+    private static final Pattern DISCARD_COST_PATTERN = Pattern.compile(
+        "(?i)(?:,\\s*)?discard\\s+(?<count>\\d+)\\s+" +
+        "(?:" +
+            "Card\\s+Name\\s+(?<cardname>.+)"    +                        // "Card Name X"
+        "|" +
+            "Category\\s+(?<category>\\S+)\\s+(?<typecat>Characters?|Forwards?|Backups?|Monsters?|Summons?)" + // "Category VI Characters"
+        "|" +
+            "(?<element>Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark)\\s+cards?" + // "Water card"
+        "|" +
+            "(?<type>Summons?|Forwards?|Backups?|Monsters?|Characters?)" + // type only
+        "|" +
+            "cards?(?<different>,\\s*each\\s+of\\s+a\\s+different\\s+card\\s+type)?" + // "card(s)"
+        ")"
     );
 
     /**
@@ -229,13 +245,14 @@ public record CardData(
         List<ActionAbility> result = new ArrayList<>();
         Matcher m = ACTION_ABILITY_PATTERN.matcher(textEn);
         while (m.find()) {
-            String rawName   = m.group(1);
-            String costPart  = m.group(2);
-            String bzRaw     = m.group(3);
-            String effectRaw = m.group(4).trim();
+            String rawName    = m.group(1);
+            String costPart   = m.group(2);
+            String bzRaw      = m.group(3);
+            String discardRaw = m.group(4);
+            String effectRaw  = m.group(5).trim();
             if (effectRaw.isEmpty()) continue;
-            // Skip if there are no CP tokens and no break-zone cost (spurious match)
-            if ((costPart == null || costPart.isBlank()) && bzRaw == null) continue;
+            // Skip if there are no CP tokens, no BZ cost, and no discard cost (spurious match)
+            if ((costPart == null || costPart.isBlank()) && bzRaw == null && discardRaw == null) continue;
 
             String  abilityName  = rawName != null ? rawName.trim() : "";
             boolean isSpecial    = !abilityName.isEmpty();
@@ -263,9 +280,39 @@ public record CardData(
             }
 
             List<BreakZoneCost> breakZoneCosts = parseBreakZoneCosts(bzRaw);
-            result.add(new ActionAbility(abilityName, requiresDull, isSpecial, crystalCost, cpCost, breakZoneCosts, effectRaw));
+            List<DiscardCost>   discardCosts   = parseDiscardCosts(discardRaw);
+            result.add(new ActionAbility(abilityName, requiresDull, isSpecial, crystalCost, cpCost, breakZoneCosts, discardCosts, effectRaw));
         }
         return List.copyOf(result);
+    }
+
+    /** Parses a "discard N [filter]" cost phrase into a {@link DiscardCost} list (0 or 1 item). */
+    private static List<DiscardCost> parseDiscardCosts(String raw) {
+        if (raw == null || raw.isBlank()) return List.of();
+        Matcher m = DISCARD_COST_PATTERN.matcher(raw.trim());
+        if (!m.find()) return List.of();
+
+        int    count     = Integer.parseInt(m.group("count"));
+        String cardName  = m.group("cardname");
+        String category  = m.group("category");
+        String typeCat   = m.group("typecat");
+        String element   = m.group("element");
+        String type      = m.group("type");
+        String different = m.group("different");
+
+        String finalType = typeCat != null ? normalizeTypeSuffix(typeCat)
+                         : type    != null ? normalizeTypeSuffix(type) : null;
+
+        if (cardName != null) cardName = cardName.trim();
+        if (category != null) category = category.trim();
+
+        return List.of(new DiscardCost(count, cardName, element, finalType, category, different != null));
+    }
+
+    /** Strips a trailing "s" from plural type names (e.g. "Summons" → "Summon"). */
+    private static String normalizeTypeSuffix(String t) {
+        String s = t.trim();
+        return (s.length() > 2 && s.endsWith("s")) ? s.substring(0, s.length() - 1) : s;
     }
 
     /** Parses the "put … into the Break Zone" cost phrase into individual {@link BreakZoneCost} items. */

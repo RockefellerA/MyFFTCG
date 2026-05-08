@@ -5758,12 +5758,65 @@ public class MainWindow {
 			}
 		}
 
+		// Discard costs — paid from hand, no CP generated
+		for (DiscardCost dc : ability.discardCosts()) {
+			Set<String> usedTypes = new java.util.HashSet<>();
+			for (int pick = 0; pick < dc.count(); pick++) {
+				List<CardData> hand = playerHand(isP1);
+				List<Integer> eligible = new ArrayList<>();
+				for (int i = 0; i < hand.size(); i++) {
+					CardData c = hand.get(i);
+					if (dc.cardName()  != null && !c.name().equalsIgnoreCase(dc.cardName())) continue;
+					if (dc.element()   != null && !c.containsElement(dc.element()))          continue;
+					if (dc.cardType()  != null && !matchesDiscardType(c, dc.cardType()))     continue;
+					if (dc.category()  != null && !meetsCategoryFilter(c, dc.category()))    continue;
+					if (dc.eachDifferentType() && usedTypes.contains(discardTypeKey(c)))     continue;
+					eligible.add(i);
+				}
+				if (eligible.isEmpty()) { logEntry("No eligible card for discard cost."); break; }
+				String[] options = eligible.stream()
+						.map(i -> hand.get(i).name() + " (Cost: " + hand.get(i).cost() + ")")
+						.toArray(String[]::new);
+				String label = "Discard cost" + (dc.count() > 1 ? " (" + (pick + 1) + "/" + dc.count() + ")" : "");
+				String choice = (String) JOptionPane.showInputDialog(frame,
+						"Choose a card to discard:", label,
+						JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+				if (choice == null) break;
+				int listIdx = java.util.Arrays.asList(options).indexOf(choice);
+				if (listIdx < 0) break;
+				int handIdx = eligible.get(listIdx);
+				if (dc.eachDifferentType()) usedTypes.add(discardTypeKey(hand.get(handIdx)));
+				String discarded = hand.get(handIdx).name();
+				playerBreakFromHand(isP1, handIdx);
+				logEntry("Discard cost: \"" + discarded + "\" discarded");
+			}
+		}
+
 		logEntry("\"" + source.name() + "\" activated ability");
 
 		gameState.pushStack(new StackEntry(source, ability, isP1));
 		showStackWindow();
 		refreshP1HandLabel();
 		refreshP1BreakLabel();
+	}
+
+	private static boolean matchesDiscardType(CardData c, String cardType) {
+		return switch (cardType.toLowerCase()) {
+			case "summon"    -> c.isSummon();
+			case "forward"   -> c.isForward();
+			case "backup"    -> c.isBackup();
+			case "monster"   -> c.isMonster();
+			case "character" -> !c.isSummon();
+			default          -> true;
+		};
+	}
+
+	private static String discardTypeKey(CardData c) {
+		if (c.isSummon())  return "summon";
+		if (c.isForward()) return "forward";
+		if (c.isBackup())  return "backup";
+		if (c.isMonster()) return "monster";
+		return "other";
 	}
 
 	/**

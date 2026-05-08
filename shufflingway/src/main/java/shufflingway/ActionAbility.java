@@ -24,6 +24,8 @@ import java.util.List;
  *   <li>{@link #crystalCost} — number of Crystals the player must spend ({@code 《C》} tokens).</li>
  *   <li>{@link #breakZoneCosts} — one entry per "put X into the Break Zone" cost item;
  *       empty when no such cost is present.</li>
+ *   <li>{@link #discardCosts} — one entry per "discard X from hand" cost item;
+ *       empty when no such cost is present.</li>
  * </ul>
  *
  * <p>{@link #effectText} is stored as a raw string for now and will be parsed
@@ -36,10 +38,12 @@ public record ActionAbility(
         int                 crystalCost,    // number of Crystals the player must spend (《C》 tokens)
         List<String>        cpCost,         // CP cost elements (element names or "" for generic)
         List<BreakZoneCost> breakZoneCosts, // "put X into the Break Zone" costs (may be empty)
+        List<DiscardCost>   discardCosts,   // "discard X" hand-card costs (may be empty)
         String              effectText      // raw effect text — future work will parse this further
 ) {
     public ActionAbility {
         cpCost         = List.copyOf(cpCost);
         breakZoneCosts = List.copyOf(breakZoneCosts);
+        discardCosts   = List.copyOf(discardCosts);
     }
 }
