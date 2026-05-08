@@ -600,6 +600,25 @@ public class ActionResolver {
 
         String  followup     = m.group("followup").trim();
 
+        // If the followup contains ". " (sentence boundary), split into a primary effect
+        // (applied to selected targets) and a secondary standalone effect that follows.
+        // E.g. "Break it. <name> deals you 1 damage." → primary="Break it", secondary parsed separately.
+        final String primaryFollowup;
+        final Consumer<GameContext> secondary;
+        {
+            int dotSpaceIdx = followup.indexOf(". ");
+            if (dotSpaceIdx >= 0) {
+                primaryFollowup = followup.substring(0, dotSpaceIdx).trim();
+                String secondaryText = followup.substring(dotSpaceIdx + 2).trim();
+                Consumer<GameContext> parsed = secondaryText.isEmpty() ? null : parse(secondaryText, source);
+                secondary = (parsed != null) ? parsed
+                        : ctx -> ctx.logEntry("[ActionResolver] Secondary followup not yet implemented: " + secondaryText);
+            } else {
+                primaryFollowup = followup;
+                secondary = null;
+            }
+        }
+
         // Shared log prefix helper (captured once, reused in all lambdas)
         String costLabel    = costVal >= 0
                 ? " of cost " + costVal + (costCmp != null ? " or " + costCmp : "") : "";
@@ -612,7 +631,7 @@ public class ActionResolver {
                 + " " + targets + costLabel + zoneLabel + controlLabel;
 
         // --- Damage followup (fixed amount) ---
-        Matcher dmgM = FOLLOWUP_DAMAGE.matcher(followup);
+        Matcher dmgM = FOLLOWUP_DAMAGE.matcher(primaryFollowup);
         if (dmgM.find()) {
             int damage = Integer.parseInt(dmgM.group(1));
             return ctx -> {
@@ -622,11 +641,12 @@ public class ActionResolver {
                         costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.damageTarget(t, damage));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.damageTarget(t, damage));
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Damage followup (computed amount) ---
-        Matcher exprM = FOLLOWUP_DAMAGE_EXPR.matcher(followup);
+        Matcher exprM = FOLLOWUP_DAMAGE_EXPR.matcher(primaryFollowup);
         if (exprM.find()) {
             if (exprM.group("highest") != null) {
                 return ctx -> {
@@ -637,6 +657,7 @@ public class ActionResolver {
                             costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                     sortedByIdxDesc(ts, true) .forEach(t -> ctx.damageTarget(t, damage));
                     sortedByIdxDesc(ts, false).forEach(t -> ctx.damageTarget(t, damage));
+                    if (secondary != null) secondary.accept(ctx);
                 };
             } else if (exprM.group("halfcard") != null) {
                 String cardName = exprM.group("halfcard").trim();
@@ -649,6 +670,7 @@ public class ActionResolver {
                             costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                     sortedByIdxDesc(ts, true) .forEach(t -> ctx.damageTarget(t, damage));
                     sortedByIdxDesc(ts, false).forEach(t -> ctx.damageTarget(t, damage));
+                    if (secondary != null) secondary.accept(ctx);
                 };
             } else if (exprM.group("itspower") != null) {
                 int subtract = exprM.group("minus") != null ? Integer.parseInt(exprM.group("minus")) : 0;
@@ -661,6 +683,7 @@ public class ActionResolver {
                             costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                     sortedByIdxDesc(ts, true) .forEach(t -> ctx.damageTarget(t, Math.max(0, ctx.effectiveTargetPower(t) - subtract)));
                     sortedByIdxDesc(ts, false).forEach(t -> ctx.damageTarget(t, Math.max(0, ctx.effectiveTargetPower(t) - subtract)));
+                    if (secondary != null) secondary.accept(ctx);
                 };
             } else if (exprM.group("card") != null) {
                 String cardName = exprM.group("card").trim();
@@ -672,12 +695,13 @@ public class ActionResolver {
                             costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                     sortedByIdxDesc(ts, true) .forEach(t -> ctx.damageTarget(t, damage));
                     sortedByIdxDesc(ts, false).forEach(t -> ctx.damageTarget(t, damage));
+                    if (secondary != null) secondary.accept(ctx);
                 };
             }
         }
 
         // --- Activate followup ---
-        if (FOLLOWUP_ACTIVATE.matcher(followup).find()) {
+        if (FOLLOWUP_ACTIVATE.matcher(primaryFollowup).find()) {
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Activate");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
@@ -685,12 +709,13 @@ public class ActionResolver {
                         costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.activateTarget(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.activateTarget(t));
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Dull followup ---
-        if (FOLLOWUP_DULL.matcher(followup).find()
-                && !FOLLOWUP_DULL_AND_FREEZE.matcher(followup).find()) {
+        if (FOLLOWUP_DULL.matcher(primaryFollowup).find()
+                && !FOLLOWUP_DULL_AND_FREEZE.matcher(primaryFollowup).find()) {
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Dull");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
@@ -698,11 +723,12 @@ public class ActionResolver {
                         costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.dullTarget(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.dullTarget(t));
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Dull + Freeze followup ---
-        if (FOLLOWUP_DULL_AND_FREEZE.matcher(followup).find()) {
+        if (FOLLOWUP_DULL_AND_FREEZE.matcher(primaryFollowup).find()) {
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Dull & Freeze");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
@@ -710,11 +736,12 @@ public class ActionResolver {
                         costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.dullAndFreezeTarget(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.dullAndFreezeTarget(t));
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Freeze followup ---
-        if (FOLLOWUP_FREEZE.matcher(followup).find()) {
+        if (FOLLOWUP_FREEZE.matcher(primaryFollowup).find()) {
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Freeze");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
@@ -722,11 +749,12 @@ public class ActionResolver {
                         costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.freezeTarget(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.freezeTarget(t));
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Break followup ---
-        if (FOLLOWUP_BREAK.matcher(followup).find()) {
+        if (FOLLOWUP_BREAK.matcher(primaryFollowup).find()) {
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Break");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
@@ -734,11 +762,12 @@ public class ActionResolver {
                         costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.breakTarget(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.breakTarget(t));
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Remove from game followup ---
-        if (FOLLOWUP_REMOVE_FROM_GAME.matcher(followup).find()) {
+        if (FOLLOWUP_REMOVE_FROM_GAME.matcher(primaryFollowup).find()) {
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Remove From Game");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
@@ -746,11 +775,12 @@ public class ActionResolver {
                         costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.removeTargetFromGame(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.removeTargetFromGame(t));
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Play onto field followup ---
-        if (FOLLOWUP_PLAY_ONTO_FIELD.matcher(followup).find()) {
+        if (FOLLOWUP_PLAY_ONTO_FIELD.matcher(primaryFollowup).find()) {
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Play onto Field");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
@@ -758,11 +788,12 @@ public class ActionResolver {
                         costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.playTargetOntoField(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.playTargetOntoField(t));
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Add to hand followup ---
-        if (FOLLOWUP_ADD_TO_HAND.matcher(followup).find()) {
+        if (FOLLOWUP_ADD_TO_HAND.matcher(primaryFollowup).find()) {
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Add to Hand");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
@@ -770,11 +801,12 @@ public class ActionResolver {
                         costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.addTargetToHand(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.addTargetToHand(t));
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Return to owner's hand followup ---
-        if (FOLLOWUP_RETURN_TO_OWNERS_HAND.matcher(followup).find()) {
+        if (FOLLOWUP_RETURN_TO_OWNERS_HAND.matcher(primaryFollowup).find()) {
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Return to owner's hand");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
@@ -785,11 +817,12 @@ public class ActionResolver {
                     if (t.isP1()) ctx.returnP1ForwardToHand(t.idx());
                     else          ctx.returnP2ForwardToHand(t.idx());
                 }
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Return to your hand followup ---
-        if (FOLLOWUP_RETURN_TO_YOUR_HAND.matcher(followup).find()) {
+        if (FOLLOWUP_RETURN_TO_YOUR_HAND.matcher(primaryFollowup).find()) {
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Return to your hand");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
@@ -799,11 +832,12 @@ public class ActionResolver {
                     if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
                     if (t.isP1()) ctx.returnP1ForwardToHand(t.idx());
                 }
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Put at top or bottom of owner's deck followup (player chooses) ---
-        if (FOLLOWUP_PUT_TOP_OR_BOTTOM_OF_DECK.matcher(followup).find()) {
+        if (FOLLOWUP_PUT_TOP_OR_BOTTOM_OF_DECK.matcher(primaryFollowup).find()) {
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Put at top or bottom of owner's deck (player chooses)");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
@@ -823,11 +857,12 @@ public class ActionResolver {
                         else       ctx.returnP2ForwardToDeckBottom(t.idx());
                     }
                 }
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Put at bottom of owner's deck followup ---
-        if (FOLLOWUP_PUT_BOTTOM_OF_DECK.matcher(followup).find()) {
+        if (FOLLOWUP_PUT_BOTTOM_OF_DECK.matcher(primaryFollowup).find()) {
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Put at bottom of owner's deck");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
@@ -838,11 +873,12 @@ public class ActionResolver {
                     if (t.isP1()) ctx.returnP1ForwardToDeckBottom(t.idx());
                     else          ctx.returnP2ForwardToDeckBottom(t.idx());
                 }
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Put on top of owner's deck followup ---
-        if (FOLLOWUP_PUT_TOP_OF_DECK.matcher(followup).find()) {
+        if (FOLLOWUP_PUT_TOP_OF_DECK.matcher(primaryFollowup).find()) {
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Put on top of owner's deck");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
@@ -853,11 +889,12 @@ public class ActionResolver {
                     if (t.isP1()) ctx.returnP1ForwardToDeckTop(t.idx());
                     else          ctx.returnP2ForwardToDeckTop(t.idx());
                 }
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Cannot block followup ---
-        if (FOLLOWUP_CANNOT_BLOCK.matcher(followup).find()) {
+        if (FOLLOWUP_CANNOT_BLOCK.matcher(primaryFollowup).find()) {
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Cannot block this turn");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
@@ -868,11 +905,12 @@ public class ActionResolver {
                     if (t.isP1()) ctx.setP1ForwardCannotBlock(t.idx());
                     else          ctx.setP2ForwardCannotBlock(t.idx());
                 }
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Must block followup ---
-        if (FOLLOWUP_MUST_BLOCK.matcher(followup).find()) {
+        if (FOLLOWUP_MUST_BLOCK.matcher(primaryFollowup).find()) {
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Must block if possible this turn");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
@@ -883,11 +921,12 @@ public class ActionResolver {
                     if (t.isP1()) ctx.setP1ForwardMustBlock(t.idx());
                     else          ctx.setP2ForwardMustBlock(t.idx());
                 }
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Cannot attack (this turn) followup ---
-        if (FOLLOWUP_CANNOT_ATTACK.matcher(followup).find()) {
+        if (FOLLOWUP_CANNOT_ATTACK.matcher(primaryFollowup).find()) {
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Cannot attack this turn");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
@@ -898,11 +937,12 @@ public class ActionResolver {
                     if (t.isP1()) ctx.setP1ForwardCannotAttack(t.idx());
                     else          ctx.setP2ForwardCannotAttack(t.idx());
                 }
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Must attack (this turn) followup ---
-        if (FOLLOWUP_MUST_ATTACK.matcher(followup).find()) {
+        if (FOLLOWUP_MUST_ATTACK.matcher(primaryFollowup).find()) {
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Must attack if possible this turn");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
@@ -913,11 +953,12 @@ public class ActionResolver {
                     if (t.isP1()) ctx.setP1ForwardMustAttack(t.idx());
                     else          ctx.setP2ForwardMustAttack(t.idx());
                 }
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Cannot attack or block (this turn) followup ---
-        if (FOLLOWUP_CANNOT_ATTACK_OR_BLOCK.matcher(followup).find()) {
+        if (FOLLOWUP_CANNOT_ATTACK_OR_BLOCK.matcher(primaryFollowup).find()) {
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Cannot attack or block this turn");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
@@ -928,11 +969,12 @@ public class ActionResolver {
                     if (t.isP1()) { ctx.setP1ForwardCannotAttack(t.idx()); ctx.setP1ForwardCannotBlock(t.idx()); }
                     else          { ctx.setP2ForwardCannotAttack(t.idx()); ctx.setP2ForwardCannotBlock(t.idx()); }
                 }
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Cannot attack or block until end of opponent's/next turn (persistent) followup ---
-        if (FOLLOWUP_CANNOT_ATTACK_OR_BLOCK_PERSISTENT.matcher(followup).find()) {
+        if (FOLLOWUP_CANNOT_ATTACK_OR_BLOCK_PERSISTENT.matcher(primaryFollowup).find()) {
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Cannot attack or block until end of next turn");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
@@ -943,11 +985,12 @@ public class ActionResolver {
                     if (t.isP1()) ctx.setP1ForwardCannotAttackOrBlockPersistent(t.idx());
                     else          ctx.setP2ForwardCannotAttackOrBlockPersistent(t.idx());
                 }
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Power boost followup (standard order: "it/they gains +N power [, traits] until…") ---
-        Matcher boostM = FOLLOWUP_POWER_BOOST.matcher(followup);
+        Matcher boostM = FOLLOWUP_POWER_BOOST.matcher(primaryFollowup);
         if (boostM.find()) {
             int boost = Integer.parseInt(boostM.group(1));
             EnumSet<CardData.Trait> traits = parseTraits(boostM.group(2));
@@ -959,11 +1002,12 @@ public class ActionResolver {
                         costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.boostTarget(t, boost, traits));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.boostTarget(t, boost, traits));
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Power boost followup (until-prefix order: "Until…, it/they gains +N power [and traits]") ---
-        Matcher boostUntilM = FOLLOWUP_POWER_BOOST_UNTIL.matcher(followup);
+        Matcher boostUntilM = FOLLOWUP_POWER_BOOST_UNTIL.matcher(primaryFollowup);
         if (boostUntilM.find()) {
             int boost = Integer.parseInt(boostUntilM.group(1));
             EnumSet<CardData.Trait> traits = parseTraits(boostUntilM.group(2));
@@ -975,11 +1019,12 @@ public class ActionResolver {
                         costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.boostTarget(t, boost, traits));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.boostTarget(t, boost, traits));
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Power / trait reduce followup (standard order: "it/they loses N power [, traits] until…") ---
-        Matcher reduceM = FOLLOWUP_POWER_REDUCE.matcher(followup);
+        Matcher reduceM = FOLLOWUP_POWER_REDUCE.matcher(primaryFollowup);
         if (reduceM.find()) {
             int reduction = reduceM.group(1) != null ? Integer.parseInt(reduceM.group(1)) : 0;
             EnumSet<CardData.Trait> traits = parseTraits(reduceM.group(2));
@@ -991,11 +1036,12 @@ public class ActionResolver {
                         costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.reduceTarget(t, reduction, traits));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.reduceTarget(t, reduction, traits));
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Power / trait reduce followup (until-prefix order: "Until…, it/they loses N power [and traits]") ---
-        Matcher reduceUntilM = FOLLOWUP_POWER_REDUCE_UNTIL.matcher(followup);
+        Matcher reduceUntilM = FOLLOWUP_POWER_REDUCE_UNTIL.matcher(primaryFollowup);
         if (reduceUntilM.find()) {
             int reduction = reduceUntilM.group(1) != null ? Integer.parseInt(reduceUntilM.group(1)) : 0;
             EnumSet<CardData.Trait> traits = parseTraits(reduceUntilM.group(2));
@@ -1007,22 +1053,24 @@ public class ActionResolver {
                         costVal, costCmp, inclForwards, inclBackups, inclMonsters);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.reduceTarget(t, reduction, traits));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.reduceTarget(t, reduction, traits));
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Opponent discard followup ---
-        Matcher discardM = OPPONENT_DISCARD.matcher(followup);
+        Matcher discardM = OPPONENT_DISCARD.matcher(primaryFollowup);
         if (discardM.find()) {
             int count = Integer.parseInt(discardM.group(1));
             return ctx -> {
                 ctx.logEntry(choosePrefix + " — Opponent discards " + count);
                 ctx.forceOpponentDiscard(count);
+                if (secondary != null) secondary.accept(ctx);
             };
         }
 
         // --- Self-referential boost followup: "<cardName> gains [+N power] [traits] until end of turn" ---
         if (source != null) {
-            Matcher selfM = SELF_POWER_BOOST.matcher(followup);
+            Matcher selfM = SELF_POWER_BOOST.matcher(primaryFollowup);
             if (selfM.find() && selfM.group("selfsubject").trim().equalsIgnoreCase(source.name())) {
                 int boost = selfM.group("selfamount") != null ? Integer.parseInt(selfM.group("selfamount")) : 0;
                 EnumSet<CardData.Trait> traits = parseTraits(selfM.group("selftraits"));
@@ -1030,13 +1078,15 @@ public class ActionResolver {
                 return ctx -> {
                     ctx.logEntry(choosePrefix + " — " + source.name() + logSuffix);
                     ctx.boostSourceForward(source, boost, traits);
+                    if (secondary != null) secondary.accept(ctx);
                 };
             }
         }
 
         // Recognised "Choose" header but followup not yet implemented
-        return ctx -> ctx.logEntry(
+        Consumer<GameContext> warnEffect = ctx -> ctx.logEntry(
                 "[ActionResolver] Choose effect — followup not yet implemented: " + followup);
+        return secondary == null ? warnEffect : warnEffect.andThen(secondary);
     }
 
     /** Returns targets belonging to {@code isP1} sorted by descending index (safe for list removal). */
