@@ -5137,6 +5137,7 @@ public class MainWindow {
 		if (ability.requiresDull())    { sb.append("Dull");      first = false; }
 		if (ability.isSpecial())       { if (!first) sb.append(", "); sb.append("S"); first = false; }
 		if (ability.hasXCost())        { if (!first) sb.append(", "); sb.append("X"); first = false; }
+		if (ability.yourTurnOnly())    { if (!first) sb.append(", "); sb.append("your turn"); first = false; }
 		if (ability.crystalCost() > 0) { if (!first) sb.append(", "); sb.append(ability.crystalCost()).append(" Crystal"); first = false; }
 		for (String e : ability.cpCost()) {
 			if (!first) sb.append(", ");
@@ -5333,6 +5334,7 @@ public class MainWindow {
 	 */
 	private boolean canActivateAbility(ActionAbility ability, boolean isFrozen, CardState state,
 			int playedTurn, String sourceName, boolean isP1) {
+		if (ability.yourTurnOnly() && !isP1) return false;
 		if (ability.requiresDull()) {
 			if (state != CardState.ACTIVE) return false;
 			if (playedTurn == gameState.getTurnNumber()) return false;

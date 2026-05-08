@@ -47,6 +47,7 @@ public record ActionAbility(
         List<DiscardCost>       discardCosts,          // "discard X" hand-card costs (may be empty)
         List<RemoveFromGameCost> removeFromGameCosts,  // "remove X from the game" costs (may be empty)
         List<ReturnToHandCost>   returnToHandCosts,    // "return X to its owner's hand" costs (may be empty)
+        boolean                 yourTurnOnly,          // "can only use this ability during your turn" restriction
         String                  effectText             // raw effect text — future work will parse this further
 ) {
     public ActionAbility {

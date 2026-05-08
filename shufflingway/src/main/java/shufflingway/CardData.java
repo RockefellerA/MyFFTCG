@@ -290,7 +290,8 @@ public record CardData(
             List<DiscardCost>        discardCosts        = parseDiscardCosts(discardRaw);
             List<RemoveFromGameCost> removeFromGameCosts = parseRemoveFromGameCosts(removeRaw);
             List<ReturnToHandCost>   returnToHandCosts   = parseReturnToHandCosts(returnRaw);
-            result.add(new ActionAbility(abilityName, requiresDull, isSpecial, crystalCost, hasXCost, cpCost, breakZoneCosts, discardCosts, removeFromGameCosts, returnToHandCosts, effectRaw));
+            boolean yourTurnOnly = YOUR_TURN_ONLY_PATTERN.matcher(effectRaw).find();
+            result.add(new ActionAbility(abilityName, requiresDull, isSpecial, crystalCost, hasXCost, cpCost, breakZoneCosts, discardCosts, removeFromGameCosts, returnToHandCosts, yourTurnOnly, effectRaw));
         }
         return List.copyOf(result);
     }
@@ -348,6 +349,10 @@ public record CardData(
 
     private static final Pattern REMOVE_FROM_GAME_COST_PATTERN = Pattern.compile(
         "(?i)remove\\s+(.+?)\\s+from\\s+(?:the\\s+)?game"
+    );
+
+    private static final Pattern YOUR_TURN_ONLY_PATTERN = Pattern.compile(
+        "(?i)You\\s+can(?:\\s+only)?\\s+use\\s+this\\s+ability(?:\\s+only)?\\s+during\\s+your\\s+turn[.!]?"
     );
 
     /** Parses a "remove … from the game" cost phrase into a list of {@link RemoveFromGameCost} items. */
