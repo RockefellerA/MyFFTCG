@@ -6,10 +6,8 @@ import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
-import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Image;
-import java.awt.Point;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.KeyEvent;
@@ -46,7 +44,6 @@ import javax.swing.JSplitPane;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
-import javax.swing.JWindow;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.RowFilter;
@@ -120,21 +117,20 @@ public class DeckManager extends JDialog {
         return sa.compareTo(sb);
     };
 
-    private static final int ZOOM_POSITION_OFFSET = 6;
+    private static final int PREVIEW_W = 429;
+    private static final int PREVIEW_H = 600;
 
     private DeckDatabase db;
     private int selectedDeckId = -1;
     private JButton addMaxBtn;
     private Set<String> lbSerials = new HashSet<>();
-    private JWindow zoomPopup;
-    private String currentImageUrl;
 
     // Format legality labels
     private JLabel formatS, formatL3, formatL6, formatT;
 
     public DeckManager(JFrame parent) {
         super(parent, "Deck Manager", true);
-        setSize(1400, 800);
+        setSize(1600, 800);
         setLocationRelativeTo(parent);
         setLayout(new BorderLayout(4, 4));
 
@@ -149,17 +145,12 @@ public class DeckManager extends JDialog {
         countLabel.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 8));
 
         cardImageLabel = new JLabel("Select a card to preview", SwingConstants.CENTER);
-        cardImageLabel.setPreferredSize(new Dimension(220, 309));
+        cardImageLabel.setPreferredSize(new Dimension(PREVIEW_W, PREVIEW_H));
         cardImageLabel.setBorder(BorderFactory.createEtchedBorder());
-        cardImageLabel.addMouseListener(new MouseAdapter() {
-            @Override public void mouseEntered(MouseEvent e) { showZoom(); }
-            @Override public void mouseExited(MouseEvent e)  { hideZoom(); }
-        });
 
-        JPanel imagePanel = new JPanel(new GridBagLayout());
-        imagePanel.setPreferredSize(new Dimension(240, 0));
-        imagePanel.setBorder(BorderFactory.createEmptyBorder(4, 0, 4, 4));
-        imagePanel.add(cardImageLabel);
+        JPanel imagePanel = new JPanel(new BorderLayout());
+        imagePanel.setPreferredSize(new Dimension(PREVIEW_W + 10, PREVIEW_H));
+        imagePanel.add(cardImageLabel, BorderLayout.CENTER);
 
         add(buildDeckListPanel(), BorderLayout.WEST);
         add(buildCenterSplit(),   BorderLayout.CENTER);
@@ -185,7 +176,6 @@ public class DeckManager extends JDialog {
 
         addWindowListener(new WindowAdapter() {
             @Override public void windowClosing(WindowEvent e) {
-                hideZoom();
                 if (db != null) try { db.close(); } catch (SQLException ignored) {}
             }
         });
@@ -994,11 +984,8 @@ public class DeckManager extends JDialog {
     private void loadCardImageAsync(String serial) {
         cardImageLabel.setIcon(null);
         cardImageLabel.setText("Loading…");
-        currentImageUrl = null;
 
         new SwingWorker<ImageIcon, Void>() {
-            private String fetchedUrl;
-
             @Override
             protected ImageIcon doInBackground() throws Exception {
                 try (java.sql.Connection conn = DriverManager.getConnection("jdbc:sqlite:fftcg_cards.db");
@@ -1007,11 +994,11 @@ public class DeckManager extends JDialog {
                     ps.setString(1, serial);
                     try (ResultSet rs = ps.executeQuery()) {
                         if (rs.next()) {
-                            fetchedUrl = rs.getString("image_url");
-                            if (fetchedUrl != null && !fetchedUrl.isBlank()) {
-                                Image img = ImageCache.load(fetchedUrl);
+                            String url = rs.getString("image_url");
+                            if (url != null && !url.isBlank()) {
+                                Image img = ImageCache.load(url);
                                 if (img != null)
-                                    return new ImageIcon(img.getScaledInstance(220, 309, Image.SCALE_SMOOTH));
+                                    return new ImageIcon(img.getScaledInstance(PREVIEW_W, PREVIEW_H, Image.SCALE_SMOOTH));
                             }
                         }
                     }
@@ -1024,65 +1011,18 @@ public class DeckManager extends JDialog {
                 try {
                     ImageIcon icon = get();
                     if (icon != null) {
-                        currentImageUrl = fetchedUrl;
                         cardImageLabel.setIcon(icon);
                         cardImageLabel.setText(null);
                     } else {
-                        currentImageUrl = null;
                         cardImageLabel.setIcon(null);
                         cardImageLabel.setText("No image available");
                     }
                 } catch (InterruptedException | ExecutionException e) {
-                    currentImageUrl = null;
                     cardImageLabel.setIcon(null);
                     cardImageLabel.setText("Error loading image");
                 }
             }
         }.execute();
-    }
-
-    private void showZoom() {
-        if (currentImageUrl == null) return;
-        final String urlToFetch = currentImageUrl;
-
-        if (zoomPopup == null) zoomPopup = new JWindow(this);
-
-        new SwingWorker<ImageIcon, Void>() {
-            @Override
-            protected ImageIcon doInBackground() throws Exception {
-                Image img = ImageCache.load(urlToFetch);
-                return img != null ? new ImageIcon(img) : null;
-            }
-            @Override
-            protected void done() {
-                if (!urlToFetch.equals(currentImageUrl) || zoomPopup == null) return;
-                try {
-                    ImageIcon icon = get();
-                    if (icon == null) return;
-
-                    JLabel zoomLabel = new JLabel(icon);
-                    zoomLabel.setBorder(BorderFactory.createRaisedBevelBorder());
-
-                    zoomPopup.getContentPane().removeAll();
-                    zoomPopup.getContentPane().add(zoomLabel);
-                    zoomPopup.pack();
-
-                    int w = icon.getIconWidth();
-                    int h = icon.getIconHeight();
-                    Point loc = cardImageLabel.getLocationOnScreen();
-                    int x = loc.x - w - ZOOM_POSITION_OFFSET;
-                    int y = loc.y + (cardImageLabel.getHeight() - h) / 2;
-                    Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
-                    y = Math.max(0, Math.min(y, screen.height - h));
-                    zoomPopup.setLocation(x, y);
-                    zoomPopup.setVisible(true);
-                } catch (InterruptedException | ExecutionException ignored) {}
-            }
-        }.execute();
-    }
-
-    private void hideZoom() {
-        if (zoomPopup != null) zoomPopup.setVisible(false);
     }
 
     // -------------------------------------------------------------------------
