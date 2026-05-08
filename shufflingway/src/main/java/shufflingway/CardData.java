@@ -261,6 +261,7 @@ public record CardData(
             String  abilityName  = rawName != null ? rawName.trim() : "";
             boolean isSpecial    = !abilityName.isEmpty();
             boolean requiresDull = false;
+            boolean hasXCost     = false;
             int     crystalCost  = 0;
             List<String> cpCost  = new ArrayList<>();
 
@@ -274,6 +275,8 @@ public record CardData(
                         isSpecial = true;
                     } else if ("C".equalsIgnoreCase(sym)) {
                         crystalCost++;
+                    } else if ("X".equalsIgnoreCase(sym)) {
+                        hasXCost = true;
                     } else if (sym.matches("\\d+")) {
                         int n = Integer.parseInt(sym);
                         for (int i = 0; i < n; i++) cpCost.add("");
@@ -287,7 +290,7 @@ public record CardData(
             List<DiscardCost>        discardCosts        = parseDiscardCosts(discardRaw);
             List<RemoveFromGameCost> removeFromGameCosts = parseRemoveFromGameCosts(removeRaw);
             List<ReturnToHandCost>   returnToHandCosts   = parseReturnToHandCosts(returnRaw);
-            result.add(new ActionAbility(abilityName, requiresDull, isSpecial, crystalCost, cpCost, breakZoneCosts, discardCosts, removeFromGameCosts, returnToHandCosts, effectRaw));
+            result.add(new ActionAbility(abilityName, requiresDull, isSpecial, crystalCost, hasXCost, cpCost, breakZoneCosts, discardCosts, removeFromGameCosts, returnToHandCosts, effectRaw));
         }
         return List.copyOf(result);
     }

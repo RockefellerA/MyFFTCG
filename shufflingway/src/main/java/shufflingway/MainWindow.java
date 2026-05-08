@@ -4539,7 +4539,7 @@ public class MainWindow {
 			logEntry("\"" + entry.source().name() + "\" → Break Zone");
 			refreshP1BreakLabel();
 		} else {
-			ActionResolver.resolve(entry.ability(), entry.source(), gameState, ctx);
+			ActionResolver.resolve(entry.ability(), entry.source(), gameState, ctx, entry.xValue());
 			refreshP1HandLabel();
 			refreshP1BreakLabel();
 		}
@@ -5136,6 +5136,7 @@ public class MainWindow {
 		boolean first = true;
 		if (ability.requiresDull())    { sb.append("Dull");      first = false; }
 		if (ability.isSpecial())       { if (!first) sb.append(", "); sb.append("S"); first = false; }
+		if (ability.hasXCost())        { if (!first) sb.append(", "); sb.append("X"); first = false; }
 		if (ability.crystalCost() > 0) { if (!first) sb.append(", "); sb.append(ability.crystalCost()).append(" Crystal"); first = false; }
 		for (String e : ability.cpCost()) {
 			if (!first) sb.append(", ");
@@ -5668,9 +5669,9 @@ public class MainWindow {
 
 		List<BreakZoneCost> bzCosts = ability.breakZoneCosts();
 
-		// If zero CP cost, confirm immediately (BZ cost is always resolved automatically)
-		if (totalCost == 0) {
-			executeAbilityPayment(ability, source, applyDull, new ArrayList<>(), new ArrayList<>(), autoResolveBzTargets(source, bzCosts, isP1), isP1);
+		// If zero CP cost and no X cost, confirm immediately (BZ cost is always resolved automatically)
+		if (totalCost == 0 && !ability.hasXCost()) {
+			executeAbilityPayment(ability, source, applyDull, new ArrayList<>(), new ArrayList<>(), autoResolveBzTargets(source, bzCosts, isP1), isP1, 0);
 			return;
 		}
 
@@ -5710,6 +5711,8 @@ public class MainWindow {
 		List<Integer> discardIdxs = new ArrayList<>();
 
 		boolean[] canAddDiscard = {false};
+		boolean[] canAddBackup  = {false};
+		int[]     xValueHolder  = {0};
 		Runnable updateAll = () -> {
 			Map<String, Integer> cpByElem = new LinkedHashMap<>(bankCpByElem);
 			int extraCp = 0;
@@ -5726,12 +5729,20 @@ public class MainWindow {
 			int total       = cpByElem.values().stream().mapToInt(Integer::intValue).sum() + extraCp;
 			int unsatisfied = (int) java.util.stream.IntStream.range(0, elems.length)
 					.filter(ei -> cpByElem.getOrDefault(elems[ei], 0) < costByElem.get(elems[ei])).count();
-			int maxAllowed  = totalCost + elems.length + (totalCost % 2);
-			boolean canAddBackup = total < totalCost;
-			canAddDiscard[0]     = (total + 2 <= maxAllowed) && (total < totalCost || unsatisfied > 0);
-			boolean satisfied    = cpByElem.entrySet().stream()
+			boolean satisfied = cpByElem.entrySet().stream()
 					.allMatch(en -> en.getValue() >= costByElem.getOrDefault(en.getKey(), 0));
-			confirmBtn.setEnabled(total >= totalCost && satisfied);
+
+			if (ability.hasXCost()) {
+				xValueHolder[0]  = Math.max(0, total - totalCost);
+				canAddBackup[0]  = true;  // no upper cap — extra goes to X
+				canAddDiscard[0] = true;
+				confirmBtn.setEnabled(satisfied);
+			} else {
+				int maxAllowed   = totalCost + elems.length + (totalCost % 2);
+				canAddBackup[0]  = total < totalCost;
+				canAddDiscard[0] = (total + 2 <= maxAllowed) && (total < totalCost || unsatisfied > 0);
+				confirmBtn.setEnabled(total >= totalCost && satisfied);
+			}
 
 			StringBuilder sb = new StringBuilder("CP: " + total + " / " + totalCost + "  (");
 			boolean first = true;
@@ -5744,15 +5755,20 @@ public class MainWindow {
 				if (!first) sb.append(", ");
 				sb.append("any: ").append(Math.min(extraCp, (int) genericNeeded)).append("/").append((int) genericNeeded);
 			}
+			if (ability.hasXCost()) {
+				if (!first) sb.append(", ");
+				sb.append("X = ").append(xValueHolder[0]);
+				first = false;
+			}
 			if (first) sb.append("free");
 			sb.append(")");
 			cpLabel.setText(sb.toString());
 
 			for (int i = 0; i < backupLbls.size(); i++) {
 				JLabel lbl = backupLbls.get(i); boolean sel = selectedBackups.contains(backupSlots.get(i));
-				lbl.setBorder(BorderFactory.createLineBorder(sel ? Color.YELLOW : (canAddBackup ? Color.GRAY : new Color(80,80,80)), sel?3:1));
-				lbl.setBackground(sel || canAddBackup ? Color.DARK_GRAY : new Color(50,50,50));
-				lbl.setCursor(sel || canAddBackup ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
+				lbl.setBorder(BorderFactory.createLineBorder(sel ? Color.YELLOW : (canAddBackup[0] ? Color.GRAY : new Color(80,80,80)), sel?3:1));
+				lbl.setBackground(sel || canAddBackup[0] ? Color.DARK_GRAY : new Color(50,50,50));
+				lbl.setCursor(sel || canAddBackup[0] ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
 			}
 			for (int i = 0; i < discardLbls.size(); i++) {
 				JLabel lbl = discardLbls.get(i); boolean sel = selectedDiscards.contains(discardIdxs.get(i));
@@ -5779,8 +5795,7 @@ public class MainWindow {
 				final String url = bkpUrls[slot];
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mousePressed(MouseEvent ev) {
-						int tot = bankCpByElem.values().stream().mapToInt(Integer::intValue).sum() + selectedBackups.size() + selectedDiscards.size() * 2;
-						if (selectedBackups.remove(Integer.valueOf(slot))) { /* deselect */ } else if (tot < totalCost) selectedBackups.add(slot);
+						if (!selectedBackups.remove(Integer.valueOf(slot)) && canAddBackup[0]) selectedBackups.add(slot);
 						updateAll.run();
 					}
 					@Override public void mouseEntered(MouseEvent ev) { if (lbl.getIcon() != null) showZoomAt(url); }
@@ -5850,7 +5865,7 @@ public class MainWindow {
 			dlg.dispose();
 			executeAbilityPayment(ability, source, applyDull,
 					new ArrayList<>(selectedDiscards), new ArrayList<>(selectedBackups),
-					autoResolveBzTargets(source, bzCosts, isP1), isP1);
+					autoResolveBzTargets(source, bzCosts, isP1), isP1, xValueHolder[0]);
 		});
 
 		JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
@@ -5861,6 +5876,7 @@ public class MainWindow {
 		boolean cf = true;
 		if (ability.requiresDull())    { costDesc.append("Dull"); cf = false; }
 		if (ability.isSpecial())       { if (!cf) costDesc.append(" + "); costDesc.append("S (discard ").append(source.name()).append(")"); cf = false; }
+		if (ability.hasXCost())        { if (!cf) costDesc.append(" + "); costDesc.append("X CP"); cf = false; }
 		if (ability.crystalCost() > 0) { if (!cf) costDesc.append(" + "); costDesc.append(ability.crystalCost()).append(" Crystal"); cf = false; }
 		for (Map.Entry<String, Integer> en : costByElem.entrySet()) {
 			if (!cf) costDesc.append(" + ");
@@ -5928,7 +5944,7 @@ public class MainWindow {
 	 */
 	private void executeAbilityPayment(ActionAbility ability, CardData source,
 			Runnable applyDull, List<Integer> discardIndices, List<Integer> backupDullIndices,
-			List<ForwardTarget> bzTargets, boolean isP1) {
+			List<ForwardTarget> bzTargets, boolean isP1, int xValue) {
 		List<String> rawCost = ability.cpCost();
 		LinkedHashMap<String, Integer> costByElem = new LinkedHashMap<>();
 		for (String e : rawCost) if (!e.isEmpty()) costByElem.merge(e, 1, Integer::sum);
@@ -6034,7 +6050,7 @@ public class MainWindow {
 
 		logEntry("\"" + source.name() + "\" activated ability");
 
-		gameState.pushStack(new StackEntry(source, ability, isP1));
+		gameState.pushStack(new StackEntry(source, ability, isP1, xValue));
 		showStackWindow();
 		refreshP1HandLabel();
 		refreshP1BreakLabel();

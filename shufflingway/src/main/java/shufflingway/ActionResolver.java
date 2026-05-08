@@ -274,7 +274,7 @@ public class ActionResolver {
             "Job\\s+(?<jobnm>.+?)\\s+(?=Forwards?|Backups?|Monsters?|Characters?)" +
         ")?" +
         "(?<targets>Forwards?|Backups?|Monsters?|Characters?(?:\\s+Cards?)?)\\s*" +
-        "(?:of\\s+cost\\s+(?<cost>\\d+)(?:\\s+or\\s+(?<costcmp>less|more))?\\s+)?" +
+        "(?:of\\s+cost\\s+(?<cost>\\d+|X)(?:\\s+or\\s+(?<costcmp>less|more))?\\s+)?" +
         "from\\s+your\\s+hand\\s+onto\\s+(?:the\\s+)?field[.!]?"
     );
 
@@ -483,7 +483,7 @@ public class ActionResolver {
      * @return the effect consumer, or {@code null} if the text is not yet supported
      */
     public static Consumer<GameContext> parse(String effectText) {
-        return parse(effectText, null);
+        return parse(effectText, null, 0);
     }
 
     /**
@@ -494,6 +494,13 @@ public class ActionResolver {
      * @return the effect consumer, or {@code null} if the text is not yet supported
      */
     public static Consumer<GameContext> parse(String effectText, CardData source) {
+        return parse(effectText, source, 0);
+    }
+
+    /**
+     * @param xValue the CP amount paid into {@code 《X》}; {@code 0} when the ability has no X cost
+     */
+    public static Consumer<GameContext> parse(String effectText, CardData source, int xValue) {
         Consumer<GameContext> result;
 
         result = tryParseDealDamageToForwards(effectText);
@@ -529,7 +536,7 @@ public class ActionResolver {
         result = tryParseDealPlayerDamageToSelf(effectText);
         if (result != null) return result;
 
-        result = tryParsePlayFromHand(effectText);
+        result = tryParsePlayFromHand(effectText, source, xValue);
         if (result != null) return result;
 
         result = tryParseOpponentSelects(effectText);
@@ -559,10 +566,15 @@ public class ActionResolver {
      */
     public static void resolve(ActionAbility ability, CardData source,
             GameState gameState, GameContext ctx) {
+        resolve(ability, source, gameState, ctx, 0);
+    }
+
+    public static void resolve(ActionAbility ability, CardData source,
+            GameState gameState, GameContext ctx, int xValue) {
         ctx.logEntry("[Stack] \"" + source.name() + "\" → " + ability.effectText());
         ctx.logEntry("[Stack] P2 passes — resolving");
 
-        Consumer<GameContext> effect = parse(ability.effectText(), source);
+        Consumer<GameContext> effect = parse(ability.effectText(), source, xValue);
         if (effect != null) {
             effect.accept(ctx);
         } else {
@@ -1494,7 +1506,7 @@ public class ActionResolver {
     /**
      * Parses "Play 1 [type] of cost N [or less|more] from your hand onto the field".
      */
-    private static Consumer<GameContext> tryParsePlayFromHand(String text) {
+    private static Consumer<GameContext> tryParsePlayFromHand(String text, CardData source, int xValue) {
         Matcher m = PLAY_FROM_HAND_PATTERN.matcher(text);
         if (!m.find()) return null;
 
@@ -1535,7 +1547,9 @@ public class ActionResolver {
         boolean inclMonsters = tgtLower.contains("monster") || tgtLower.contains("character");
 
         String costStr = m.group("cost");
-        int    costVal = costStr != null ? Integer.parseInt(costStr) : -1;
+        int    costVal = costStr == null                    ? -1
+                       : costStr.equalsIgnoreCase("X")     ? xValue
+                       : Integer.parseInt(costStr);
         String costCmp = m.group("costcmp");
 
         // Build log label
