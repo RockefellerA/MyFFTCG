@@ -5757,7 +5757,7 @@ public class MainWindow {
 					boolean selfOnly, String condition, String element,
 					int costVal, String costCmp,
 					boolean inclForwards, boolean inclBackups, boolean inclMonsters,
-					String jobFilter, String cardNameFilter) {
+					String jobFilter, String cardNameFilter, boolean inclSummons) {
 				java.util.List<ForwardTarget> eligible = new ArrayList<>();
 				if (!opponentOnly) {
 					if (inclForwards) for (int i = 0; i < p1ForwardCards.size(); i++) {
@@ -5945,7 +5945,7 @@ public class MainWindow {
 					int maxCount, boolean upTo, boolean opponentZone,
 					String condition, String element, int costVal, String costCmp,
 					boolean inclForwards, boolean inclBackups, boolean inclMonsters,
-					String jobFilter, String cardNameFilter) {
+					String jobFilter, String cardNameFilter, boolean inclSummons) {
 				java.util.List<CardData> bz = opponentZone
 						? gameState.getP2BreakZone() : gameState.getP1BreakZone();
 				java.util.List<ForwardTarget> eligible = new ArrayList<>();
@@ -5954,6 +5954,7 @@ public class MainWindow {
 					if (card.isForward()  && !inclForwards) continue;
 					if (card.isBackup()   && !inclBackups)  continue;
 					if (card.isMonster()  && !inclMonsters) continue;
+					if (card.isSummon()   && !inclSummons)  continue;
 					if (element != null && !card.containsElement(element)) continue;
 					if (!meetsCostConstraint(card.cost(), costVal, costCmp)) continue;
 					if (!meetsJobFilter(card, jobFilter)) continue;
@@ -5970,6 +5971,10 @@ public class MainWindow {
 						+ " Character" + (maxCount != 1 ? "s" : "") + costLabel
 						+ " in " + (opponentZone ? "opponent's" : "your") + " Break Zone";
 				return showBreakZoneSelectDialog(eligible, bz, maxCount, upTo, title);
+			}
+
+			@Override public void cancelSummonOnStack() {
+				logEntry("[ActionResolver] Cancel Summon on stack — not yet implemented");
 			}
 
 			@Override public void damageTarget(ForwardTarget t, int amount) {

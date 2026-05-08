@@ -202,7 +202,7 @@ public record CardData(
         "((?:《[^》]*》\\s*)*)"                                        +  // zero or more 《cost》 tokens
         "((?i)(?:,\\s*)?put\\s+.+?\\s+into\\s+the\\s+Break\\s+Zone\\s*)?" + // optional BZ cost phrase
         ":\\s*"                                                        +  // colon separator
-        "([^\\[]*)"                                                       // effect text (up to next markup)
+        "((?:[^\\[]|\\[(?!\\[))*)"                                        // effect text (up to next [[markup]])
     );
 
     // Captures the content between "put " and " into the Break Zone"

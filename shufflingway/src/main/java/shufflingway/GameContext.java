@@ -86,7 +86,7 @@ public interface GameContext {
     List<ForwardTarget> selectCharacters(int maxCount, boolean upTo, boolean opponentOnly,
             boolean selfOnly, String condition, String element, int costVal, String costCmp,
             boolean forwards, boolean backups, boolean monsters,
-            String jobFilter, String cardNameFilter);
+            String jobFilter, String cardNameFilter, boolean summons);
 
     /**
      * Shows a modal dialog letting P1 choose up to {@code maxCount} eligible
@@ -106,7 +106,13 @@ public interface GameContext {
     List<ForwardTarget> selectCharactersFromBreakZone(int maxCount, boolean upTo,
             boolean opponentZone, String condition, String element, int costVal, String costCmp,
             boolean forwards, boolean backups, boolean monsters,
-            String jobFilter, String cardNameFilter);
+            String jobFilter, String cardNameFilter, boolean summons);
+
+    /**
+     * Presents the ability user with Summons currently on the stack and cancels
+     * the one they choose, preventing it from resolving.
+     */
+    void cancelSummonOnStack();
 
     // ---- Zone-dispatch single-target effects --------------------------------
 

@@ -49,13 +49,13 @@ public class ActionResolver {
         "(?i)Choose\\s+(?<upto>up\\s+to\\s+)?(?<count>\\d+)\\s+" +
         "(?:(?<condition>dull|damaged|attacking|blocking|active)\\s+)?" +
         "(?:(?<element>Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark)\\s+)?" +
-        "(?<targets>Forwards?(?:\\s+or\\s+Monsters?)?|Backups?|Characters?" +
+        "(?<targets>Forwards?(?:\\s+or\\s+Monsters?)?|Backups?|Characters?|Summons?" +
             "|\\[Job\\s+\\([^)]+\\)\\]" +
             "|\\[Card\\s+Name\\s+\\([^)]+\\)\\]" +
             "|Job\\s+.+?\\s+Forwards?(?:\\s+or\\s+Job\\s+.+?\\s+Forwards?)*)" +
         "(?:\\s+of\\s+cost\\s+(?<cost>\\d+)(?:\\s+or\\s+(?<costcmp>less|more))?)?" +
         "(?:\\s+(?<control>(?:your\\s+)?opponent\\s+controls|you\\s+control))?" +
-        "(?:\\s+(?<zone>in\\s+your(?:\\s+opponent(?:'s)?)?\\s+Break\\s+Zone))?" +
+        "(?:\\s+(?<zone>(?:in|from)\\s+your(?:\\s+opponent(?:'s)?)?\\s+Break\\s+Zone))?" +
         "(?:[.]\\s*|\\s+and\\s+|,\\s*)" +
         "(?<followup>.+)"
     );
@@ -73,6 +73,11 @@ public class ActionResolver {
     /** Matches one {@code Job name Forward(s)} segment in the written job-filter form; group 1 is the job name. */
     private static final Pattern JOB_WRITTEN_SEGMENT = Pattern.compile(
         "(?i)Job\\s+(.+?)\\s+Forwards?"
+    );
+
+    /** Matches "Cancel its effect." — used to counter a Summon on the stack. */
+    private static final Pattern FOLLOWUP_CANCEL_EFFECT = Pattern.compile(
+        "(?i)Cancel\\s+its\\s+effect\\.?"
     );
 
     /** Matches "deal it/them N damage". */
@@ -640,6 +645,7 @@ public class ActionResolver {
             inclBackups    = tgtLower.contains("backup")  || tgtLower.contains("character");
             inclMonsters   = tgtLower.contains("monster") || tgtLower.contains("character");
         }
+        boolean inclSummons = tgtLower.contains("summon");
         String  costStr      = m.group("cost");
         String  costCmp      = m.group("costcmp");
         int     costVal      = costStr != null ? Integer.parseInt(costStr) : -1;
@@ -689,7 +695,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Deal " + damage + " damage");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.damageTarget(t, damage));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.damageTarget(t, damage));
                 if (secondary != null) secondary.accept(ctx);
@@ -705,7 +711,7 @@ public class ActionResolver {
                     ctx.logEntry(choosePrefix + " — Deal " + damage + " damage (highest Forward power)");
                     List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                             opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                            costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                            costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                     sortedByIdxDesc(ts, true) .forEach(t -> ctx.damageTarget(t, damage));
                     sortedByIdxDesc(ts, false).forEach(t -> ctx.damageTarget(t, damage));
                     if (secondary != null) secondary.accept(ctx);
@@ -718,7 +724,7 @@ public class ActionResolver {
                     ctx.logEntry(choosePrefix + " — Deal " + damage + " damage (half of " + cardName + "'s power)");
                     List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                             opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                            costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                            costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                     sortedByIdxDesc(ts, true) .forEach(t -> ctx.damageTarget(t, damage));
                     sortedByIdxDesc(ts, false).forEach(t -> ctx.damageTarget(t, damage));
                     if (secondary != null) secondary.accept(ctx);
@@ -731,7 +737,7 @@ public class ActionResolver {
                     ctx.logEntry(choosePrefix + logSuffix);
                     List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                             opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                            costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                            costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                     sortedByIdxDesc(ts, true) .forEach(t -> ctx.damageTarget(t, Math.max(0, ctx.effectiveTargetPower(t) - subtract)));
                     sortedByIdxDesc(ts, false).forEach(t -> ctx.damageTarget(t, Math.max(0, ctx.effectiveTargetPower(t) - subtract)));
                     if (secondary != null) secondary.accept(ctx);
@@ -743,7 +749,7 @@ public class ActionResolver {
                     ctx.logEntry(choosePrefix + " — Deal " + damage + " damage (" + cardName + "'s power)");
                     List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                             opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                            costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                            costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                     sortedByIdxDesc(ts, true) .forEach(t -> ctx.damageTarget(t, damage));
                     sortedByIdxDesc(ts, false).forEach(t -> ctx.damageTarget(t, damage));
                     if (secondary != null) secondary.accept(ctx);
@@ -757,7 +763,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Activate");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.activateTarget(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.activateTarget(t));
                 if (secondary != null) secondary.accept(ctx);
@@ -771,7 +777,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Dull");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.dullTarget(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.dullTarget(t));
                 if (secondary != null) secondary.accept(ctx);
@@ -784,7 +790,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Dull & Freeze");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.dullAndFreezeTarget(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.dullAndFreezeTarget(t));
                 if (secondary != null) secondary.accept(ctx);
@@ -797,7 +803,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Freeze");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.freezeTarget(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.freezeTarget(t));
                 if (secondary != null) secondary.accept(ctx);
@@ -810,7 +816,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Break");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.breakTarget(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.breakTarget(t));
                 if (secondary != null) secondary.accept(ctx);
@@ -823,7 +829,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Remove From Game");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.removeTargetFromGame(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.removeTargetFromGame(t));
                 if (secondary != null) secondary.accept(ctx);
@@ -836,7 +842,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Play onto Field");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.playTargetOntoField(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.playTargetOntoField(t));
                 if (secondary != null) secondary.accept(ctx);
@@ -849,7 +855,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Add to Hand");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.addTargetToHand(t));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.addTargetToHand(t));
                 if (secondary != null) secondary.accept(ctx);
@@ -862,7 +868,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Return to owner's hand");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 for (ForwardTarget t : ts) {
                     if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
                     if (t.isP1()) ctx.returnP1ForwardToHand(t.idx());
@@ -878,7 +884,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Return to your hand");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 for (ForwardTarget t : ts) {
                     if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
                     if (t.isP1()) ctx.returnP1ForwardToHand(t.idx());
@@ -893,7 +899,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Put at top or bottom of owner's deck (player chooses)");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 for (ForwardTarget t : ts) {
                     if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
                     if (t.isP1()) {
@@ -918,7 +924,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Put at bottom of owner's deck");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 for (ForwardTarget t : ts) {
                     if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
                     if (t.isP1()) ctx.returnP1ForwardToDeckBottom(t.idx());
@@ -934,7 +940,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Put on top of owner's deck");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 for (ForwardTarget t : ts) {
                     if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
                     if (t.isP1()) ctx.returnP1ForwardToDeckTop(t.idx());
@@ -950,7 +956,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Cannot block this turn");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 for (ForwardTarget t : ts) {
                     if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
                     if (t.isP1()) ctx.setP1ForwardCannotBlock(t.idx());
@@ -966,7 +972,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Must block if possible this turn");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 for (ForwardTarget t : ts) {
                     if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
                     if (t.isP1()) ctx.setP1ForwardMustBlock(t.idx());
@@ -982,7 +988,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Cannot attack this turn");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 for (ForwardTarget t : ts) {
                     if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
                     if (t.isP1()) ctx.setP1ForwardCannotAttack(t.idx());
@@ -998,7 +1004,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Must attack if possible this turn");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 for (ForwardTarget t : ts) {
                     if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
                     if (t.isP1()) ctx.setP1ForwardMustAttack(t.idx());
@@ -1014,7 +1020,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Cannot attack or block this turn");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 for (ForwardTarget t : ts) {
                     if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
                     if (t.isP1()) { ctx.setP1ForwardCannotAttack(t.idx()); ctx.setP1ForwardCannotBlock(t.idx()); }
@@ -1030,7 +1036,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + " — Cannot attack or block until end of next turn");
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 for (ForwardTarget t : ts) {
                     if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
                     if (t.isP1()) ctx.setP1ForwardCannotAttackOrBlockPersistent(t.idx());
@@ -1050,7 +1056,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + logSuffix);
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.boostTarget(t, boost, traits));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.boostTarget(t, boost, traits));
                 if (secondary != null) secondary.accept(ctx);
@@ -1067,7 +1073,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + logSuffix);
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.boostTarget(t, boost, traits));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.boostTarget(t, boost, traits));
                 if (secondary != null) secondary.accept(ctx);
@@ -1084,7 +1090,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + logSuffix);
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.reduceTarget(t, reduction, traits));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.reduceTarget(t, reduction, traits));
                 if (secondary != null) secondary.accept(ctx);
@@ -1101,7 +1107,7 @@ public class ActionResolver {
                 ctx.logEntry(choosePrefix + logSuffix);
                 List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
                         opponentOnly, selfOnly, condition, element, zone, opponentZone,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
                 sortedByIdxDesc(ts, true) .forEach(t -> ctx.reduceTarget(t, reduction, traits));
                 sortedByIdxDesc(ts, false).forEach(t -> ctx.reduceTarget(t, reduction, traits));
                 if (secondary != null) secondary.accept(ctx);
@@ -1132,6 +1138,15 @@ public class ActionResolver {
                     if (secondary != null) secondary.accept(ctx);
                 };
             }
+        }
+
+        // --- Cancel effect followup (counters a Summon on the stack) ---
+        if (FOLLOWUP_CANCEL_EFFECT.matcher(primaryFollowup).find()) {
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — Cancel its effect");
+                ctx.cancelSummonOnStack();
+                if (secondary != null) secondary.accept(ctx);
+            };
         }
 
         // Recognised "Choose" header but followup not yet implemented
@@ -1400,11 +1415,11 @@ public class ActionResolver {
             String condition, String element, String zone, boolean opponentZone,
             int costVal, String costCmp,
             boolean inclForwards, boolean inclBackups, boolean inclMonsters,
-            String jobFilter, String cardNameFilter) {
+            String jobFilter, String cardNameFilter, boolean inclSummons) {
         return zone != null
                 ? ctx.selectCharactersFromBreakZone(maxCount, upTo, opponentZone, condition, element,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter)
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons)
                 : ctx.selectCharacters(maxCount, upTo, opponentOnly, selfOnly, condition, element,
-                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter);
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
     }
 }
