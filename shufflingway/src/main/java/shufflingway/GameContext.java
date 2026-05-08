@@ -114,6 +114,22 @@ public interface GameContext {
      */
     void cancelSummonOnStack();
 
+    /**
+     * Forces {@code t} directly into the Break Zone, bypassing any
+     * "cannot be broken" protection that {@link #breakTarget} would respect.
+     */
+    void forceTargetToBreakZone(ForwardTarget t);
+
+    /**
+     * Moves the top {@code count} cards from the opponent's main deck into their Break Zone.
+     */
+    void opponentMillCards(int count);
+
+    /**
+     * Displays the opponent's hand to the ability user in a timed popup window.
+     */
+    void revealOpponentHand();
+
     // ---- Zone-dispatch single-target effects --------------------------------
 
     /**

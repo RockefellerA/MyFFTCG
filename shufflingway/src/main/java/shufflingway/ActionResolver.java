@@ -111,9 +111,9 @@ public class ActionResolver {
         "(?i)Activate\\s+(?:it|them)\\.?"
     );
 
-    /** Matches "dull it" or "dull them". */
+    /** Matches "dull it/them" or "dulls it/them" (third-person form used in opponent-selects effects). */
     private static final Pattern FOLLOWUP_DULL = Pattern.compile(
-        "(?i)dull\\s+(?:it|them)"
+        "(?i)dulls?\\s+(?:it|them)"
     );
 
     /** Matches "freeze it" or "freeze them". */
@@ -214,6 +214,53 @@ public class ActionResolver {
     private static final Pattern OPPONENT_DISCARD = Pattern.compile(
         "(?i)Your\\s+opponent\\s+discards?\\s+(\\d+)\\s+cards?" +
         "(?:\\s+from\\s+(?:his|her|their)\\s+hand)?[.!]?"
+    );
+
+    /**
+     * Matches "Your opponent selects N [condition] [element] [type] they control [sep] followup".
+     * <ul>
+     *   <li>Group {@code count}     — number of cards the opponent must select</li>
+     *   <li>Group {@code condition} — optional state filter</li>
+     *   <li>Group {@code element}   — optional element filter</li>
+     *   <li>Group {@code targets}   — card type(s)</li>
+     *   <li>Group {@code followup}  — action applied to the selected card(s)</li>
+     * </ul>
+     */
+    private static final Pattern OPPONENT_SELECTS_PATTERN = Pattern.compile(
+        "(?i)Your\\s+opponent\\s+selects?\\s+(?<count>\\d+)\\s+" +
+        "(?:(?<condition>dull|damaged|attacking|blocking|active)\\s+)?" +
+        "(?:(?<element>Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark)\\s+)?" +
+        "(?<targets>Forwards?|Backups?|Characters?)" +
+        "\\s+(?:they|he|she)\\s+controls?" +
+        "(?:[.]\\s*|\\s+and\\s+)" +
+        "(?<followup>.+)"
+    );
+
+    /**
+     * Matches "Your opponent puts the top N card(s) of his/her/their deck into the Break Zone
+     * [. Draw M card(s)]".
+     * <ul>
+     *   <li>Group {@code count} — number of cards to mill; absent means 1 ("the top card")</li>
+     *   <li>Group {@code draw}  — optional number of cards to draw afterward</li>
+     * </ul>
+     */
+    private static final Pattern OPPONENT_MILL_PATTERN = Pattern.compile(
+        "(?i)Your\\s+opponent\\s+puts?\\s+the\\s+top\\s+(?:(?<count>\\d+)\\s+cards?|card)\\s+" +
+        "of\\s+(?:his|her|their)\\s+deck\\s+into\\s+the\\s+Break\\s+Zone" +
+        "(?:[.!]?\\s*Draw\\s+(?<draw>\\d+)\\s+cards?[.!]?)?"
+    );
+
+    /** Matches "Your opponent shows/reveals his/her/their hand". */
+    private static final Pattern OPPONENT_REVEAL_HAND_PATTERN = Pattern.compile(
+        "(?i)Your\\s+opponent\\s+(?:shows?|reveals?)\\s+(?:his|her|their)\\s+hand[.!]?"
+    );
+
+    /**
+     * Matches "Put it into the Break Zone" — a forced send that bypasses
+     * "cannot be broken" protections, unlike {@code FOLLOWUP_BREAK}.
+     */
+    private static final Pattern FOLLOWUP_PUT_TO_BREAK_ZONE = Pattern.compile(
+        "(?i)Put\\s+it\\s+into\\s+the\\s+Break\\s+Zone[.!]?"
     );
 
     /**
@@ -454,7 +501,14 @@ public class ActionResolver {
         result = tryParseDealPlayerDamageToSelf(effectText);
         if (result != null) return result;
 
-        // TODO: add more effect parsers here as they are implemented
+        result = tryParseOpponentSelects(effectText);
+        if (result != null) return result;
+
+        result = tryParseOpponentMill(effectText);
+        if (result != null) return result;
+
+        result = tryParseOpponentRevealHand(effectText);
+        if (result != null) return result;
 
         return null;
     }
@@ -1403,6 +1457,84 @@ public class ActionResolver {
             ctx.logEntry("Effect: " + logMsg);
             ctx.applyMassFieldEffect(action, inclForwards, inclBackups, inclMonsters,
                     opponentOnly, selfOnly, element, costVal, costCmp);
+        };
+    }
+
+    /**
+     * Parses "Your opponent selects N [condition] [type] they control [sep] followup".
+     * Supported followups: "Put it into the Break Zone" and "dull/dulls it".
+     */
+    private static Consumer<GameContext> tryParseOpponentSelects(String text) {
+        Matcher m = OPPONENT_SELECTS_PATTERN.matcher(text);
+        if (!m.find()) return null;
+
+        int     count     = Integer.parseInt(m.group("count"));
+        String  condition = m.group("condition");
+        String  element   = m.group("element");
+        String  targets   = m.group("targets");
+        String  tgtLower  = targets.toLowerCase();
+        boolean inclForwards = tgtLower.contains("forward") || tgtLower.contains("character");
+        boolean inclBackups  = tgtLower.contains("backup")  || tgtLower.contains("character");
+        boolean inclMonsters = tgtLower.contains("monster") || tgtLower.contains("character");
+        String  followup  = m.group("followup").trim();
+
+        String prefix = "Opponent selects " + count
+                + (condition != null ? " " + condition : "")
+                + (element   != null ? " " + element   : "")
+                + " " + targets + " (opponent)";
+
+        if (FOLLOWUP_PUT_TO_BREAK_ZONE.matcher(followup).find()) {
+            return ctx -> {
+                ctx.logEntry(prefix + " — Force to Break Zone");
+                List<ForwardTarget> ts = ctx.selectCharacters(count, false, true, false,
+                        condition, element, -1, null,
+                        inclForwards, inclBackups, inclMonsters, null, null, false);
+                sortedByIdxDesc(ts, false).forEach(ctx::forceTargetToBreakZone);
+            };
+        }
+
+        if (FOLLOWUP_DULL.matcher(followup).find()) {
+            return ctx -> {
+                ctx.logEntry(prefix + " — Dull");
+                List<ForwardTarget> ts = ctx.selectCharacters(count, false, true, false,
+                        condition, element, -1, null,
+                        inclForwards, inclBackups, inclMonsters, null, null, false);
+                sortedByIdxDesc(ts, false).forEach(ctx::dullTarget);
+            };
+        }
+
+        return ctx -> ctx.logEntry(
+                "[ActionResolver] Opponent selects — followup not yet implemented: " + followup);
+    }
+
+    /**
+     * Parses "Your opponent puts the top N card(s) of his/her deck into the Break Zone
+     * [. Draw M card(s)]".
+     */
+    private static Consumer<GameContext> tryParseOpponentMill(String text) {
+        Matcher m = OPPONENT_MILL_PATTERN.matcher(text);
+        if (!m.find()) return null;
+
+        String countStr = m.group("count");
+        int    mill     = countStr != null ? Integer.parseInt(countStr) : 1;
+        String drawStr  = m.group("draw");
+        int    draw     = drawStr  != null ? Integer.parseInt(drawStr)  : 0;
+
+        return ctx -> {
+            ctx.logEntry("Effect: Opponent mills " + mill + " card(s)"
+                    + (draw > 0 ? ", draw " + draw : ""));
+            ctx.opponentMillCards(mill);
+            if (draw > 0) ctx.drawCards(draw);
+        };
+    }
+
+    /** Parses "Your opponent shows/reveals his/her hand". */
+    private static Consumer<GameContext> tryParseOpponentRevealHand(String text) {
+        Matcher m = OPPONENT_REVEAL_HAND_PATTERN.matcher(text);
+        if (!m.find()) return null;
+        return ctx -> {
+            ctx.logEntry("Effect: Opponent reveals hand");
+            ctx.revealOpponentHand();
         };
     }
 

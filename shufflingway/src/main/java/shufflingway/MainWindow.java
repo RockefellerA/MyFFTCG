@@ -6038,6 +6038,114 @@ public class MainWindow {
 				logEntry("[ActionResolver] Cancel Summon on stack — not yet implemented");
 			}
 
+			@Override public void forceTargetToBreakZone(ForwardTarget t) {
+				switch (t.zone()) {
+					case FORWARD -> { if (t.isP1()) breakP1Forward(t.idx()); else breakP2Forward(t.idx()); }
+					case BACKUP  -> { if (t.isP1()) breakP1BackupSlot(t.idx()); else breakP2BackupSlot(t.idx()); }
+					case MONSTER -> { if (t.isP1()) breakP1MonsterSlot(t.idx()); else breakP2MonsterSlot(t.idx()); }
+				}
+			}
+
+			@Override public void opponentMillCards(int count) {
+				java.util.Deque<CardData> deck = gameState.getP2MainDeck();
+				java.util.List<CardData>  bz   = gameState.getP2BreakZone();
+				for (int i = 0; i < count && !deck.isEmpty(); i++) {
+					CardData card = deck.pop();
+					bz.add(card);
+					logEntry("[P2] Mill: \"" + card.name() + "\" → Break Zone");
+				}
+				refreshP2BreakLabel();
+			}
+
+			@Override public void revealOpponentHand() {
+				java.util.List<CardData> hand = gameState.getP2Hand();
+				if (hand.isEmpty()) {
+					logEntry("Opponent's hand is empty.");
+					return;
+				}
+				StringBuilder sb = new StringBuilder("Opponent's hand revealed: ");
+				for (int i = 0; i < hand.size(); i++) {
+					if (i > 0) sb.append(", ");
+					sb.append(hand.get(i).name());
+				}
+				logEntry(sb.toString());
+
+				JDialog dlg = new JDialog(frame, "Opponent's Hand (" + hand.size() + " cards)", false);
+				dlg.setResizable(false);
+				dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+				JPanel cardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+				for (CardData cd : hand) {
+					JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+					lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
+					lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+					lbl.setOpaque(true);
+					lbl.setBackground(Color.DARK_GRAY);
+					lbl.setBorder(BorderFactory.createLineBorder(new Color(160, 110, 220), 1));
+					lbl.addMouseListener(new MouseAdapter() {
+						@Override public void mouseEntered(MouseEvent e) { showZoomAt(cd.imageUrl()); }
+						@Override public void mouseExited(MouseEvent e)  { hideZoom(); }
+					});
+					new SwingWorker<ImageIcon, Void>() {
+						@Override protected ImageIcon doInBackground() throws Exception {
+							Image img = ImageCache.load(cd.imageUrl());
+							return img == null ? null
+									: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+						}
+						@Override protected void done() {
+							try {
+								ImageIcon icon = get();
+								if (icon != null) { lbl.setIcon(icon); lbl.setText(null); }
+							} catch (InterruptedException | ExecutionException ignored) {}
+						}
+					}.execute();
+
+					JPanel wrapper = new JPanel(new BorderLayout(0, 4));
+					wrapper.setBackground(cardsPanel.getBackground());
+					JLabel nameLabel = new JLabel(cd.name(), SwingConstants.CENTER);
+					nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+					nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
+					wrapper.add(lbl,       BorderLayout.CENTER);
+					wrapper.add(nameLabel, BorderLayout.SOUTH);
+					cardsPanel.add(wrapper);
+				}
+
+				JScrollPane scrollPane = new JScrollPane(cardsPanel,
+						JScrollPane.VERTICAL_SCROLLBAR_NEVER,
+						JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+				scrollPane.setPreferredSize(new Dimension(
+						Math.min(hand.size() * (CARD_W + 16) + 16, 900), CARD_H + 60));
+
+				int[] countdown = { 10 };
+				JLabel countdownLabel = new JLabel("Closing in 10...", SwingConstants.CENTER);
+				countdownLabel.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+
+				JButton okBtn = new JButton("OK");
+				okBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+				okBtn.addActionListener(ae -> { hideZoom(); dlg.dispose(); });
+
+				JPanel south = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
+				south.add(countdownLabel);
+				south.add(okBtn);
+				south.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 8));
+
+				dlg.getContentPane().setLayout(new BorderLayout(0, 4));
+				dlg.getContentPane().add(scrollPane, BorderLayout.CENTER);
+				dlg.getContentPane().add(south,      BorderLayout.SOUTH);
+				dlg.pack();
+				dlg.setLocationRelativeTo(frame);
+				dlg.setVisible(true);
+
+				javax.swing.Timer[] timerRef = { null };
+				timerRef[0] = new javax.swing.Timer(1000, null);
+				timerRef[0].addActionListener(te -> {
+					countdown[0]--;
+					if (countdown[0] <= 0) { timerRef[0].stop(); hideZoom(); dlg.dispose(); }
+					else countdownLabel.setText("Closing in " + countdown[0] + "...");
+				});
+				timerRef[0].start();
+			}
+
 			@Override public void damageTarget(ForwardTarget t, int amount) {
 				if (t.zone() == ForwardTarget.CardZone.BACKUP) return;
 				if (t.isP1()) damageP1Forward(t.idx(), amount);
