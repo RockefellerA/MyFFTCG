@@ -129,8 +129,10 @@ public class MainWindow {
 	private JWindow openingHandPopup;
 	// Hand hover popover (deck zone mouseover)
 	private JWindow handPopup;
-	// Summon stack overlay (shown while a Summon is on the stack)
-	private JWindow summonStackWindow;
+	// Stack overlay (shown while any entry is on the resolution stack)
+	private JWindow               summonStackWindow;
+	private javax.swing.Timer     stackCountdownTimer;
+	private int                   stackWindowGeneration = 0;
 	private javax.swing.Timer handPopupHideTimer;
 	private boolean handCardMenuOpen = false;
 
@@ -1617,8 +1619,6 @@ public class MainWindow {
 		List<CardData> resolved = gameState.tickP1WarpCounters();
 		for (CardData card : resolved) {
 			logEntry("Warp: \"" + card.name() + "\" enters play (auto-ability)");
-			gameState.pushStack(card);
-			gameState.popStack();
 			if (card.isForward()) {
 				placeCardInForwardZone(card);
 			} else if (card.isBackup()) {
@@ -4320,18 +4320,32 @@ public class MainWindow {
 		refreshP1BreakLabel();
 	}
 
-	/**
-	 * Pushes {@code card} onto the stack and shows a floating overlay in the centre of the
-	 * board for up to 5 seconds so the opponent can read the card and respond.  The overlay
-	 * has a "Resolve Now" button that skips the countdown.  When the timer expires or the
-	 * button is clicked the Summon's effect is parsed and executed, then the card is popped
-	 * from the stack and sent to the Break Zone.
-	 */
+	/** Pushes a Summon onto the stack and opens the stack overlay. */
 	private void showSummonOnStack(CardData card) {
-		gameState.pushStack(card);
+		gameState.pushStack(new StackEntry(card, null, true));
 		logEntry("[Stack] \"" + card.name() + "\" — Summon on the stack");
+		showStackWindow();
+	}
 
-		if (summonStackWindow != null) summonStackWindow.dispose();
+	/**
+	 * Shows the resolution overlay for the current top of the stack.
+	 * Disposes any existing overlay first and increments the generation counter
+	 * so stale timers from previous windows never fire.
+	 *
+	 * <p>The overlay has a 10-second countdown, an "OK" button (resolve immediately)
+	 * and a "Respond" button that pauses the countdown and opens a 20-second response
+	 * window during which the player may activate cards.  When the response window
+	 * expires (or no new entry was pushed), the top entry resolves automatically.
+	 */
+	private void showStackWindow() {
+		StackEntry entry = gameState.peekStack();
+		if (entry == null) return;
+
+		if (stackCountdownTimer != null) { stackCountdownTimer.stop(); stackCountdownTimer = null; }
+		if (summonStackWindow   != null) { summonStackWindow.dispose(); summonStackWindow = null; }
+
+		final int myGeneration = ++stackWindowGeneration;
+
 		summonStackWindow = new JWindow(frame);
 
 		JPanel panel = new JPanel(new BorderLayout(6, 6));
@@ -4340,7 +4354,8 @@ public class MainWindow {
 				BorderFactory.createLineBorder(new Color(160, 110, 220), 2),
 				BorderFactory.createEmptyBorder(10, 14, 10, 14)));
 
-		JLabel header = new JLabel("S U M M O N", SwingConstants.CENTER);
+		String headerText = entry.isSummon() ? "S U M M O N" : "A C T I O N";
+		JLabel header = new JLabel(headerText, SwingConstants.CENTER);
 		header.setFont(new Font("Pixel NES", Font.PLAIN, 13));
 		header.setForeground(new Color(210, 170, 255));
 		panel.add(header, BorderLayout.NORTH);
@@ -4348,34 +4363,40 @@ public class MainWindow {
 		JLabel cardImg = new JLabel("", SwingConstants.CENTER);
 		cardImg.setPreferredSize(new Dimension(CardAnimation.CARD_W, CardAnimation.CARD_H));
 
-		JLabel nameLabel = new JLabel(card.name(), SwingConstants.CENTER);
+		JLabel nameLabel = new JLabel(entry.source().name(), SwingConstants.CENTER);
 		nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 10));
 		nameLabel.setForeground(Color.WHITE);
 
 		JPanel imagePanel = new JPanel(new BorderLayout(3, 3));
 		imagePanel.setOpaque(false);
-		imagePanel.add(cardImg,    BorderLayout.CENTER);
-		imagePanel.add(nameLabel,  BorderLayout.SOUTH);
+		imagePanel.add(cardImg,   BorderLayout.CENTER);
+		imagePanel.add(nameLabel, BorderLayout.SOUTH);
 		panel.add(imagePanel, BorderLayout.CENTER);
 
-		int[] countdown = { 5 };
-		JLabel countdownLabel = new JLabel("Resolving in 5...", SwingConstants.CENTER);
+		int[] countdown = { 10 };
+		JLabel countdownLabel = new JLabel("Resolving in 10...", SwingConstants.CENTER);
 		countdownLabel.setFont(new Font("Pixel NES", Font.PLAIN, 10));
 		countdownLabel.setForeground(Color.LIGHT_GRAY);
 
-		JButton resolveBtn = new JButton("Resolve Now");
-		resolveBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		JButton okBtn      = new JButton("OK");
+		JButton respondBtn = new JButton("Respond");
+		okBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		respondBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+
+		JPanel btnPanel = new JPanel(new java.awt.GridLayout(1, 2, 4, 0));
+		btnPanel.setOpaque(false);
+		btnPanel.add(respondBtn);
+		btnPanel.add(okBtn);
 
 		JPanel bottomPanel = new JPanel(new BorderLayout(4, 4));
 		bottomPanel.setOpaque(false);
 		bottomPanel.add(countdownLabel, BorderLayout.NORTH);
-		bottomPanel.add(resolveBtn,     BorderLayout.CENTER);
+		bottomPanel.add(btnPanel,       BorderLayout.CENTER);
 		panel.add(bottomPanel, BorderLayout.SOUTH);
 
 		summonStackWindow.getContentPane().add(panel);
 		summonStackWindow.pack();
 
-		// Centre over the game frame
 		Point loc = frame.getLocationOnScreen();
 		int wx = loc.x + (frame.getWidth()  - summonStackWindow.getWidth())  / 2;
 		int wy = loc.y + (frame.getHeight() - summonStackWindow.getHeight()) / 2;
@@ -4385,7 +4406,7 @@ public class MainWindow {
 		// Load card image asynchronously
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
-				Image img = ImageCache.load(card.imageUrl());
+				Image img = ImageCache.load(entry.source().imageUrl());
 				return img == null ? null
 						: new ImageIcon(img.getScaledInstance(
 								CardAnimation.CARD_W, CardAnimation.CARD_H, Image.SCALE_SMOOTH));
@@ -4398,38 +4419,78 @@ public class MainWindow {
 			}
 		}.execute();
 
-		// Resolution: pop stack, run effect, send to break zone
-		Runnable resolve = () -> {
-			if (summonStackWindow != null) { summonStackWindow.dispose(); summonStackWindow = null; }
-			String effectText = card.summonEffect();
-			logEntry("[Summon] Resolving \"" + card.name() + "\": " + effectText);
-			java.util.function.Consumer<GameContext> effect = ActionResolver.parse(effectText, card);
-			GameContext ctx = buildGameContext(true);
-			if (effect != null) effect.accept(ctx);
-			else logEntry("[ActionResolver] Summon effect not yet implemented: " + effectText);
-			CardData resolved = gameState.popStack();
-			if (resolved != null) {
-				gameState.getP1BreakZone().add(resolved);
-				logEntry("\"" + resolved.name() + "\" → Break Zone");
-			}
-			refreshP1BreakLabel();
-		};
-
-		// 1-second countdown timer
-		javax.swing.Timer[] timerRef = { null };
-		timerRef[0] = new javax.swing.Timer(1000, null);
-		timerRef[0].addActionListener(e -> {
+		// 10-second countdown timer
+		stackCountdownTimer = new javax.swing.Timer(1000, null);
+		stackCountdownTimer.addActionListener(e -> {
+			if (stackWindowGeneration != myGeneration) { ((javax.swing.Timer) e.getSource()).stop(); return; }
 			countdown[0]--;
 			if (countdown[0] <= 0) {
-				timerRef[0].stop();
-				resolve.run();
+				stackCountdownTimer.stop();
+				resolveTopOfStack();
 			} else {
 				countdownLabel.setText("Resolving in " + countdown[0] + "...");
 			}
 		});
-		timerRef[0].start();
+		stackCountdownTimer.start();
 
-		resolveBtn.addActionListener(e -> { timerRef[0].stop(); resolve.run(); });
+		okBtn.addActionListener(e -> {
+			if (stackWindowGeneration != myGeneration) return;
+			stackCountdownTimer.stop();
+			resolveTopOfStack();
+		});
+
+		respondBtn.addActionListener(e -> {
+			if (stackWindowGeneration != myGeneration) return;
+			stackCountdownTimer.stop();
+			respondBtn.setEnabled(false);
+
+			// 20-second response window
+			int[] responseCountdown = { 20 };
+			countdownLabel.setText("Response window: 20s...");
+			javax.swing.Timer responseTimer = new javax.swing.Timer(1000, null);
+			responseTimer.addActionListener(re -> {
+				if (stackWindowGeneration != myGeneration) { ((javax.swing.Timer) re.getSource()).stop(); return; }
+				responseCountdown[0]--;
+				if (responseCountdown[0] <= 0) {
+					((javax.swing.Timer) re.getSource()).stop();
+					// Only auto-resolve if we're still the top entry (nothing was pushed during response)
+					if (gameState.peekStack() == entry) resolveTopOfStack();
+				} else {
+					countdownLabel.setText("Response window: " + responseCountdown[0] + "s...");
+				}
+			});
+			responseTimer.start();
+		});
+	}
+
+	/**
+	 * Pops and executes the top entry of the stack, then shows the next entry
+	 * if the stack is non-empty.
+	 */
+	private void resolveTopOfStack() {
+		if (stackCountdownTimer != null) { stackCountdownTimer.stop(); stackCountdownTimer = null; }
+		if (summonStackWindow   != null) { summonStackWindow.dispose(); summonStackWindow = null; }
+
+		StackEntry entry = gameState.popStack();
+		if (entry == null) return;
+
+		GameContext ctx = buildGameContext(entry.isP1());
+		if (entry.isSummon()) {
+			String effectText = entry.effectText();
+			logEntry("[Summon] Resolving \"" + entry.source().name() + "\": " + effectText);
+			java.util.function.Consumer<GameContext> effect = ActionResolver.parse(effectText, entry.source());
+			if (effect != null) effect.accept(ctx);
+			else logEntry("[ActionResolver] Summon effect not yet implemented: " + effectText);
+			gameState.getP1BreakZone().add(entry.source());
+			logEntry("\"" + entry.source().name() + "\" → Break Zone");
+			refreshP1BreakLabel();
+		} else {
+			ActionResolver.resolve(entry.ability(), entry.source(), gameState, ctx);
+			refreshP1HandLabel();
+			refreshP1BreakLabel();
+		}
+
+		if (!gameState.getStack().isEmpty()) showStackWindow();
 	}
 
 	/**
@@ -5699,8 +5760,8 @@ public class MainWindow {
 
 		logEntry("\"" + source.name() + "\" activated ability");
 
-		GameContext ctx = buildGameContext(isP1);
-		ActionResolver.resolve(ability, source, gameState, ctx);
+		gameState.pushStack(new StackEntry(source, ability, isP1));
+		showStackWindow();
 		refreshP1HandLabel();
 		refreshP1BreakLabel();
 	}

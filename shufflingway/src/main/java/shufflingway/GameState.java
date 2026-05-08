@@ -43,7 +43,7 @@ public class GameState {
     private boolean p1GameOver            = false;
 
     // --- Shared ---
-    private final List<CardData>           stack        = new ArrayList<>();
+    private final List<StackEntry>         stack        = new ArrayList<>();
 
     // --- P2 ---
     private final Deque<CardData>          p2MainDeck    = new ArrayDeque<>();
@@ -424,19 +424,19 @@ public class GameState {
     // Accessors
     // -------------------------------------------------------------------------
 
-    /** Pushes a card onto the top of the Stack. */
-    public void pushStack(CardData card)            { stack.add(card); }
+    /** Pushes an entry onto the top of the Stack. */
+    public void pushStack(StackEntry entry)         { stack.add(entry); }
 
-    /** Removes and returns the top card of the Stack, or {@code null} if empty. */
-    public CardData popStack() {
+    /** Removes and returns the top entry of the Stack, or {@code null} if empty. */
+    public StackEntry popStack() {
         return stack.isEmpty() ? null : stack.remove(stack.size() - 1);
     }
 
-    /** Returns the top card of the Stack without removing it, or {@code null} if empty. */
-    public CardData peekStack()                     { return stack.isEmpty() ? null : stack.get(stack.size() - 1); }
+    /** Returns the top entry of the Stack without removing it, or {@code null} if empty. */
+    public StackEntry peekStack()                   { return stack.isEmpty() ? null : stack.get(stack.size() - 1); }
 
     /** Returns an unmodifiable view of the Stack (index 0 = bottom, last = top). */
-    public List<CardData> getStack()                { return Collections.unmodifiableList(stack); }
+    public List<StackEntry> getStack()              { return Collections.unmodifiableList(stack); }
 
     public Deque<CardData> getP1MainDeck()          { return p1MainDeck; }
     public List<CardData>  getP1LbDeck()            { return p1LbDeck; }
