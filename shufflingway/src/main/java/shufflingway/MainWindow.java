@@ -5096,6 +5096,19 @@ public class MainWindow {
 			sb.append("→BZ");
 			first = false;
 		}
+		for (RemoveFromGameCost rfg : ability.removeFromGameCosts()) {
+			if (!first) sb.append(", ");
+			sb.append("RFG ");
+			if (rfg.cardName() != null) sb.append(rfg.cardName());
+			else {
+				sb.append(rfg.count() == -1 ? "all" : rfg.count());
+				if (rfg.element()  != null) sb.append(' ').append(rfg.element());
+				if (rfg.cardType() != null) sb.append(' ').append(rfg.cardType());
+				else sb.append(" card");
+			}
+			sb.append(" (").append(rfg.zone().toLowerCase().replace('_', ' ')).append(')');
+			first = false;
+		}
 		sb.append("] → ");
 		String fx = ability.effectText();
 		sb.append(fx.length() > 55 ? fx.substring(0, 52) + "..." : fx);
@@ -5262,6 +5275,8 @@ public class MainWindow {
 		if (ability.crystalCost() > 0 && playerCrystals(isP1) < ability.crystalCost()) return false;
 		for (BreakZoneCost bz : ability.breakZoneCosts())
 			if (!bzCostSatisfied(bz, isP1)) return false;
+		for (RemoveFromGameCost rfg : ability.removeFromGameCosts())
+			if (!rfgCostSatisfied(rfg, isP1)) return false;
 		return canAffordAbilityCost(ability, isP1);
 	}
 
@@ -5354,6 +5369,72 @@ public class MainWindow {
 			}
 		}
 		return result;
+	}
+
+	private boolean rfgCostSatisfied(RemoveFromGameCost rfg, boolean isP1) {
+		if (rfg.count() == -1) return true; // "all" — always payable
+		return switch (rfg.zone()) {
+			case "DECK"       -> (isP1 ? gameState.getP1MainDeck() : gameState.getP2MainDeck()).size() >= rfg.count();
+			case "HAND"       -> eligibleRfgHandIndices(rfg, isP1).size() >= rfg.count();
+			case "BREAK_ZONE" -> eligibleRfgBzIndices(rfg, isP1).size() >= rfg.count();
+			default           -> eligibleRfgFieldTargets(rfg, isP1).size() >= rfg.count();
+		};
+	}
+
+	private List<Integer> eligibleRfgHandIndices(RemoveFromGameCost rfg, boolean isP1) {
+		List<CardData> hand = playerHand(isP1);
+		List<Integer> result = new ArrayList<>();
+		for (int i = 0; i < hand.size(); i++) {
+			CardData c = hand.get(i);
+			if (rfg.cardName() != null && !c.name().equalsIgnoreCase(rfg.cardName())) continue;
+			if (rfg.element()  != null && !c.containsElement(rfg.element()))          continue;
+			if (rfg.cardType() != null && !matchesDiscardType(c, rfg.cardType()))     continue;
+			result.add(i);
+		}
+		return result;
+	}
+
+	private List<Integer> eligibleRfgBzIndices(RemoveFromGameCost rfg, boolean isP1) {
+		List<CardData> bz = isP1 ? gameState.getP1BreakZone() : gameState.getP2BreakZone();
+		List<Integer> result = new ArrayList<>();
+		for (int i = 0; i < bz.size(); i++) {
+			CardData c = bz.get(i);
+			if (rfg.cardName() != null && !c.name().equalsIgnoreCase(rfg.cardName())) continue;
+			if (rfg.element()  != null && !c.containsElement(rfg.element()))          continue;
+			if (rfg.cardType() != null && !matchesDiscardType(c, rfg.cardType()))     continue;
+			result.add(i);
+		}
+		return result;
+	}
+
+	private List<ForwardTarget> eligibleRfgFieldTargets(RemoveFromGameCost rfg, boolean isP1) {
+		List<ForwardTarget> result = new ArrayList<>();
+		List<CardData> fwds = playerForwardCards(isP1);
+		List<CardData> mons = playerMonsterCards(isP1);
+		CardData[]     bkps = playerBackupCards(isP1);
+		for (int i = 0; i < fwds.size(); i++) {
+			CardData c = fwds.get(i);
+			if (!matchesRfgFieldFilter(c, rfg)) continue;
+			result.add(new ForwardTarget(isP1, i, ForwardTarget.CardZone.FORWARD));
+		}
+		for (int i = 0; i < bkps.length; i++) {
+			if (bkps[i] == null) continue;
+			if (!matchesRfgFieldFilter(bkps[i], rfg)) continue;
+			result.add(new ForwardTarget(isP1, i, ForwardTarget.CardZone.BACKUP));
+		}
+		for (int i = 0; i < mons.size(); i++) {
+			if (!matchesRfgFieldFilter(mons.get(i), rfg)) continue;
+			result.add(new ForwardTarget(isP1, i, ForwardTarget.CardZone.MONSTER));
+		}
+		return result;
+	}
+
+	private boolean matchesRfgFieldFilter(CardData c, RemoveFromGameCost rfg) {
+		if (rfg.cardName()    != null && !c.name().equalsIgnoreCase(rfg.cardName()))  return false;
+		if (rfg.element()     != null && !c.containsElement(rfg.element()))           return false;
+		if (rfg.cardType()    != null && !matchesDiscardType(c, rfg.cardType()))      return false;
+		if (rfg.excludeName() != null &&  c.name().equalsIgnoreCase(rfg.excludeName())) return false;
+		return true;
 	}
 
 	private CardData fieldCardData(ForwardTarget t) {
@@ -5667,6 +5748,19 @@ public class MainWindow {
 			costDesc.append(" into BZ");
 			cf = false;
 		}
+		for (RemoveFromGameCost rfg : ability.removeFromGameCosts()) {
+			if (!cf) costDesc.append(" + ");
+			costDesc.append("RFG ");
+			if (rfg.cardName() != null) costDesc.append(rfg.cardName());
+			else {
+				costDesc.append(rfg.count() == -1 ? "all" : rfg.count());
+				if (rfg.element()  != null) costDesc.append(' ').append(rfg.element());
+				if (rfg.cardType() != null) costDesc.append(' ').append(rfg.cardType());
+				else costDesc.append(" card");
+			}
+			costDesc.append(" (").append(rfg.zone().toLowerCase().replace('_', ' ')).append(')');
+			cf = false;
+		}
 
 		JLabel titleLabel = new JLabel(
 				"<html><center>" + source.name() + " — " + (costDesc.length() > 0 ? costDesc : "free") + "</center></html>",
@@ -5792,6 +5886,10 @@ public class MainWindow {
 			}
 		}
 
+		// Remove-from-game costs
+		for (RemoveFromGameCost rfg : ability.removeFromGameCosts())
+			executeRemoveFromGameCost(rfg, isP1);
+
 		logEntry("\"" + source.name() + "\" activated ability");
 
 		gameState.pushStack(new StackEntry(source, ability, isP1));
@@ -5817,6 +5915,114 @@ public class MainWindow {
 		if (c.isBackup())  return "backup";
 		if (c.isMonster()) return "monster";
 		return "other";
+	}
+
+	private void executeRemoveFromGameCost(RemoveFromGameCost rfg, boolean isP1) {
+		switch (rfg.zone()) {
+			case "DECK" -> {
+				java.util.Deque<CardData> deck = isP1 ? gameState.getP1MainDeck() : gameState.getP2MainDeck();
+				for (int i = 0; i < rfg.count() && !deck.isEmpty(); i++) {
+					CardData c = deck.pollFirst();
+					if (isP1) gameState.addToP1PermanentRfp(c); else gameState.addToP2PermanentRfp(c);
+					logEntry(c.name() + " → Removed From Game (cost)");
+				}
+				if (isP1) refreshP1DeckLabel(); else refreshP2DeckLabel();
+			}
+			case "HAND" -> {
+				int target = rfg.count();
+				for (int pick = 0; pick < target; pick++) {
+					List<Integer> eligible = eligibleRfgHandIndices(rfg, isP1);
+					if (eligible.isEmpty()) { logEntry("No eligible hand card for remove-from-game cost."); break; }
+					List<CardData> hand = playerHand(isP1);
+					if (eligible.size() == 1 && rfg.cardName() != null) {
+						// Named card — auto-select
+						CardData c = hand.get(eligible.get(0));
+						hand.remove((int) eligible.get(0));
+						if (isP1) gameState.addToP1PermanentRfp(c); else gameState.addToP2PermanentRfp(c);
+						logEntry(c.name() + " → Removed From Game (cost)");
+					} else {
+						String[] options = eligible.stream()
+								.map(i -> hand.get(i).name() + " (Cost: " + hand.get(i).cost() + ")")
+								.toArray(String[]::new);
+						String label = "Remove from game (hand)" + (target > 1 ? " (" + (pick + 1) + "/" + target + ")" : "");
+						String choice = (String) JOptionPane.showInputDialog(frame,
+								"Choose a card to remove from game:", label,
+								JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+						if (choice == null) break;
+						int listIdx = java.util.Arrays.asList(options).indexOf(choice);
+						if (listIdx < 0) break;
+						int handIdx = eligible.get(listIdx);
+						CardData c = hand.get(handIdx);
+						hand.remove(handIdx);
+						if (isP1) gameState.addToP1PermanentRfp(c); else gameState.addToP2PermanentRfp(c);
+						logEntry(c.name() + " → Removed From Game (cost)");
+					}
+				}
+				refreshP1HandLabel();
+			}
+			case "BREAK_ZONE" -> {
+				List<CardData> bz = isP1 ? gameState.getP1BreakZone() : gameState.getP2BreakZone();
+				if (rfg.count() == -1) {
+					// Remove all matching cards
+					List<Integer> eligible = eligibleRfgBzIndices(rfg, isP1);
+					for (int i = eligible.size() - 1; i >= 0; i--) {
+						CardData c = bz.remove((int) eligible.get(i));
+						if (isP1) gameState.addToP1PermanentRfp(c); else gameState.addToP2PermanentRfp(c);
+						logEntry(c.name() + " → Removed From Game (cost)");
+					}
+				} else {
+					for (int pick = 0; pick < rfg.count(); pick++) {
+						List<Integer> eligible = eligibleRfgBzIndices(rfg, isP1);
+						if (eligible.isEmpty()) { logEntry("No eligible Break Zone card for remove-from-game cost."); break; }
+						if (eligible.size() == 1 && rfg.cardName() != null) {
+							CardData c = bz.remove((int) eligible.get(0));
+							if (isP1) gameState.addToP1PermanentRfp(c); else gameState.addToP2PermanentRfp(c);
+							logEntry(c.name() + " → Removed From Game (cost)");
+						} else {
+							String[] options = eligible.stream().map(i -> bz.get(i).name()).toArray(String[]::new);
+							String label = "Remove from game (Break Zone)" + (rfg.count() > 1 ? " (" + (pick + 1) + "/" + rfg.count() + ")" : "");
+							String choice = (String) JOptionPane.showInputDialog(frame,
+									"Choose a card to remove from game:", label,
+									JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+							if (choice == null) break;
+							int listIdx = java.util.Arrays.asList(options).indexOf(choice);
+							if (listIdx < 0) break;
+							int bzIdx = eligible.get(listIdx);
+							CardData c = bz.remove(bzIdx);
+							if (isP1) gameState.addToP1PermanentRfp(c); else gameState.addToP2PermanentRfp(c);
+							logEntry(c.name() + " → Removed From Game (cost)");
+						}
+					}
+				}
+				refreshP1BreakLabel();
+			}
+			default -> {
+				// FIELD
+				GameContext ctx = buildGameContext(isP1);
+				if (rfg.cardName() != null) {
+					// Auto-find named card(s) and remove
+					List<ForwardTarget> eligible = eligibleRfgFieldTargets(rfg, isP1);
+					for (int i = 0; i < rfg.count() && i < eligible.size(); i++)
+						ctx.removeTargetFromGame(eligible.get(i));
+				} else {
+					for (int pick = 0; pick < rfg.count(); pick++) {
+						List<ForwardTarget> eligible = eligibleRfgFieldTargets(rfg, isP1);
+						if (eligible.isEmpty()) { logEntry("No eligible field card for remove-from-game cost."); break; }
+						String[] options = eligible.stream()
+								.map(t -> fieldCardData(t).name() + " (" + t.zone().name().toLowerCase() + ")")
+								.toArray(String[]::new);
+						String label = "Remove from game (field)" + (rfg.count() > 1 ? " (" + (pick + 1) + "/" + rfg.count() + ")" : "");
+						String choice = (String) JOptionPane.showInputDialog(frame,
+								"Choose a card to remove from game:", label,
+								JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+						if (choice == null) break;
+						int listIdx = java.util.Arrays.asList(options).indexOf(choice);
+						if (listIdx < 0) break;
+						ctx.removeTargetFromGame(eligible.get(listIdx));
+					}
+				}
+			}
+		}
 	}
 
 	/**

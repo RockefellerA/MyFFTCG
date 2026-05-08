@@ -201,13 +201,14 @@ public record CardData(
      * spurious matches on arbitrary colons in card text.
      */
     private static final Pattern ACTION_ABILITY_PATTERN = Pattern.compile(
-        "(?:(?i)\\[\\[s\\]\\]\\s*([^\\[]+?)\\s*\\[\\[/\\]\\]\\s*)?" +  // optional [[s]]Name[[/]]
-        "(?=(?:《|(?i:put)\\b|(?i:discard)\\b))"                     +  // lookahead: must start with 《, put, or discard
-        "((?:《[^》]*》\\s*)*)"                                        +  // zero or more 《cost》 tokens
+        "(?:(?i)\\[\\[s\\]\\]\\s*([^\\[]+?)\\s*\\[\\[/\\]\\]\\s*)?"  +  // optional [[s]]Name[[/]]
+        "(?=(?:《|(?i:put)\\b|(?i:discard)\\b|(?i:remove)\\b))"       +  // lookahead: must start with 《, put, discard, or remove
+        "((?:《[^》]*》\\s*)*)"                                         +  // zero or more 《cost》 tokens
         "((?i)(?:,\\s*)?put\\s+.+?\\s+into\\s+the\\s+Break\\s+Zone\\s*)?" + // optional BZ cost phrase
-        "((?i)(?:,\\s*)?discard[^:]+)?"                               +  // optional discard cost phrase
-        ":\\s*"                                                        +  // colon separator
-        "((?:[^\\[]|\\[(?!\\[))*)"                                        // effect text (up to next [[markup]])
+        "((?i)(?:,\\s*)?discard[^:]+)?"                                +  // optional discard cost phrase
+        "((?i)(?:,\\s*)?remove\\s+[^:]+?\\s+from\\s+(?:the\\s+)?game\\s*)?" + // optional remove-from-game cost phrase
+        ":\\s*"                                                         +  // colon separator
+        "((?:[^\\[]|\\[(?!\\[))*)"                                         // effect text (up to next [[markup]])
     );
 
     // Captures the content between "put " and " into the Break Zone"
@@ -249,10 +250,11 @@ public record CardData(
             String costPart   = m.group(2);
             String bzRaw      = m.group(3);
             String discardRaw = m.group(4);
-            String effectRaw  = m.group(5).trim();
+            String removeRaw  = m.group(5);
+            String effectRaw  = m.group(6).trim();
             if (effectRaw.isEmpty()) continue;
-            // Skip if there are no CP tokens, no BZ cost, and no discard cost (spurious match)
-            if ((costPart == null || costPart.isBlank()) && bzRaw == null && discardRaw == null) continue;
+            // Skip if there are no CP tokens, no BZ cost, no discard cost, and no remove cost (spurious match)
+            if ((costPart == null || costPart.isBlank()) && bzRaw == null && discardRaw == null && removeRaw == null) continue;
 
             String  abilityName  = rawName != null ? rawName.trim() : "";
             boolean isSpecial    = !abilityName.isEmpty();
@@ -279,9 +281,10 @@ public record CardData(
                 }
             }
 
-            List<BreakZoneCost> breakZoneCosts = parseBreakZoneCosts(bzRaw);
-            List<DiscardCost>   discardCosts   = parseDiscardCosts(discardRaw);
-            result.add(new ActionAbility(abilityName, requiresDull, isSpecial, crystalCost, cpCost, breakZoneCosts, discardCosts, effectRaw));
+            List<BreakZoneCost>      breakZoneCosts      = parseBreakZoneCosts(bzRaw);
+            List<DiscardCost>        discardCosts        = parseDiscardCosts(discardRaw);
+            List<RemoveFromGameCost> removeFromGameCosts = parseRemoveFromGameCosts(removeRaw);
+            result.add(new ActionAbility(abilityName, requiresDull, isSpecial, crystalCost, cpCost, breakZoneCosts, discardCosts, removeFromGameCosts, effectRaw));
         }
         return List.copyOf(result);
     }
@@ -335,6 +338,97 @@ public record CardData(
             }
         }
         return List.copyOf(result);
+    }
+
+    private static final Pattern REMOVE_FROM_GAME_COST_PATTERN = Pattern.compile(
+        "(?i)remove\\s+(.+?)\\s+from\\s+(?:the\\s+)?game"
+    );
+
+    /** Parses a "remove … from the game" cost phrase into a list of {@link RemoveFromGameCost} items. */
+    private static List<RemoveFromGameCost> parseRemoveFromGameCosts(String raw) {
+        if (raw == null || raw.isBlank()) return List.of();
+        Matcher m = REMOVE_FROM_GAME_COST_PATTERN.matcher(raw.trim());
+        if (!m.find()) return List.of();
+        String content = m.group(1).trim();
+
+        // Split compound costs like "<name> and 1 Backup" where second part starts with a digit or "all"
+        String[] parts = content.split("(?i)\\s+and\\s+(?=\\d|all\\b)", 2);
+        List<RemoveFromGameCost> result = new ArrayList<>();
+        for (String part : parts) {
+            RemoveFromGameCost cost = parseOneRemoveFromGameCost(part.trim());
+            if (cost != null) result.add(cost);
+        }
+        return List.copyOf(result);
+    }
+
+    private static RemoveFromGameCost parseOneRemoveFromGameCost(String part) {
+        // DECK: "the top N cards of your deck"
+        Matcher deckM = Pattern.compile("(?i)the\\s+top\\s+(\\d+)\\s+cards?\\s+of\\s+your\\s+deck").matcher(part);
+        if (deckM.find())
+            return new RemoveFromGameCost("DECK", Integer.parseInt(deckM.group(1)), null, null, null, null);
+
+        // Determine zone by trailing qualifier
+        String zone;
+        String inner;
+        Matcher handM = Pattern.compile("(?i)(.+?)\\s+in\\s+(?:your|the)\\s+hand").matcher(part);
+        Matcher bzM   = Pattern.compile("(?i)(.+?)\\s+in\\s+(?:your|the)\\s+Break\\s+Zone").matcher(part);
+        if (handM.find()) {
+            zone  = "HAND";
+            inner = handM.group(1).trim();
+        } else if (bzM.find()) {
+            zone  = "BREAK_ZONE";
+            inner = bzM.group(1).trim();
+        } else {
+            zone  = "FIELD";
+            inner = part;
+        }
+        return parseRemoveInnerCost(zone, inner);
+    }
+
+    private static RemoveFromGameCost parseRemoveInnerCost(String zone, String inner) {
+        // "all the <Type>s"
+        Matcher allM = Pattern.compile("(?i)all\\s+the\\s+(\\w+)").matcher(inner);
+        if (allM.find())
+            return new RemoveFromGameCost(zone, -1, null, null, normalizeTypeSuffix(allM.group(1)), null);
+
+        // "N Card Name <name>"
+        Matcher cnM = Pattern.compile("(?i)(\\d+)\\s+Card\\s+Name\\s+(.+)").matcher(inner);
+        if (cnM.find())
+            return new RemoveFromGameCost(zone, Integer.parseInt(cnM.group(1)), cnM.group(2).trim(), null, null, null);
+
+        // "N <type> other than <name>"
+        Matcher otherM = Pattern.compile(
+            "(?i)(\\d+)\\s+(Summons?|Forwards?|Backups?|Monsters?|Characters?)\\s+other\\s+than\\s+(.+)"
+        ).matcher(inner);
+        if (otherM.find())
+            return new RemoveFromGameCost(zone, Integer.parseInt(otherM.group(1)), null, null,
+                    normalizeTypeSuffix(otherM.group(2)), otherM.group(3).trim());
+
+        // "N <element> cards?" (generic element, no type)
+        Matcher elemCardM = Pattern.compile(
+            "(?i)(\\d+)\\s+(Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark)\\s+cards?"
+        ).matcher(inner);
+        if (elemCardM.find())
+            return new RemoveFromGameCost(zone, Integer.parseInt(elemCardM.group(1)), null, elemCardM.group(2), null, null);
+
+        // "N <element>? <type>s?" — covers typed and generic "card(s)"
+        Matcher typedM = Pattern.compile(
+            "(?i)(\\d+)\\s+(?:(Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark)\\s+)?" +
+            "(Summons?|Forwards?|Backups?|Monsters?|Characters?|cards?)"
+        ).matcher(inner);
+        if (typedM.find()) {
+            String elem     = typedM.group(2);
+            String rawType  = typedM.group(3);
+            String cardType = rawType.equalsIgnoreCase("card") || rawType.equalsIgnoreCase("cards")
+                    ? null : normalizeTypeSuffix(rawType);
+            return new RemoveFromGameCost(zone, Integer.parseInt(typedM.group(1)), null, elem, cardType, null);
+        }
+
+        // Fallback: treat entire string as a named card on field
+        if (!inner.isBlank())
+            return new RemoveFromGameCost(zone, 1, inner, null, null, null);
+
+        return null;
     }
 
     // -------------------------------------------------------------------------
