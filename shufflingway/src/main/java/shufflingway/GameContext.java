@@ -322,6 +322,18 @@ public interface GameContext {
     /** Removes P2's forward at {@code idx} from the field and places it on top of P2's deck. */
     void returnP2ForwardToDeckTop(int idx);
 
+    /** Removes P1's backup at {@code idx} from the field and adds it to P1's hand. */
+    void returnP1BackupToHand(int idx);
+
+    /** Removes P2's backup at {@code idx} from the field and adds it to P2's hand. */
+    void returnP2BackupToHand(int idx);
+
+    /** Removes P1's monster at {@code idx} from the field and adds it to P1's hand. */
+    void returnP1MonsterToHand(int idx);
+
+    /** Removes P2's monster at {@code idx} from the field and adds it to P2's hand. */
+    void returnP2MonsterToHand(int idx);
+
     // ---- Attack restrictions ------------------------------------------------
 
     /** Prevents P1's forward at {@code idx} from attacking this turn. */

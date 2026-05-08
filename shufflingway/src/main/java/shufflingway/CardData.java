@@ -202,13 +202,14 @@ public record CardData(
      */
     private static final Pattern ACTION_ABILITY_PATTERN = Pattern.compile(
         "(?:(?i)\\[\\[s\\]\\]\\s*([^\\[]+?)\\s*\\[\\[/\\]\\]\\s*)?"  +  // optional [[s]]Name[[/]]
-        "(?=(?:《|(?i:put)\\b|(?i:discard)\\b|(?i:remove)\\b))"       +  // lookahead: must start with 《, put, discard, or remove
-        "((?:《[^》]*》\\s*)*)"                                         +  // zero or more 《cost》 tokens
-        "((?i)(?:,\\s*)?put\\s+.+?\\s+into\\s+the\\s+Break\\s+Zone\\s*)?" + // optional BZ cost phrase
-        "((?i)(?:,\\s*)?discard[^:]+)?"                                +  // optional discard cost phrase
+        "(?=(?:《|(?i:put)\\b|(?i:discard)\\b|(?i:remove)\\b|(?i:return)\\b))" + // lookahead: must start with 《, put, discard, remove, or return
+        "((?:《[^》]*》\\s*)*)"                                              +  // zero or more 《cost》 tokens
+        "((?i)(?:,\\s*)?put\\s+.+?\\s+into\\s+the\\s+Break\\s+Zone\\s*)?"  + // optional BZ cost phrase
+        "((?i)(?:,\\s*)?discard[^:]+)?"                                     +  // optional discard cost phrase
         "((?i)(?:,\\s*)?remove\\s+[^:]+?\\s+from\\s+(?:the\\s+)?game\\s*)?" + // optional remove-from-game cost phrase
-        ":\\s*"                                                         +  // colon separator
-        "((?:[^\\[]|\\[(?!\\[))*)"                                         // effect text (up to next [[markup]])
+        "((?i)(?:,\\s*)?return\\s+[^:]+?\\s+to\\s+(?:its|their)\\s+owner(?:'s|s')?\\s+hand\\s*)?" + // optional return-to-hand cost phrase
+        ":\\s*"                                                              +  // colon separator
+        "((?:[^\\[]|\\[(?!\\[))*)"                                              // effect text (up to next [[markup]])
     );
 
     // Captures the content between "put " and " into the Break Zone"
@@ -246,15 +247,16 @@ public record CardData(
         List<ActionAbility> result = new ArrayList<>();
         Matcher m = ACTION_ABILITY_PATTERN.matcher(textEn);
         while (m.find()) {
-            String rawName    = m.group(1);
-            String costPart   = m.group(2);
-            String bzRaw      = m.group(3);
-            String discardRaw = m.group(4);
-            String removeRaw  = m.group(5);
-            String effectRaw  = m.group(6).trim();
+            String rawName       = m.group(1);
+            String costPart      = m.group(2);
+            String bzRaw         = m.group(3);
+            String discardRaw    = m.group(4);
+            String removeRaw     = m.group(5);
+            String returnRaw     = m.group(6);
+            String effectRaw     = m.group(7).trim();
             if (effectRaw.isEmpty()) continue;
-            // Skip if there are no CP tokens, no BZ cost, no discard cost, and no remove cost (spurious match)
-            if ((costPart == null || costPart.isBlank()) && bzRaw == null && discardRaw == null && removeRaw == null) continue;
+            // Skip if there are no CP tokens or any non-CP cost phrase (spurious match)
+            if ((costPart == null || costPart.isBlank()) && bzRaw == null && discardRaw == null && removeRaw == null && returnRaw == null) continue;
 
             String  abilityName  = rawName != null ? rawName.trim() : "";
             boolean isSpecial    = !abilityName.isEmpty();
@@ -284,7 +286,8 @@ public record CardData(
             List<BreakZoneCost>      breakZoneCosts      = parseBreakZoneCosts(bzRaw);
             List<DiscardCost>        discardCosts        = parseDiscardCosts(discardRaw);
             List<RemoveFromGameCost> removeFromGameCosts = parseRemoveFromGameCosts(removeRaw);
-            result.add(new ActionAbility(abilityName, requiresDull, isSpecial, crystalCost, cpCost, breakZoneCosts, discardCosts, removeFromGameCosts, effectRaw));
+            List<ReturnToHandCost>   returnToHandCosts   = parseReturnToHandCosts(returnRaw);
+            result.add(new ActionAbility(abilityName, requiresDull, isSpecial, crystalCost, cpCost, breakZoneCosts, discardCosts, removeFromGameCosts, returnToHandCosts, effectRaw));
         }
         return List.copyOf(result);
     }
@@ -429,6 +432,53 @@ public record CardData(
             return new RemoveFromGameCost(zone, 1, inner, null, null, null);
 
         return null;
+    }
+
+    private static final Pattern RETURN_TO_HAND_COST_PATTERN = Pattern.compile(
+        "(?i)return\\s+(.+?)\\s+to\\s+(?:its|their)\\s+owner(?:'s|s')?\\s+hand"
+    );
+
+    /** Parses a "return … to its owner's hand" cost phrase into a list of {@link ReturnToHandCost} items. */
+    private static List<ReturnToHandCost> parseReturnToHandCosts(String raw) {
+        if (raw == null || raw.isBlank()) return List.of();
+        Matcher m = RETURN_TO_HAND_COST_PATTERN.matcher(raw.trim());
+        if (!m.find()) return List.of();
+        String content = m.group(1).trim();
+
+        // "N Category X Type other than <name>"
+        Matcher catOtherM = Pattern.compile(
+            "(?i)(\\d+)\\s+Category\\s+(\\S+)\\s+(Summons?|Forwards?|Backups?|Monsters?|Characters?)\\s+other\\s+than\\s+(.+)"
+        ).matcher(content);
+        if (catOtherM.find())
+            return List.of(new ReturnToHandCost(Integer.parseInt(catOtherM.group(1)),
+                    null, normalizeTypeSuffix(catOtherM.group(3)), catOtherM.group(2).trim(), catOtherM.group(4).trim()));
+
+        // "N Category X Type"
+        Matcher catM = Pattern.compile(
+            "(?i)(\\d+)\\s+Category\\s+(\\S+)\\s+(Summons?|Forwards?|Backups?|Monsters?|Characters?)"
+        ).matcher(content);
+        if (catM.find())
+            return List.of(new ReturnToHandCost(Integer.parseInt(catM.group(1)),
+                    null, normalizeTypeSuffix(catM.group(3)), catM.group(2).trim(), null));
+
+        // "N Type other than <name>"
+        Matcher typeOtherM = Pattern.compile(
+            "(?i)(\\d+)\\s+(Summons?|Forwards?|Backups?|Monsters?|Characters?)\\s+other\\s+than\\s+(.+)"
+        ).matcher(content);
+        if (typeOtherM.find())
+            return List.of(new ReturnToHandCost(Integer.parseInt(typeOtherM.group(1)),
+                    null, normalizeTypeSuffix(typeOtherM.group(2)), null, typeOtherM.group(3).trim()));
+
+        // "N Type"
+        Matcher typeM = Pattern.compile(
+            "(?i)(\\d+)\\s+(Summons?|Forwards?|Backups?|Monsters?|Characters?)"
+        ).matcher(content);
+        if (typeM.find())
+            return List.of(new ReturnToHandCost(Integer.parseInt(typeM.group(1)),
+                    null, normalizeTypeSuffix(typeM.group(2)), null, null));
+
+        // Fallback: named card
+        return List.of(new ReturnToHandCost(1, content, null, null, null));
     }
 
     // -------------------------------------------------------------------------

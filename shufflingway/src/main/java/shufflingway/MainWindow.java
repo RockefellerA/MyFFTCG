@@ -2256,6 +2256,60 @@ public class MainWindow {
 		refreshP2HandCountLabel();
 	}
 
+	private void returnP1BackupToHand(int idx) {
+		if (idx < 0 || idx >= p1BackupCards.length || p1BackupCards[idx] == null) return;
+		CardData c = p1BackupCards[idx];
+		gameState.getP1Hand().add(c);
+		logEntry(c.name() + " → returned to hand");
+		p1BackupCards[idx]  = null;
+		p1BackupUrls[idx]   = null;
+		p1BackupStates[idx] = CardState.ACTIVE;
+		p1BackupFrozen[idx] = false;
+		if (p1BackupLabels[idx] != null) { p1BackupLabels[idx].setIcon(null); p1BackupLabels[idx].setText(null); }
+		refreshP1HandLabel();
+	}
+
+	private void returnP2BackupToHand(int idx) {
+		if (idx < 0 || idx >= p2BackupCards.length || p2BackupCards[idx] == null) return;
+		CardData c = p2BackupCards[idx];
+		gameState.getP2Hand().add(c);
+		logEntry("[P2] " + c.name() + " → returned to hand");
+		p2BackupCards[idx]  = null;
+		p2BackupUrls[idx]   = null;
+		p2BackupStates[idx] = CardState.ACTIVE;
+		p2BackupFrozen[idx] = false;
+		if (p2BackupLabels[idx] != null) { p2BackupLabels[idx].setIcon(null); p2BackupLabels[idx].setText(null); }
+	}
+
+	private void returnP1MonsterToHand(int idx) {
+		if (idx < 0 || idx >= p1MonsterCards.size()) return;
+		CardData c = p1MonsterCards.get(idx);
+		gameState.getP1Hand().add(c);
+		logEntry(c.name() + " → returned to hand");
+		p1MonsterCards.remove(idx);
+		p1MonsterStates.remove(idx);
+		p1MonsterFrozen.remove(idx);
+		p1MonsterPlayedOnTurn.remove(idx);
+		p1MonsterUrls.remove(idx);
+		JLabel lbl = p1MonsterLabels.remove(idx);
+		if (p1MonsterPanel != null) { p1MonsterPanel.remove(lbl); p1MonsterPanel.revalidate(); p1MonsterPanel.repaint(); }
+		refreshP1HandLabel();
+	}
+
+	private void returnP2MonsterToHand(int idx) {
+		if (idx < 0 || idx >= p2MonsterCards.size()) return;
+		CardData c = p2MonsterCards.get(idx);
+		gameState.getP2Hand().add(c);
+		logEntry("[P2] " + c.name() + " → returned to hand");
+		p2MonsterCards.remove(idx);
+		p2MonsterStates.remove(idx);
+		p2MonsterFrozen.remove(idx);
+		p2MonsterPlayedOnTurn.remove(idx);
+		p2MonsterUrls.remove(idx);
+		JLabel lbl = p2MonsterLabels.remove(idx);
+		if (p2MonsterPanel != null) { p2MonsterPanel.remove(lbl); p2MonsterPanel.revalidate(); p2MonsterPanel.repaint(); }
+	}
+
 	private int effectiveP1ForwardPower(int idx) {
 		CardData top = p1ForwardPrimedTop.get(idx);
 		int base = top != null ? top.power() : p1ForwardCards.get(idx).power();
@@ -5109,6 +5163,17 @@ public class MainWindow {
 			sb.append(" (").append(rfg.zone().toLowerCase().replace('_', ' ')).append(')');
 			first = false;
 		}
+		for (ReturnToHandCost rth : ability.returnToHandCosts()) {
+			if (!first) sb.append(", ");
+			sb.append("RTH ");
+			if (rth.cardName() != null) sb.append(rth.cardName());
+			else {
+				sb.append(rth.count());
+				if (rth.category() != null) sb.append(" Cat.").append(rth.category());
+				if (rth.cardType() != null) sb.append(' ').append(rth.cardType());
+			}
+			first = false;
+		}
 		sb.append("] → ");
 		String fx = ability.effectText();
 		sb.append(fx.length() > 55 ? fx.substring(0, 52) + "..." : fx);
@@ -5277,6 +5342,8 @@ public class MainWindow {
 			if (!bzCostSatisfied(bz, isP1)) return false;
 		for (RemoveFromGameCost rfg : ability.removeFromGameCosts())
 			if (!rfgCostSatisfied(rfg, isP1)) return false;
+		for (ReturnToHandCost rth : ability.returnToHandCosts())
+			if (!rfthCostSatisfied(rth, isP1)) return false;
 		return canAffordAbilityCost(ability, isP1);
 	}
 
@@ -5435,6 +5502,66 @@ public class MainWindow {
 		if (rfg.cardType()    != null && !matchesDiscardType(c, rfg.cardType()))      return false;
 		if (rfg.excludeName() != null &&  c.name().equalsIgnoreCase(rfg.excludeName())) return false;
 		return true;
+	}
+
+	private boolean rfthCostSatisfied(ReturnToHandCost rth, boolean isP1) {
+		return eligibleRfthFieldTargets(rth, isP1).size() >= rth.count();
+	}
+
+	private List<ForwardTarget> eligibleRfthFieldTargets(ReturnToHandCost rth, boolean isP1) {
+		List<ForwardTarget> result = new ArrayList<>();
+		List<CardData> fwds = playerForwardCards(isP1);
+		List<CardData> mons = playerMonsterCards(isP1);
+		CardData[]     bkps = playerBackupCards(isP1);
+		for (int i = 0; i < fwds.size(); i++)
+			if (matchesRfthFilter(fwds.get(i), rth)) result.add(new ForwardTarget(isP1, i, ForwardTarget.CardZone.FORWARD));
+		for (int i = 0; i < bkps.length; i++)
+			if (bkps[i] != null && matchesRfthFilter(bkps[i], rth)) result.add(new ForwardTarget(isP1, i, ForwardTarget.CardZone.BACKUP));
+		for (int i = 0; i < mons.size(); i++)
+			if (matchesRfthFilter(mons.get(i), rth)) result.add(new ForwardTarget(isP1, i, ForwardTarget.CardZone.MONSTER));
+		return result;
+	}
+
+	private boolean matchesRfthFilter(CardData c, ReturnToHandCost rth) {
+		if (rth.cardName()    != null && !c.name().equalsIgnoreCase(rth.cardName()))    return false;
+		if (rth.cardType()    != null && !matchesDiscardType(c, rth.cardType()))        return false;
+		if (rth.category()    != null && !meetsCategoryFilter(c, rth.category()))       return false;
+		if (rth.excludeName() != null &&  c.name().equalsIgnoreCase(rth.excludeName())) return false;
+		return true;
+	}
+
+	private void executeReturnToHandCost(ReturnToHandCost rth, boolean isP1) {
+		GameContext ctx = buildGameContext(isP1);
+		if (rth.cardName() != null) {
+			// Auto-find named card and return it
+			List<ForwardTarget> eligible = eligibleRfthFieldTargets(rth, isP1);
+			for (int i = 0; i < rth.count() && i < eligible.size(); i++)
+				returnTargetToHand(ctx, eligible.get(i));
+		} else {
+			for (int pick = 0; pick < rth.count(); pick++) {
+				List<ForwardTarget> eligible = eligibleRfthFieldTargets(rth, isP1);
+				if (eligible.isEmpty()) { logEntry("No eligible field card for return-to-hand cost."); break; }
+				String[] options = eligible.stream()
+						.map(t -> fieldCardData(t).name() + " (" + t.zone().name().toLowerCase() + ")")
+						.toArray(String[]::new);
+				String label = "Return to hand (cost)" + (rth.count() > 1 ? " (" + (pick + 1) + "/" + rth.count() + ")" : "");
+				String choice = (String) JOptionPane.showInputDialog(frame,
+						"Choose a card to return to hand:", label,
+						JOptionPane.PLAIN_MESSAGE, null, options, options[0]);
+				if (choice == null) break;
+				int listIdx = java.util.Arrays.asList(options).indexOf(choice);
+				if (listIdx < 0) break;
+				returnTargetToHand(ctx, eligible.get(listIdx));
+			}
+		}
+	}
+
+	private void returnTargetToHand(GameContext ctx, ForwardTarget t) {
+		switch (t.zone()) {
+			case FORWARD -> { if (t.isP1()) ctx.returnP1ForwardToHand(t.idx()); else ctx.returnP2ForwardToHand(t.idx()); }
+			case BACKUP  -> { if (t.isP1()) ctx.returnP1BackupToHand(t.idx());  else ctx.returnP2BackupToHand(t.idx()); }
+			case MONSTER -> { if (t.isP1()) ctx.returnP1MonsterToHand(t.idx()); else ctx.returnP2MonsterToHand(t.idx()); }
+		}
 	}
 
 	private CardData fieldCardData(ForwardTarget t) {
@@ -5761,6 +5888,17 @@ public class MainWindow {
 			costDesc.append(" (").append(rfg.zone().toLowerCase().replace('_', ' ')).append(')');
 			cf = false;
 		}
+		for (ReturnToHandCost rth : ability.returnToHandCosts()) {
+			if (!cf) costDesc.append(" + ");
+			costDesc.append("RTH ");
+			if (rth.cardName() != null) costDesc.append(rth.cardName());
+			else {
+				costDesc.append(rth.count());
+				if (rth.category() != null) costDesc.append(" Cat.").append(rth.category());
+				if (rth.cardType() != null) costDesc.append(' ').append(rth.cardType());
+			}
+			cf = false;
+		}
 
 		JLabel titleLabel = new JLabel(
 				"<html><center>" + source.name() + " — " + (costDesc.length() > 0 ? costDesc : "free") + "</center></html>",
@@ -5889,6 +6027,10 @@ public class MainWindow {
 		// Remove-from-game costs
 		for (RemoveFromGameCost rfg : ability.removeFromGameCosts())
 			executeRemoveFromGameCost(rfg, isP1);
+
+		// Return-to-hand costs
+		for (ReturnToHandCost rth : ability.returnToHandCosts())
+			executeReturnToHandCost(rth, isP1);
 
 		logEntry("\"" + source.name() + "\" activated ability");
 
@@ -6228,6 +6370,11 @@ public class MainWindow {
 			@Override public void returnP2ForwardToDeckBottom(int idx) { returnP2ForwardToDeck(idx, true);  }
 			@Override public void returnP1ForwardToDeckTop(int idx)    { returnP1ForwardToDeck(idx, false); }
 			@Override public void returnP2ForwardToDeckTop(int idx)    { returnP2ForwardToDeck(idx, false); }
+
+			@Override public void returnP1BackupToHand(int idx) { MainWindow.this.returnP1BackupToHand(idx); }
+			@Override public void returnP2BackupToHand(int idx) { MainWindow.this.returnP2BackupToHand(idx); }
+			@Override public void returnP1MonsterToHand(int idx) { MainWindow.this.returnP1MonsterToHand(idx); }
+			@Override public void returnP2MonsterToHand(int idx) { MainWindow.this.returnP2MonsterToHand(idx); }
 
 			@Override public boolean isP1ForwardAttacking(int idx) { return p1AttackSelection.contains(idx); }
 			@Override public boolean isP2ForwardAttacking(int idx) { return false; }

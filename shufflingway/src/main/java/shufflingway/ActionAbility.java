@@ -42,12 +42,14 @@ public record ActionAbility(
         List<BreakZoneCost>     breakZoneCosts,        // "put X into the Break Zone" costs (may be empty)
         List<DiscardCost>       discardCosts,          // "discard X" hand-card costs (may be empty)
         List<RemoveFromGameCost> removeFromGameCosts,  // "remove X from the game" costs (may be empty)
+        List<ReturnToHandCost>   returnToHandCosts,    // "return X to its owner's hand" costs (may be empty)
         String                  effectText             // raw effect text — future work will parse this further
 ) {
     public ActionAbility {
-        cpCost              = List.copyOf(cpCost);
-        breakZoneCosts      = List.copyOf(breakZoneCosts);
-        discardCosts        = List.copyOf(discardCosts);
+        cpCost            = List.copyOf(cpCost);
+        breakZoneCosts    = List.copyOf(breakZoneCosts);
+        discardCosts      = List.copyOf(discardCosts);
         removeFromGameCosts = List.copyOf(removeFromGameCosts);
+        returnToHandCosts = List.copyOf(returnToHandCosts);
     }
 }
