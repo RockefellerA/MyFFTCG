@@ -30,6 +30,7 @@ public record CardData(
         String primingTarget,
         List<String> primingCost,
         List<ActionAbility> actionAbilities,
+        String job,
         String textEn
 ) {
 
@@ -51,6 +52,7 @@ public record CardData(
         warpCost        = List.copyOf(warpCost);
         primingCost     = List.copyOf(primingCost);
         actionAbilities = List.copyOf(actionAbilities);
+        job             = job    != null ? job    : "";
         textEn          = textEn != null ? textEn : "";
     }
 

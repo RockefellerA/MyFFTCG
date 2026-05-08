@@ -929,7 +929,7 @@ public class MainWindow {
 							card.multicard(), CardData.parseTraits(tx),
 							CardData.parseWarpValue(tx), CardData.parseWarpCost(tx),
 							CardData.parsePrimingTarget(tx), CardData.parsePrimingCost(tx),
-							CardData.parseActionAbilities(tx), tx);
+							CardData.parseActionAbilities(tx), card.job(), tx);
 					if (card.isLb()) lb.add(cd);
 					else             main.add(cd);
 				}
@@ -948,7 +948,7 @@ public class MainWindow {
 								card.multicard(), CardData.parseTraits(tx),
 								CardData.parseWarpValue(tx), CardData.parseWarpCost(tx),
 								CardData.parsePrimingTarget(tx), CardData.parsePrimingCost(tx),
-								CardData.parseActionAbilities(tx), tx);
+								CardData.parseActionAbilities(tx), card.job(), tx);
 						if (card.isLb()) p2Lb.add(cd);
 						else             p2Main.add(cd);
 					}
@@ -5756,13 +5756,16 @@ public class MainWindow {
 					int maxCount, boolean upTo, boolean opponentOnly,
 					boolean selfOnly, String condition, String element,
 					int costVal, String costCmp,
-					boolean inclForwards, boolean inclBackups, boolean inclMonsters) {
+					boolean inclForwards, boolean inclBackups, boolean inclMonsters,
+					String jobFilter, String cardNameFilter) {
 				java.util.List<ForwardTarget> eligible = new ArrayList<>();
 				if (!opponentOnly) {
 					if (inclForwards) for (int i = 0; i < p1ForwardCards.size(); i++) {
 						CardData card = p1Forward(i);
 						if (element != null && !card.containsElement(element)) continue;
 						if (!meetsCostConstraint(card.cost(), costVal, costCmp)) continue;
+						if (!meetsJobFilter(card, jobFilter)) continue;
+						if (!meetsCardNameFilter(card, cardNameFilter)) continue;
 						if (meetsTargetCondition(p1ForwardStates.get(i), p1ForwardDamage.get(i),
 								p1AttackSelection.contains(i), false, condition))
 							eligible.add(new ForwardTarget(true, i, ForwardTarget.CardZone.FORWARD));
@@ -5771,6 +5774,8 @@ public class MainWindow {
 						if (p1BackupCards[i] == null) continue;
 						if (element != null && !p1BackupCards[i].containsElement(element)) continue;
 						if (!meetsCostConstraint(p1BackupCards[i].cost(), costVal, costCmp)) continue;
+						if (!meetsJobFilter(p1BackupCards[i], jobFilter)) continue;
+						if (!meetsCardNameFilter(p1BackupCards[i], cardNameFilter)) continue;
 						if (meetsTargetCondition(p1BackupStates[i], 0, false, false, condition))
 							eligible.add(new ForwardTarget(true, i, ForwardTarget.CardZone.BACKUP));
 					}
@@ -5778,6 +5783,8 @@ public class MainWindow {
 						CardData card = p1MonsterCards.get(i);
 						if (element != null && !card.containsElement(element)) continue;
 						if (!meetsCostConstraint(card.cost(), costVal, costCmp)) continue;
+						if (!meetsJobFilter(card, jobFilter)) continue;
+						if (!meetsCardNameFilter(card, cardNameFilter)) continue;
 						if (meetsTargetCondition(p1MonsterStates.get(i), 0, false, false, condition))
 							eligible.add(new ForwardTarget(true, i, ForwardTarget.CardZone.MONSTER));
 					}
@@ -5787,6 +5794,8 @@ public class MainWindow {
 						CardData card = p2ForwardCards.get(i);
 						if (element != null && !card.containsElement(element)) continue;
 						if (!meetsCostConstraint(card.cost(), costVal, costCmp)) continue;
+						if (!meetsJobFilter(card, jobFilter)) continue;
+						if (!meetsCardNameFilter(card, cardNameFilter)) continue;
 						if (meetsTargetCondition(p2ForwardStates.get(i), p2ForwardDamage.get(i),
 								false, false, condition))
 							eligible.add(new ForwardTarget(false, i, ForwardTarget.CardZone.FORWARD));
@@ -5795,6 +5804,8 @@ public class MainWindow {
 						if (p2BackupCards[i] == null) continue;
 						if (element != null && !p2BackupCards[i].containsElement(element)) continue;
 						if (!meetsCostConstraint(p2BackupCards[i].cost(), costVal, costCmp)) continue;
+						if (!meetsJobFilter(p2BackupCards[i], jobFilter)) continue;
+						if (!meetsCardNameFilter(p2BackupCards[i], cardNameFilter)) continue;
 						if (meetsTargetCondition(p2BackupStates[i], 0, false, false, condition))
 							eligible.add(new ForwardTarget(false, i, ForwardTarget.CardZone.BACKUP));
 					}
@@ -5802,6 +5813,8 @@ public class MainWindow {
 						CardData card = p2MonsterCards.get(i);
 						if (element != null && !card.containsElement(element)) continue;
 						if (!meetsCostConstraint(card.cost(), costVal, costCmp)) continue;
+						if (!meetsJobFilter(card, jobFilter)) continue;
+						if (!meetsCardNameFilter(card, cardNameFilter)) continue;
 						if (meetsTargetCondition(p2MonsterStates.get(i), 0, false, false, condition))
 							eligible.add(new ForwardTarget(false, i, ForwardTarget.CardZone.MONSTER));
 					}
@@ -5931,7 +5944,8 @@ public class MainWindow {
 			public java.util.List<ForwardTarget> selectCharactersFromBreakZone(
 					int maxCount, boolean upTo, boolean opponentZone,
 					String condition, String element, int costVal, String costCmp,
-					boolean inclForwards, boolean inclBackups, boolean inclMonsters) {
+					boolean inclForwards, boolean inclBackups, boolean inclMonsters,
+					String jobFilter, String cardNameFilter) {
 				java.util.List<CardData> bz = opponentZone
 						? gameState.getP2BreakZone() : gameState.getP1BreakZone();
 				java.util.List<ForwardTarget> eligible = new ArrayList<>();
@@ -5942,6 +5956,8 @@ public class MainWindow {
 					if (card.isMonster()  && !inclMonsters) continue;
 					if (element != null && !card.containsElement(element)) continue;
 					if (!meetsCostConstraint(card.cost(), costVal, costCmp)) continue;
+					if (!meetsJobFilter(card, jobFilter)) continue;
+					if (!meetsCardNameFilter(card, cardNameFilter)) continue;
 					ForwardTarget.CardZone cz = card.isBackup()  ? ForwardTarget.CardZone.BACKUP
 					                         : card.isMonster() ? ForwardTarget.CardZone.MONSTER
 					                         :                    ForwardTarget.CardZone.FORWARD;
@@ -6440,6 +6456,20 @@ public class MainWindow {
 			case "more" -> cardCost >= costVal;
 			default     -> cardCost == costVal;
 		};
+	}
+
+	/** Returns {@code true} if the card's job matches any job in the bar-separated {@code jobFilter}, or if the filter is {@code null}. */
+	private static boolean meetsJobFilter(CardData card, String jobFilter) {
+		if (jobFilter == null) return true;
+		for (String j : jobFilter.split("\\|")) {
+			if (j.trim().equalsIgnoreCase(card.job())) return true;
+		}
+		return false;
+	}
+
+	/** Returns {@code true} if the card's name matches {@code cardNameFilter} (case-insensitive), or if the filter is {@code null}. */
+	private static boolean meetsCardNameFilter(CardData card, String cardNameFilter) {
+		return cardNameFilter == null || cardNameFilter.equalsIgnoreCase(card.name());
 	}
 
 	/**

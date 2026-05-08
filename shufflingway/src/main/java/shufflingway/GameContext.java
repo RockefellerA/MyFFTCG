@@ -76,30 +76,37 @@ public interface GameContext {
      * @param element      optional element name to restrict targets; {@code null} = any
      * @param costVal      CP cost filter value; {@code -1} = no filter
      * @param costCmp      {@code "less"}, {@code "more"}, or {@code null} for exact
-     * @param forwards     include Forwards as eligible targets
-     * @param backups      include Backups as eligible targets
-     * @param monsters     include Monsters as eligible targets
+     * @param forwards        include Forwards as eligible targets
+     * @param backups         include Backups as eligible targets
+     * @param monsters        include Monsters as eligible targets
+     * @param jobFilter       optional job name(s) to restrict targets; {@code null} = any;
+     *                        bar-separated (e.g. {@code "Standard Unit|Warrior of Light"}) for OR
+     * @param cardNameFilter  optional exact card name to restrict targets; {@code null} = any
      */
     List<ForwardTarget> selectCharacters(int maxCount, boolean upTo, boolean opponentOnly,
             boolean selfOnly, String condition, String element, int costVal, String costCmp,
-            boolean forwards, boolean backups, boolean monsters);
+            boolean forwards, boolean backups, boolean monsters,
+            String jobFilter, String cardNameFilter);
 
     /**
      * Shows a modal dialog letting P1 choose up to {@code maxCount} eligible
      * cards from a Break Zone and returns their targets.
      *
-     * @param opponentZone if {@code true}, selects from P2's Break Zone; otherwise P1's
-     * @param condition    optional eligibility filter; {@code null} = any
-     * @param element      optional element name to restrict targets; {@code null} = any
-     * @param costVal      CP cost filter value; {@code -1} = no filter
-     * @param costCmp      {@code "less"}, {@code "more"}, or {@code null} for exact
-     * @param forwards     include Forwards as eligible targets
-     * @param backups      include Backups as eligible targets
-     * @param monsters     include Monsters as eligible targets
+     * @param opponentZone    if {@code true}, selects from P2's Break Zone; otherwise P1's
+     * @param condition       optional eligibility filter; {@code null} = any
+     * @param element         optional element name to restrict targets; {@code null} = any
+     * @param costVal         CP cost filter value; {@code -1} = no filter
+     * @param costCmp         {@code "less"}, {@code "more"}, or {@code null} for exact
+     * @param forwards        include Forwards as eligible targets
+     * @param backups         include Backups as eligible targets
+     * @param monsters        include Monsters as eligible targets
+     * @param jobFilter       optional job name(s); {@code null} = any; bar-separated for OR
+     * @param cardNameFilter  optional exact card name; {@code null} = any
      */
     List<ForwardTarget> selectCharactersFromBreakZone(int maxCount, boolean upTo,
             boolean opponentZone, String condition, String element, int costVal, String costCmp,
-            boolean forwards, boolean backups, boolean monsters);
+            boolean forwards, boolean backups, boolean monsters,
+            String jobFilter, String cardNameFilter);
 
     // ---- Zone-dispatch single-target effects --------------------------------
 
