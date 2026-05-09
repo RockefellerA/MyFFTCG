@@ -240,6 +240,7 @@ public class MainWindow {
 	// Attack button and selection state for party attacks
 	private JButton              attackButton;
 	private final List<Integer>  p1AttackSelection = new ArrayList<>();
+	private int                  p1BlockingIdx     = -1; // index of the P1 forward currently declared as a blocker; -1 if none
 
 	public static void main(String[] args) {
 		Runtime.getRuntime().addShutdownHook(new Thread(ImageCache::shutdown));
@@ -2522,10 +2523,11 @@ public class MainWindow {
 		dlg.setVisible(true);
 
 		if (chosen[0] >= 0) {
-			// Use the top card's stats for combat when the blocker is primed
 			CardData top = p1ForwardPrimedTop.get(chosen[0]);
 			CardData blocker = top != null ? top : p1ForwardCards.get(chosen[0]);
+			p1BlockingIdx = chosen[0];
 			resolveCombat(attacker, false, attackerIdx, blocker, true, chosen[0]);
+			p1BlockingIdx = -1;
 		} else {
 			p1TakeDamage();
 		}
@@ -5137,7 +5139,10 @@ public class MainWindow {
 		if (ability.requiresDull())    { sb.append("Dull");      first = false; }
 		if (ability.isSpecial())       { if (!first) sb.append(", "); sb.append("S"); first = false; }
 		if (ability.hasXCost())        { if (!first) sb.append(", "); sb.append("X"); first = false; }
-		if (ability.yourTurnOnly())    { if (!first) sb.append(", "); sb.append("your turn"); first = false; }
+		if (ability.yourTurnOnly())        { if (!first) sb.append(", "); sb.append("your turn"); first = false; }
+		if (ability.whilePartyAttacking()) { if (!first) sb.append(", "); sb.append("while party atk"); first = false; }
+		else if (ability.whileCardAttacking() != null) { if (!first) sb.append(", "); sb.append("while ").append(ability.whileCardAttacking()).append(" atk"); first = false; }
+		if (ability.whileCardBlocking() != null) { if (!first) sb.append(", "); sb.append("while ").append(ability.whileCardBlocking()).append(" blk"); first = false; }
 		if (ability.crystalCost() > 0) { if (!first) sb.append(", "); sb.append(ability.crystalCost()).append(" Crystal"); first = false; }
 		for (String e : ability.cpCost()) {
 			if (!first) sb.append(", ");
@@ -5335,6 +5340,21 @@ public class MainWindow {
 	private boolean canActivateAbility(ActionAbility ability, boolean isFrozen, CardState state,
 			int playedTurn, String sourceName, boolean isP1) {
 		if (ability.yourTurnOnly() && !isP1) return false;
+		// Attack-phase restrictions — all require the game to be in the ATTACK phase
+		if (ability.whileCardAttacking() != null || ability.whileCardBlocking() != null || ability.whilePartyAttacking()) {
+			if (gameState.getCurrentPhase() != GameState.GamePhase.ATTACK) return false;
+		}
+		if (ability.whileCardAttacking() != null) {
+			boolean found = p1AttackSelection.stream()
+					.anyMatch(i -> i < p1ForwardCards.size()
+							&& p1ForwardCards.get(i).name().equalsIgnoreCase(ability.whileCardAttacking()));
+			if (!found) return false;
+		}
+		if (ability.whileCardBlocking() != null) {
+			if (p1BlockingIdx < 0 || p1BlockingIdx >= p1ForwardCards.size()) return false;
+			if (!p1ForwardCards.get(p1BlockingIdx).name().equalsIgnoreCase(ability.whileCardBlocking())) return false;
+		}
+		if (ability.whilePartyAttacking() && p1AttackSelection.size() < 2) return false;
 		if (ability.requiresDull()) {
 			if (state != CardState.ACTIVE) return false;
 			if (playedTurn == gameState.getTurnNumber()) return false;
@@ -5643,11 +5663,15 @@ public class MainWindow {
 		if (abilities.isEmpty()) return;
 
 		GameState.GamePhase phase = gameState.getCurrentPhase();
-		boolean isMainPhase = phase == GameState.GamePhase.MAIN_1 || phase == GameState.GamePhase.MAIN_2;
+		boolean isMainPhase  = phase == GameState.GamePhase.MAIN_1 || phase == GameState.GamePhase.MAIN_2;
+		boolean isAttackPhase = phase == GameState.GamePhase.ATTACK;
 
 		for (ActionAbility ability : abilities) {
+			boolean hasAttackRestriction = ability.whileCardAttacking() != null
+					|| ability.whileCardBlocking() != null || ability.whilePartyAttacking();
+			boolean phaseOk = hasAttackRestriction ? isAttackPhase : isMainPhase;
 			JMenuItem item = new JMenuItem(buildAbilityMenuLabel(ability));
-			item.setEnabled(isMainPhase && canActivateAbility(ability, isFrozen, state, playedTurn, card.name(), isP1));
+			item.setEnabled(phaseOk && canActivateAbility(ability, isFrozen, state, playedTurn, card.name(), isP1));
 			item.addActionListener(ae ->
 					showActionAbilityPaymentDialog(ability, card, applyDull, isP1));
 			menu.add(item);
