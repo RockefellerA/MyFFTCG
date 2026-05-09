@@ -240,7 +240,18 @@ public class MainWindow {
 	// Attack button and selection state for party attacks
 	private JButton              attackButton;
 	private final List<Integer>  p1AttackSelection = new ArrayList<>();
-	private int                  p1BlockingIdx     = -1; // index of the P1 forward currently declared as a blocker; -1 if none
+	private int                  p1BlockingIdx     = -1;
+
+	// Damage-shield / damage-modifier state (keyed by CardData identity; cleared at end of turn)
+	private final Set<CardData>          nextIncomingDmgZeroSet   = new java.util.HashSet<>();
+	private final Map<CardData, Integer> nextIncomingDmgReduceMap = new java.util.HashMap<>();
+	private final Map<CardData, Integer> incomingDmgIncreaseMap   = new java.util.HashMap<>();
+	private final Set<CardData>          nullifyAbilityDmgSet     = new java.util.HashSet<>();
+	private final Set<CardData>          nextOutgoingDmgZeroSet   = new java.util.HashSet<>();
+	private boolean p1NonLethalProtection = false;
+	private boolean p2NonLethalProtection = false;
+	private int     p1GlobalDmgReduction  = 0;
+	private int     p2GlobalDmgReduction  = 0;
 
 	public static void main(String[] args) {
 		Runtime.getRuntime().addShutdownHook(new Thread(ImageCache::shutdown));
@@ -1289,8 +1300,12 @@ public class MainWindow {
                             p1ForwardMustBlock.clear();             p2ForwardMustBlock.clear();
                             p1ForwardCannotAttack.clear();          p2ForwardCannotAttack.clear();
                             p1ForwardMustAttack.clear();            p2ForwardMustAttack.clear();
-                            p1ForwardCannotAttackPersistent.clear(); // P1's own; P2's persists to P2's end phase
-                            p1ForwardCannotBlockPersistent.clear();  // P1's own
+                            p1ForwardCannotAttackPersistent.clear(); p1ForwardCannotBlockPersistent.clear();
+                            nextIncomingDmgZeroSet.clear();   nextIncomingDmgReduceMap.clear();
+                            incomingDmgIncreaseMap.clear();   nullifyAbilityDmgSet.clear();
+                            nextOutgoingDmgZeroSet.clear();
+                            p1NonLethalProtection = false;    p2NonLethalProtection = false;
+                            p1GlobalDmgReduction  = 0;        p2GlobalDmgReduction  = 0;
                             for (int i = 0; i < p2ForwardCards.size(); i++) refreshP2ForwardSlot(i);
                             showEndPhaseDiscardDialog();
                             onNextPhase();             // END → ACTIVE (auto-advance)
@@ -2353,46 +2368,38 @@ public class MainWindow {
 		logEntry((attackerIsP1 ? "" : "[P2] ") + attacker.name() + " (" + effAttackerPow + ")"
 				+ " vs " + (blockerIsP1 ? "" : "[P2] ") + blocker.name() + " (" + effBlockerPow + ")");
 
-		boolean attackerBroken = effBlockerPow >= effAttackerPow;
-		boolean blockerBroken  = effAttackerPow >= effBlockerPow;
+		// Compute actual damage each side deals after outgoing and incoming modifiers
+		int rawDmgToBlocker  = modifyOutgoingCombatDamage(attackerIsP1, attackerIdx, effAttackerPow);
+		int dmgToBlocker     = modifyIncomingDamage(blockerIsP1,  blockerIdx,  rawDmgToBlocker,  false);
+		int rawDmgToAttacker = modifyOutgoingCombatDamage(blockerIsP1, blockerIdx, effBlockerPow);
+		int dmgToAttacker    = modifyIncomingDamage(attackerIsP1, attackerIdx, rawDmgToAttacker, false);
+
+		boolean attackerBroken = dmgToAttacker >= effAttackerPow;
+		boolean blockerBroken  = dmgToBlocker  >= effBlockerPow;
 
 		if (attackerFirst && blockerBroken) {
 			attackerBroken = false;
+			dmgToAttacker  = 0; // attacker takes no return strike
 		} else if (blockerFirst && attackerBroken) {
 			blockerBroken = false;
+			dmgToBlocker  = 0; // blocker takes no return strike
 		}
 
 		if (attackerBroken) {
 			if (attackerIsP1) breakP1Forward(attackerIdx);
 			else              breakP2Forward(attackerIdx);
-		} else {
-			// Attacker survives — accumulate damage it received from the blocker
-			int received = blockerFirst ? 0 : effBlockerPow;
-			if (received > 0) {
-				if (attackerIsP1) {
-					p1ForwardDamage.set(attackerIdx, p1ForwardDamage.get(attackerIdx) + received);
-					refreshP1ForwardSlot(attackerIdx);
-				} else {
-					p2ForwardDamage.set(attackerIdx, p2ForwardDamage.get(attackerIdx) + received);
-					refreshP2ForwardSlot(attackerIdx);
-				}
-			}
+		} else if (!blockerFirst && dmgToAttacker > 0) {
+			List<Integer> dmgList = attackerIsP1 ? p1ForwardDamage : p2ForwardDamage;
+			dmgList.set(attackerIdx, dmgList.get(attackerIdx) + dmgToAttacker);
+			if (attackerIsP1) refreshP1ForwardSlot(attackerIdx); else refreshP2ForwardSlot(attackerIdx);
 		}
 		if (blockerBroken) {
 			if (blockerIsP1) breakP1Forward(blockerIdx);
 			else             breakP2Forward(blockerIdx);
-		} else {
-			// Blocker survives — accumulate damage it received from the attacker
-			int received = attackerFirst ? 0 : effAttackerPow;
-			if (received > 0) {
-				if (blockerIsP1) {
-					p1ForwardDamage.set(blockerIdx, p1ForwardDamage.get(blockerIdx) + received);
-					refreshP1ForwardSlot(blockerIdx);
-				} else {
-					p2ForwardDamage.set(blockerIdx, p2ForwardDamage.get(blockerIdx) + received);
-					refreshP2ForwardSlot(blockerIdx);
-				}
-			}
+		} else if (!attackerFirst && dmgToBlocker > 0) {
+			List<Integer> dmgList = blockerIsP1 ? p1ForwardDamage : p2ForwardDamage;
+			dmgList.set(blockerIdx, dmgList.get(blockerIdx) + dmgToBlocker);
+			if (blockerIsP1) refreshP1ForwardSlot(blockerIdx); else refreshP2ForwardSlot(blockerIdx);
 		}
 		if (!attackerBroken && !blockerBroken) {
 			logEntry("Both forwards survive combat");
@@ -6228,15 +6235,7 @@ public class MainWindow {
 			@Override public int       p1ForwardCurrentDamage(int idx) { return p1ForwardDamage.get(idx); }
 			@Override public CardState p1ForwardState(int idx)          { return p1ForwardStates.get(idx); }
 			@Override public void damageP1Forward(int idx, int amount) {
-				if (idx >= p1ForwardCards.size()) return;
-				int dmg = p1ForwardDamage.get(idx) + amount;
-				p1ForwardDamage.set(idx, dmg);
-				CardData eff = p1Forward(idx);
-				int effPow = effectiveP1ForwardPower(idx);
-				logEntry(eff.name() + " takes " + amount + " damage"
-						+ (effPow > 0 ? " (" + (effPow - dmg) + " remaining)" : ""));
-				if (effPow > 0 && dmg >= effPow) breakP1Forward(idx);
-				else refreshP1ForwardSlot(idx);
+				applyDamageToForward(true, idx, amount, true);
 			}
 
 			@Override public int p2ForwardCount()                    { return p2ForwardCards.size(); }
@@ -6244,15 +6243,29 @@ public class MainWindow {
 			@Override public int       p2ForwardCurrentDamage(int idx) { return p2ForwardDamage.get(idx); }
 			@Override public CardState p2ForwardState(int idx)          { return p2ForwardStates.get(idx); }
 			@Override public void damageP2Forward(int idx, int amount) {
-				if (idx >= p2ForwardCards.size()) return;
-				int dmg = p2ForwardDamage.get(idx) + amount;
-				p2ForwardDamage.set(idx, dmg);
-				CardData card = p2ForwardCards.get(idx);
-				int effPow = effectiveP2ForwardPower(idx);
-				logEntry("[P2] " + card.name() + " takes " + amount + " damage"
-						+ (effPow > 0 ? " (" + (effPow - dmg) + " remaining)" : ""));
-				if (effPow > 0 && dmg >= effPow) breakP2Forward(idx);
-				else refreshP2ForwardSlot(idx);
+				applyDamageToForward(false, idx, amount, true);
+			}
+
+			@Override public void shieldNextIncomingDamage(ForwardTarget t) {
+				CardData c = fieldCardData(t); if (c != null) nextIncomingDmgZeroSet.add(c);
+			}
+			@Override public void shieldNextIncomingDamageReduction(ForwardTarget t, int reduction) {
+				CardData c = fieldCardData(t); if (c != null) nextIncomingDmgReduceMap.merge(c, reduction, Integer::sum);
+			}
+			@Override public void debuffIncomingDamageIncrease(ForwardTarget t, int amount) {
+				CardData c = fieldCardData(t); if (c != null) incomingDmgIncreaseMap.merge(c, amount, Integer::sum);
+			}
+			@Override public void shieldAbilityDamage(ForwardTarget t) {
+				CardData c = fieldCardData(t); if (c != null) nullifyAbilityDmgSet.add(c);
+			}
+			@Override public void shieldNextOutgoingDamage(ForwardTarget t) {
+				CardData c = fieldCardData(t); if (c != null) nextOutgoingDmgZeroSet.add(c);
+			}
+			@Override public void shieldActivePlayerNonLethal() {
+				if (isP1) p1NonLethalProtection = true; else p2NonLethalProtection = true;
+			}
+			@Override public void shieldActivePlayerDamageReduction(int reduction) {
+				if (isP1) p1GlobalDmgReduction += reduction; else p2GlobalDmgReduction += reduction;
 			}
 
 			@Override
@@ -7094,6 +7107,85 @@ public class MainWindow {
 				}
 			}
 		};
+	}
+
+	// -------------------------------------------------------------------------
+	// Damage modifier helpers
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Applies all incoming-damage modifiers for {@code idx} and returns the final amount.
+	 * One-time shields (next-damage-zero, next-damage-reduction) are consumed here.
+	 * {@code fromAbility} is true when the damage source is an effect/summon, false for combat.
+	 */
+	private int modifyIncomingDamage(boolean isP1, int idx, int rawAmount, boolean fromAbility) {
+		List<CardData> fwds = isP1 ? p1ForwardCards : p2ForwardCards;
+		if (idx >= fwds.size()) return rawAmount;
+		CardData card = fwds.get(idx);
+		int amount = rawAmount;
+
+		// Incoming damage increase (debuff)
+		if (incomingDmgIncreaseMap.containsKey(card))
+			amount += incomingDmgIncreaseMap.get(card);
+
+		// Nullify damage from opponent's abilities/summons (does not block combat)
+		if (fromAbility && nullifyAbilityDmgSet.contains(card)) return 0;
+
+		// One-time: next incoming damage = 0
+		if (nextIncomingDmgZeroSet.remove(card)) return 0;
+
+		// One-time: next incoming damage reduced by N
+		if (nextIncomingDmgReduceMap.containsKey(card))
+			amount = Math.max(0, amount - nextIncomingDmgReduceMap.remove(card));
+
+		// Global per-player damage reduction
+		int globalRed = isP1 ? p1GlobalDmgReduction : p2GlobalDmgReduction;
+		if (globalRed > 0) amount = Math.max(0, amount - globalRed);
+
+		// Non-lethal protection: damage < forward's effective power → becomes 0
+		boolean nonLethal = isP1 ? p1NonLethalProtection : p2NonLethalProtection;
+		if (nonLethal) {
+			int power = isP1 ? effectiveP1ForwardPower(idx) : effectiveP2ForwardPower(idx);
+			if (amount < power) return 0;
+		}
+
+		return amount;
+	}
+
+	/**
+	 * Applies outgoing-damage modifiers for a forward that is about to deal combat damage.
+	 * Checks and consumes the one-time "next outgoing damage = 0" shield.
+	 */
+	private int modifyOutgoingCombatDamage(boolean isP1, int idx, int rawAmount) {
+		List<CardData> fwds = isP1 ? p1ForwardCards : p2ForwardCards;
+		if (idx >= fwds.size()) return rawAmount;
+		CardData card = fwds.get(idx);
+		return nextOutgoingDmgZeroSet.remove(card) ? 0 : rawAmount;
+	}
+
+	/**
+	 * Applies incoming-damage modifiers, writes the result to the damage accumulator,
+	 * and breaks the forward if accumulated damage reaches its effective power.
+	 */
+	private void applyDamageToForward(boolean isP1, int idx, int rawAmount, boolean fromAbility) {
+		List<CardData>  fwds   = isP1 ? p1ForwardCards   : p2ForwardCards;
+		List<Integer>   dmgList = isP1 ? p1ForwardDamage  : p2ForwardDamage;
+		if (idx >= fwds.size()) return;
+		int amount = modifyIncomingDamage(isP1, idx, rawAmount, fromAbility);
+		if (amount <= 0) {
+			logEntry((isP1 ? "" : "[P2] ") + fwds.get(idx).name() + " — damage blocked");
+			return;
+		}
+		int accum  = dmgList.get(idx) + amount;
+		dmgList.set(idx, accum);
+		int effPow = isP1 ? effectiveP1ForwardPower(idx) : effectiveP2ForwardPower(idx);
+		logEntry((isP1 ? "" : "[P2] ") + fwds.get(idx).name() + " takes " + amount + " damage"
+				+ (effPow > 0 ? " (" + (effPow - accum) + " remaining)" : ""));
+		if (effPow > 0 && accum >= effPow) {
+			if (isP1) breakP1Forward(idx); else breakP2Forward(idx);
+		} else {
+			if (isP1) refreshP1ForwardSlot(idx); else refreshP2ForwardSlot(idx);
+		}
 	}
 
 	// -------------------------------------------------------------------------
@@ -9081,8 +9173,12 @@ public class MainWindow {
 			p1ForwardMustBlock.clear();             p2ForwardMustBlock.clear();
 			p1ForwardCannotAttack.clear();          p2ForwardCannotAttack.clear();
 			p1ForwardMustAttack.clear();            p2ForwardMustAttack.clear();
-			p2ForwardCannotAttackPersistent.clear(); // P2's own; P1's persists to P1's end phase
-			p2ForwardCannotBlockPersistent.clear();  // P2's own
+			p2ForwardCannotAttackPersistent.clear(); p2ForwardCannotBlockPersistent.clear();
+			nextIncomingDmgZeroSet.clear();   nextIncomingDmgReduceMap.clear();
+			incomingDmgIncreaseMap.clear();   nullifyAbilityDmgSet.clear();
+			nextOutgoingDmgZeroSet.clear();
+			p1NonLethalProtection = false;    p2NonLethalProtection = false;
+			p1GlobalDmgReduction  = 0;        p2GlobalDmgReduction  = 0;
 			gameState.advancePhase(); // MAIN_2 → END
 			logEntry("[P2] End Phase");
 			gameState.advancePhase(); // END → ACTIVE (switches to P1, increments turn)

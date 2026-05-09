@@ -205,6 +205,48 @@ public class ActionResolver {
         "(?:your\\s+opponent's|the\\s+next)\\s+turn\\.?"
     );
 
+    // ---- Damage-shield followup patterns (apply to selected "it/them" targets) --------
+
+    /** Matches "During this turn, the next damage dealt to it/him becomes 0 instead." */
+    private static final Pattern FOLLOWUP_SHIELD_NEXT_DMG_ZERO = Pattern.compile(
+        "(?i)During\\s+this\\s+turn,\\s+the\\s+next\\s+damage\\s+dealt\\s+to\\s+(?:it|him)\\s+becomes\\s+0\\s+instead\\.?"
+    );
+
+    /** Matches "During this turn, the next damage dealt to it is reduced by N instead." */
+    private static final Pattern FOLLOWUP_SHIELD_NEXT_DMG_REDUCTION = Pattern.compile(
+        "(?i)During\\s+this\\s+turn,\\s+the\\s+next\\s+damage\\s+dealt\\s+to\\s+it\\s+is\\s+reduced\\s+by\\s+(?<reduction>\\d+)\\s+instead\\.?"
+    );
+
+    /** Matches "During this turn, the damage dealt to it is increased by N instead." */
+    private static final Pattern FOLLOWUP_DEBUFF_INCOMING_DMG_INCREASE = Pattern.compile(
+        "(?i)During\\s+this\\s+turn,\\s+the\\s+damage\\s+dealt\\s+to\\s+it\\s+is\\s+increased\\s+by\\s+(?<amount>\\d+)\\s+instead\\.?"
+    );
+
+    /** Matches "During this turn, the next damage it deals to a Forward becomes 0 instead." */
+    private static final Pattern FOLLOWUP_SHIELD_NEXT_OUTGOING_ZERO = Pattern.compile(
+        "(?i)During\\s+this\\s+turn,\\s+the\\s+next\\s+damage\\s+it\\s+deals\\s+to\\s+a\\s+Forward\\s+becomes\\s+0\\s+instead\\.?"
+    );
+
+    // ---- Standalone damage-shield patterns (apply globally or to a named card) --------
+
+    /** "During this turn, if a Forward you control is dealt damage less than its power, the damage becomes 0 instead." */
+    private static final Pattern STANDALONE_NONLETHAL_PROTECTION = Pattern.compile(
+        "(?i)During\\s+this\\s+turn,\\s+if\\s+a\\s+Forward\\s+you\\s+control\\s+is\\s+dealt\\s+damage\\s+less\\s+than\\s+its\\s+power,\\s+the\\s+damage\\s+becomes\\s+0\\s+instead\\.?"
+    );
+
+    /** "During this turn, if a Forward you control is dealt damage, reduce the damage by N instead." */
+    private static final Pattern STANDALONE_GLOBAL_DMG_REDUCTION = Pattern.compile(
+        "(?i)During\\s+this\\s+turn,\\s+if\\s+a\\s+Forward\\s+you\\s+control\\s+is\\s+dealt\\s+damage,\\s+reduce\\s+the\\s+damage\\s+by\\s+(?<reduction>\\d+)\\s+instead\\.?"
+    );
+
+    /**
+     * "During this turn, if &lt;cardName&gt; is dealt damage by your opponent's Summons or abilities,
+     * the damage becomes 0 instead."
+     */
+    private static final Pattern STANDALONE_NULLIFY_ABILITY_DAMAGE = Pattern.compile(
+        "(?i)During\\s+this\\s+turn,\\s+if\\s+(?<card>.+?)\\s+is\\s+dealt\\s+damage\\s+by\\s+your\\s+opponent's\\s+Summons?\\s+or\\s+abilities,\\s+the\\s+damage\\s+becomes\\s+0\\s+instead\\.?"
+    );
+
     /**
      * Matches "Your opponent discards N card(s) [from his/her/their hand]".
      * <ul>
@@ -546,6 +588,9 @@ public class ActionResolver {
         if (result != null) return result;
 
         result = tryParseOpponentRevealHand(effectText);
+        if (result != null) return result;
+
+        result = tryParseStandaloneDamageShields(effectText, source);
         if (result != null) return result;
 
         return null;
@@ -1246,6 +1291,58 @@ public class ActionResolver {
             };
         }
 
+        // --- Next incoming damage = 0 followup ---
+        if (FOLLOWUP_SHIELD_NEXT_DMG_ZERO.matcher(primaryFollowup).find()) {
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — Shield: next damage becomes 0");
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
+                ts.forEach(ctx::shieldNextIncomingDamage);
+                if (secondary != null) secondary.accept(ctx);
+            };
+        }
+
+        // --- Next incoming damage reduced by N followup ---
+        Matcher shieldRedM = FOLLOWUP_SHIELD_NEXT_DMG_REDUCTION.matcher(primaryFollowup);
+        if (shieldRedM.find()) {
+            int reduction = Integer.parseInt(shieldRedM.group("reduction"));
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — Shield: next damage reduced by " + reduction);
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
+                ts.forEach(t -> ctx.shieldNextIncomingDamageReduction(t, reduction));
+                if (secondary != null) secondary.accept(ctx);
+            };
+        }
+
+        // --- Incoming damage increased by N followup ---
+        Matcher dmgIncM = FOLLOWUP_DEBUFF_INCOMING_DMG_INCREASE.matcher(primaryFollowup);
+        if (dmgIncM.find()) {
+            int amount = Integer.parseInt(dmgIncM.group("amount"));
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — Debuff: incoming damage increased by " + amount);
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
+                ts.forEach(t -> ctx.debuffIncomingDamageIncrease(t, amount));
+                if (secondary != null) secondary.accept(ctx);
+            };
+        }
+
+        // --- Next outgoing damage = 0 followup ---
+        if (FOLLOWUP_SHIELD_NEXT_OUTGOING_ZERO.matcher(primaryFollowup).find()) {
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — Shield: next outgoing damage becomes 0");
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
+                ts.forEach(ctx::shieldNextOutgoingDamage);
+                if (secondary != null) secondary.accept(ctx);
+            };
+        }
+
         // Recognised "Choose" header but followup not yet implemented
         Consumer<GameContext> warnEffect = ctx -> ctx.logEntry(
                 "[ActionResolver] Choose effect — followup not yet implemented: " + followup);
@@ -1642,6 +1739,50 @@ public class ActionResolver {
             ctx.logEntry("Effect: Opponent reveals hand");
             ctx.revealOpponentHand();
         };
+    }
+
+    /**
+     * Parses the three standalone damage-shield effects that apply globally or to a named card:
+     * <ul>
+     *   <li>Non-lethal protection for all active-player Forwards.</li>
+     *   <li>Global incoming-damage reduction for all active-player Forwards.</li>
+     *   <li>Nullify ability/Summon damage for a specific named Forward.</li>
+     * </ul>
+     */
+    private static Consumer<GameContext> tryParseStandaloneDamageShields(String text, CardData source) {
+        // "During this turn, if a Forward you control is dealt damage less than its power, the damage becomes 0 instead."
+        if (STANDALONE_NONLETHAL_PROTECTION.matcher(text).find()) {
+            return ctx -> {
+                ctx.logEntry("Effect: Non-lethal protection for your Forwards this turn");
+                ctx.shieldActivePlayerNonLethal();
+            };
+        }
+
+        // "During this turn, if a Forward you control is dealt damage, reduce the damage by N instead."
+        Matcher globalRedM = STANDALONE_GLOBAL_DMG_REDUCTION.matcher(text);
+        if (globalRedM.find()) {
+            int reduction = Integer.parseInt(globalRedM.group("reduction"));
+            return ctx -> {
+                ctx.logEntry("Effect: All your Forwards take " + reduction + " less damage this turn");
+                ctx.shieldActivePlayerDamageReduction(reduction);
+            };
+        }
+
+        // "During this turn, if <cardName> is dealt damage by your opponent's Summons or abilities, the damage becomes 0 instead."
+        Matcher nullifyM = STANDALONE_NULLIFY_ABILITY_DAMAGE.matcher(text);
+        if (nullifyM.find()) {
+            String cardName = nullifyM.group("card").trim();
+            return ctx -> {
+                ctx.logEntry("Effect: " + cardName + " — ability damage nullified this turn");
+                // Find the named forward on the active player's field
+                for (int i = 0; i < ctx.p1ForwardCount(); i++) {
+                    if (ctx.p1Forward(i).name().equalsIgnoreCase(cardName))
+                        ctx.shieldAbilityDamage(new ForwardTarget(true, i, ForwardTarget.CardZone.FORWARD));
+                }
+            };
+        }
+
+        return null;
     }
 
     /**

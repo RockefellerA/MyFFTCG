@@ -213,6 +213,35 @@ public interface GameContext {
      */
     void reduceSourceForward(CardData source, int amount, EnumSet<CardData.Trait> traits);
 
+    // ---- Damage-shield / damage-modifier effects --------------------------------
+
+    /** Next damage received by target becomes 0 (consumed on first hit). */
+    void shieldNextIncomingDamage(ForwardTarget t);
+
+    /** Next damage received by target is reduced by {@code reduction} (consumed on first hit). */
+    void shieldNextIncomingDamageReduction(ForwardTarget t, int reduction);
+
+    /** All damage received by target is increased by {@code amount} until end of turn. */
+    void debuffIncomingDamageIncrease(ForwardTarget t, int amount);
+
+    /** Damage from the opponent's Summons or abilities to target becomes 0 until end of turn. */
+    void shieldAbilityDamage(ForwardTarget t);
+
+    /** Next damage target deals to a Forward becomes 0 (consumed on first hit). */
+    void shieldNextOutgoingDamage(ForwardTarget t);
+
+    /**
+     * Until end of turn: if any Forward the active player controls is dealt damage less than
+     * its current effective power, that damage becomes 0 instead.
+     */
+    void shieldActivePlayerNonLethal();
+
+    /**
+     * Until end of turn: all Forwards the active player controls take {@code reduction} less
+     * incoming damage (minimum 0).
+     */
+    void shieldActivePlayerDamageReduction(int reduction);
+
     // ---- Computed-damage queries -----------------------------------------------
 
     /** Returns the highest effective power among all P1 Forwards on the field; {@code 0} if none. */
