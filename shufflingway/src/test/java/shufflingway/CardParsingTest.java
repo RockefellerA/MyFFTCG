@@ -108,8 +108,10 @@ public class CardParsingTest {
         StringBuilder sb = new StringBuilder();
         sb.append("  Card: ").append(name).append('\n');
         for (ActionAbility ab : abilities) {
+            String desc = ActionResolver.fullDescription(ab.effectText(), source);
             boolean ok = ActionResolver.parse(ab.effectText(), source) != null;
             sb.append("  [").append(ok ? "OK" : "--").append("] ").append(ab.effectText()).append('\n');
+            sb.append("       ").append(desc != null ? desc : "(none)").append('\n');
         }
         return sb.toString();
     }
@@ -135,6 +137,93 @@ public class CardParsingTest {
             }
         }
         System.out.println();
+    }
+
+    @Test
+    void reportFullPatternCoverage() throws Exception {
+        File dbFile = new File("fftcg_cards.db");
+        if (!dbFile.exists()) {
+            System.out.println("[CardParsingTest] fftcg_cards.db not found — skipping.");
+            return;
+        }
+
+        int totalAbilities = 0;
+        int fullyCovered   = 0;
+        int partialCovered = 0; // primary matched but a followup/secondary layer is unrecognised
+        int notCovered     = 0;
+
+        List<String> examplesFull    = new ArrayList<>();
+        List<String> examplesPartial = new ArrayList<>();
+        List<String> examplesNone    = new ArrayList<>();
+        java.util.Random rng         = new java.util.Random();
+
+        try (Connection conn = DriverManager.getConnection("jdbc:sqlite:" + dbFile.getAbsolutePath());
+             Statement  stmt = conn.createStatement();
+             ResultSet  rs   = stmt.executeQuery(
+                     "SELECT name_en, element, cost, power, type_en, ex_burst, multicard, " +
+                     "limit_break, lb_cost, image_url, text_en, job_en, category_1, category_2 " +
+                     "FROM cards ORDER BY serial")) {
+
+            while (rs.next()) {
+                String textEn = rs.getString("text_en");
+                if (textEn == null || textEn.isBlank()) continue;
+
+                List<ActionAbility> abilities = CardData.parseActionAbilities(textEn);
+                if (abilities.isEmpty()) continue;
+
+                CardData source = new CardData(
+                        rs.getString("image_url"),
+                        rs.getString("name_en"),
+                        rs.getString("element"),
+                        rs.getInt("cost"),
+                        rs.getInt("power"),
+                        rs.getString("type_en"),
+                        rs.getInt("limit_break") != 0,
+                        rs.getObject("lb_cost") != null ? rs.getInt("lb_cost") : 0,
+                        rs.getInt("ex_burst") != 0,
+                        rs.getInt("multicard") != 0,
+                        CardData.parseTraits(textEn),
+                        CardData.parseWarpValue(textEn),
+                        CardData.parseWarpCost(textEn),
+                        CardData.parsePrimingTarget(textEn),
+                        CardData.parsePrimingCost(textEn),
+                        abilities, rs.getString("job_en"),
+                        rs.getString("category_1"), rs.getString("category_2"), textEn);
+
+                for (ActionAbility ab : abilities) {
+                    totalAbilities++;
+                    String desc = ActionResolver.fullDescription(ab.effectText(), source);
+                    String entry = formatAbilityEntry(source.name(), ab, desc);
+                    if (desc == null) {
+                        notCovered++;
+                        reservoirAdd(examplesNone, entry, notCovered, rng);
+                    } else if (desc.contains("?")) {
+                        partialCovered++;
+                        reservoirAdd(examplesPartial, entry, partialCovered, rng);
+                    } else {
+                        fullyCovered++;
+                        reservoirAdd(examplesFull, entry, fullyCovered, rng);
+                    }
+                }
+            }
+        }
+
+        System.out.printf("%n=== Full Pattern Coverage (per ability) ===%n");
+        System.out.printf("Total abilities:      %5d%n", totalAbilities);
+        System.out.printf("  Fully covered:      %5d  (%.1f%%)%n", fullyCovered,   pct(fullyCovered,   totalAbilities));
+        System.out.printf("  Partial (followup?): %4d  (%.1f%%)%n", partialCovered, pct(partialCovered, totalAbilities));
+        System.out.printf("  Not covered:        %5d  (%.1f%%)%n", notCovered,     pct(notCovered,     totalAbilities));
+        System.out.println();
+        printExamples("Fully covered",            examplesFull);
+        printExamples("Partial (followup unknown)", examplesPartial);
+        printExamples("Not covered",               examplesNone);
+    }
+
+    private static String formatAbilityEntry(String cardName, ActionAbility ab, String desc) {
+        String status = desc == null ? "--" : desc.contains("?") ? "??" : "OK";
+        return "  Card: " + cardName + '\n' +
+               "  [" + status + "] " + ab.effectText() + '\n' +
+               "       " + (desc != null ? desc : "(none)") + '\n';
     }
 
     private static double pct(int n, int total) {

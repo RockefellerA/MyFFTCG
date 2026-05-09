@@ -596,6 +596,122 @@ public class ActionResolver {
         return null;
     }
 
+    /** Returns the name of the first pattern that matches {@code effectText}, or {@code null}. */
+    public static String matchedPatternName(String effectText, CardData source) {
+        if (tryParseDealDamageToForwards(effectText)          != null) return "DealDamageToForwards";
+        if (tryParseChooseCharacter(effectText, source)       != null) return "ChooseCharacter";
+        if (tryParseAllFieldEffect(effectText)                != null) return "AllFieldEffect";
+        if (tryParseStandalonePowerBoostUntil(effectText, source) != null) return "StandalonePowerBoostUntil";
+        if (tryParseStandalonePowerReduceUntil(effectText, source) != null) return "StandalonePowerReduceUntil";
+        if (tryParseStandaloneSelfBoost(effectText, source)   != null) return "StandaloneSelfBoost";
+        if (tryParseOpponentDiscard(effectText)               != null) return "OpponentDiscard";
+        if (tryParseDrawCards(effectText)                     != null) return "DrawCards";
+        if (tryParseDiscardThenDraw(effectText)               != null) return "DiscardThenDraw";
+        if (tryParseDealPlayerDamageToOpponent(effectText)    != null) return "DealPlayerDamageToOpponent";
+        if (tryParseDealPlayerDamageToSelf(effectText)        != null) return "DealPlayerDamageToSelf";
+        if (tryParsePlayFromHand(effectText, source, 0)       != null) return "PlayFromHand";
+        if (tryParseOpponentSelects(effectText)               != null) return "OpponentSelects";
+        if (tryParseOpponentMill(effectText)                  != null) return "OpponentMill";
+        if (tryParseOpponentRevealHand(effectText)            != null) return "OpponentRevealHand";
+        if (tryParseStandaloneDamageShields(effectText, source) != null) return "StandaloneDamageShields";
+        return null;
+    }
+
+    /**
+     * Returns the name of the first followup pattern that matches {@code followupText}, or
+     * {@code null} if no followup pattern recognises it.  The ordering mirrors the precedence
+     * used inside {@link #tryParseChooseCharacter}.
+     */
+    public static String matchedFollowupName(String followupText, CardData source) {
+        if (FOLLOWUP_DAMAGE.matcher(followupText).find())                             return "Damage";
+        if (FOLLOWUP_DAMAGE_EXPR.matcher(followupText).find())                        return "DamageExpr";
+        if (FOLLOWUP_ACTIVATE.matcher(followupText).find())                           return "Activate";
+        if (FOLLOWUP_DULL.matcher(followupText).find()
+                && !FOLLOWUP_DULL_AND_FREEZE.matcher(followupText).find())            return "Dull";
+        if (FOLLOWUP_DULL_AND_FREEZE.matcher(followupText).find())                    return "DullAndFreeze";
+        if (FOLLOWUP_FREEZE.matcher(followupText).find())                             return "Freeze";
+        if (FOLLOWUP_BREAK.matcher(followupText).find())                              return "Break";
+        if (FOLLOWUP_REMOVE_FROM_GAME.matcher(followupText).find())                   return "RemoveFromGame";
+        if (FOLLOWUP_PLAY_ONTO_FIELD.matcher(followupText).find())                    return "PlayOntoField";
+        if (FOLLOWUP_ADD_TO_HAND.matcher(followupText).find())                        return "AddToHand";
+        if (FOLLOWUP_RETURN_TO_OWNERS_HAND.matcher(followupText).find())              return "ReturnToOwnersHand";
+        if (FOLLOWUP_RETURN_TO_YOUR_HAND.matcher(followupText).find())                return "ReturnToYourHand";
+        if (FOLLOWUP_PUT_TOP_OR_BOTTOM_OF_DECK.matcher(followupText).find())          return "PutTopOrBottomOfDeck";
+        if (FOLLOWUP_PUT_BOTTOM_OF_DECK.matcher(followupText).find())                 return "PutBottomOfDeck";
+        if (FOLLOWUP_PUT_TOP_OF_DECK.matcher(followupText).find())                    return "PutTopOfDeck";
+        if (FOLLOWUP_CANNOT_BLOCK.matcher(followupText).find())                       return "CannotBlock";
+        if (FOLLOWUP_MUST_BLOCK.matcher(followupText).find())                         return "MustBlock";
+        if (FOLLOWUP_CANNOT_ATTACK.matcher(followupText).find())                      return "CannotAttack";
+        if (FOLLOWUP_MUST_ATTACK.matcher(followupText).find())                        return "MustAttack";
+        if (FOLLOWUP_CANNOT_ATTACK_OR_BLOCK.matcher(followupText).find())             return "CannotAttackOrBlock";
+        if (FOLLOWUP_CANNOT_ATTACK_OR_BLOCK_PERSISTENT.matcher(followupText).find())  return "CannotAttackOrBlockPersistent";
+        if (FOLLOWUP_POWER_BOOST.matcher(followupText).find())                        return "PowerBoost";
+        if (FOLLOWUP_POWER_BOOST_UNTIL.matcher(followupText).find())                  return "PowerBoostUntil";
+        if (FOLLOWUP_POWER_REDUCE.matcher(followupText).find())                       return "PowerReduce";
+        if (FOLLOWUP_POWER_REDUCE_UNTIL.matcher(followupText).find())                 return "PowerReduceUntil";
+        if (OPPONENT_DISCARD.matcher(followupText).find())                            return "OpponentDiscard";
+        if (source != null) {
+            Matcher selfM = SELF_POWER_BOOST.matcher(followupText);
+            if (selfM.find() && selfM.group("selfsubject").trim().equalsIgnoreCase(source.name()))
+                return "SelfPowerBoost";
+        }
+        if (FOLLOWUP_CANCEL_EFFECT.matcher(followupText).find())                      return "CancelEffect";
+        if (FOLLOWUP_SHIELD_NEXT_DMG_ZERO.matcher(followupText).find())               return "ShieldNextDmgZero";
+        if (FOLLOWUP_SHIELD_NEXT_DMG_REDUCTION.matcher(followupText).find())          return "ShieldNextDmgReduction";
+        if (FOLLOWUP_DEBUFF_INCOMING_DMG_INCREASE.matcher(followupText).find())       return "DebuffIncomingDmgIncrease";
+        if (FOLLOWUP_SHIELD_NEXT_OUTGOING_ZERO.matcher(followupText).find())          return "ShieldNextOutgoingZero";
+        if (FOLLOWUP_PUT_TO_BREAK_ZONE.matcher(followupText).find())                  return "PutToBreakZone";
+        return null;
+    }
+
+    /**
+     * Returns a full description of which patterns cover {@code effectText}, including
+     * primary, followup, and secondary layers.  A {@code "?"} in the result means that
+     * layer has no matching pattern yet.  Returns {@code null} if no primary pattern matches.
+     */
+    public static String fullDescription(String effectText, CardData source) {
+        if (tryParseDealDamageToForwards(effectText) != null)               return "DealDamageToForwards";
+
+        Matcher chooseM = CHOOSE_CHARACTER_PATTERN.matcher(effectText);
+        if (chooseM.find()) {
+            String followup      = chooseM.group("followup").trim();
+            int    dotIdx        = followup.indexOf(". ");
+            String primaryPart   = dotIdx >= 0 ? followup.substring(0, dotIdx).trim() : followup;
+            String secondaryTxt  = dotIdx >= 0 ? followup.substring(dotIdx + 2).trim() : null;
+            String followupName  = matchedFollowupName(primaryPart, source);
+            String secondaryDesc = (secondaryTxt != null && !secondaryTxt.isEmpty())
+                    ? fullDescription(secondaryTxt, source) : null;
+            StringBuilder sb = new StringBuilder("ChooseCharacter / ")
+                    .append(followupName != null ? followupName : "?");
+            if (secondaryDesc != null) sb.append(" + ").append(secondaryDesc);
+            else if (secondaryTxt != null && !secondaryTxt.isEmpty()) sb.append(" + ?");
+            return sb.toString();
+        }
+
+        if (tryParseAllFieldEffect(effectText) != null)                     return "AllFieldEffect";
+        if (tryParseStandalonePowerBoostUntil(effectText, source) != null)  return "StandalonePowerBoostUntil";
+        if (tryParseStandalonePowerReduceUntil(effectText, source) != null) return "StandalonePowerReduceUntil";
+        if (tryParseStandaloneSelfBoost(effectText, source) != null)        return "StandaloneSelfBoost";
+        if (tryParseOpponentDiscard(effectText) != null)                    return "OpponentDiscard";
+        if (tryParseDrawCards(effectText) != null)                          return "DrawCards";
+        if (tryParseDiscardThenDraw(effectText) != null)                    return "DiscardThenDraw";
+        if (tryParseDealPlayerDamageToOpponent(effectText) != null)         return "DealPlayerDamageToOpponent";
+        if (tryParseDealPlayerDamageToSelf(effectText) != null)             return "DealPlayerDamageToSelf";
+        if (tryParsePlayFromHand(effectText, source, 0) != null)            return "PlayFromHand";
+
+        Matcher opSelM = OPPONENT_SELECTS_PATTERN.matcher(effectText);
+        if (opSelM.find()) {
+            String followup     = opSelM.group("followup").trim();
+            String followupName = matchedFollowupName(followup, source);
+            return "OpponentSelects / " + (followupName != null ? followupName : "?");
+        }
+
+        if (tryParseOpponentMill(effectText) != null)                       return "OpponentMill";
+        if (tryParseOpponentRevealHand(effectText) != null)                 return "OpponentRevealHand";
+        if (tryParseStandaloneDamageShields(effectText, source) != null)    return "StandaloneDamageShields";
+        return null;
+    }
+
     /**
      * Resolves an activated Action Ability:
      * <ol>

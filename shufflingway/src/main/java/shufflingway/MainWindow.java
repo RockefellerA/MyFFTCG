@@ -5314,7 +5314,7 @@ public class MainWindow {
 			p2BackupLabels[idx].setIcon(null);
 			p2BackupLabels[idx].setText(null);
 		}
-		refreshP1BreakLabel();
+		refreshP2BreakLabel();
 	}
 
 	private void breakP2MonsterSlot(int idx) {
@@ -5333,7 +5333,7 @@ public class MainWindow {
 			p2MonsterPanel.revalidate();
 			p2MonsterPanel.repaint();
 		}
-		refreshP1BreakLabel();
+		refreshP2BreakLabel();
 	}
 
 	/**
@@ -6723,8 +6723,15 @@ public class MainWindow {
 						logEntry(prefix + c.name() + " is broken");
 						(t.isP1() ? gameState.getP1BreakZone() : gameState.getP2BreakZone()).add(c);
 						cards[i] = null; states[i] = CardState.ACTIVE;
-						if (t.isP1()) { refreshP1BackupSlot(i); refreshP1BreakLabel(); }
-						else          { refreshP2BackupSlot(i); refreshP2BreakLabel(); }
+						if (t.isP1()) {
+							p1BackupUrls[i] = null;
+							if (p1BackupLabels[i] != null) { p1BackupLabels[i].setIcon(null); p1BackupLabels[i].setText(null); }
+							refreshP1BreakLabel();
+						} else {
+							p2BackupUrls[i] = null;
+							if (p2BackupLabels[i] != null) { p2BackupLabels[i].setIcon(null); p2BackupLabels[i].setText(null); }
+							refreshP2BreakLabel();
+						}
 					}
 					case MONSTER -> {
 						int i = t.idx();
@@ -9097,23 +9104,45 @@ public class MainWindow {
 			for (int i = 1; i < plan.length; i++) discards.add(plan[i]);
 			discards.sort(Collections.reverseOrder());
 
-			// Adjust card index after descending discards
+			// Peek at the card being played (pre-discard index is still valid here)
+			String[] playElems = gameState.getP2Hand().get(cardIdx).elements();
+			int[] accCp = new int[playElems.length];
+			for (int ei = 0; ei < playElems.length; ei++)
+				accCp[ei] = gameState.getP2CpForElement(playElems[ei]);
+
+			// Discard for CP, attributing each card's CP to the most-needed element
+			for (int di : discards) {
+				CardData d = gameState.breakP2FromHand(di);
+				if (d != null) {
+					int assignEi = p2BestDiscardElement(d, playElems, accCp);
+					accCp[assignEi] += 2;
+					gameState.addP2Cp(playElems[assignEi], 2);
+					logEntry("[P2] Discards " + d.name() + " for CP");
+				}
+			}
+			refreshP2BreakLabel();
+
+			// Adjust card index for removed cards
 			int adjustedIdx = cardIdx;
 			for (int di : discards) {
 				if (di < cardIdx) adjustedIdx--;
 			}
 
-			for (int di : discards) {
-				CardData d = gameState.discardP2FromHand(di);
-				if (d != null) logEntry("[P2] Discards " + d.name() + " for CP");
-			}
-			refreshP2BreakLabel();
-
 			CardData toPlay = gameState.removeP2FromHand(adjustedIdx);
 			refreshP2HandCountLabel();
 			if (toPlay != null) {
-				String element = toPlay.elements()[0];
-				gameState.spendP2Cp(element, Math.min(toPlay.cost(), gameState.getP2CpForElement(element)));
+				// Spend 1 CP from each required element, then cover remainder
+				String[] elems = toPlay.elements();
+				int remaining = toPlay.cost();
+				if (elems.length > 1) {
+					for (String e : elems) { gameState.spendP2Cp(e, 1); remaining--; }
+				}
+				for (String e : elems) {
+					if (remaining <= 0) break;
+					int avail = gameState.getP2CpForElement(e);
+					int toSpend = Math.min(remaining, avail);
+					if (toSpend > 0) { gameState.spendP2Cp(e, toSpend); remaining -= toSpend; }
+				}
 				logEntry("[P2] Plays " + toPlay.name());
 				if (toPlay.isForward())      placeP2CardInForwardZone(toPlay);
 				else if (toPlay.isBackup())  placeP2CardInFirstBackupSlot(toPlay);
@@ -9309,30 +9338,69 @@ public class MainWindow {
 			candidates.addAll(backupCands);
 
 			for (int cardIdx : candidates) {
-				CardData card    = hand.get(cardIdx);
-				String element   = card.elements()[0];
-				int haveCp       = gameState.getP2CpForElement(element);
-				int needed       = Math.max(0, card.cost() - haveCp);
+				CardData card   = hand.get(cardIdx);
+				String[] elems  = card.elements();
 
-				if (needed == 0) return new int[]{ cardIdx };
+				// Current CP per element this card requires
+				int[] simCp = new int[elems.length];
+				for (int ei = 0; ei < elems.length; ei++)
+					simCp[ei] = gameState.getP2CpForElement(elems[ei]);
 
-				// Cheapest non-Light/Dark matching-element cards available as discards
+				if (p2CanAfford(card.cost(), elems, simCp)) return new int[]{ cardIdx };
+
+				// Cheapest non-Light/Dark cards that match at least one required element
 				List<Integer> discardable = new ArrayList<>();
 				for (int i = 0; i < hand.size(); i++) {
 					if (i == cardIdx) continue;
 					CardData c = hand.get(i);
-					if (!c.isLightOrDark() && c.containsElement(element)) discardable.add(i);
+					if (c.isLightOrDark()) continue;
+					for (String e : elems) {
+						if (c.containsElement(e)) { discardable.add(i); break; }
+					}
 				}
-				int discardCount = (needed + 1) / 2; // ceil(needed / 2)
-				if (discardable.size() >= discardCount) {
-					discardable.sort((a, b) -> hand.get(a).cost() - hand.get(b).cost());
-					int[] result = new int[1 + discardCount];
-					result[0] = cardIdx;
-					for (int i = 0; i < discardCount; i++) result[i + 1] = discardable.get(i);
-					return result;
+				discardable.sort((a, b) -> hand.get(a).cost() - hand.get(b).cost());
+
+				// Greedily assign each discard to the most-needed element
+				List<Integer> chosen = new ArrayList<>();
+				for (int di : discardable) {
+					int assignEi = p2BestDiscardElement(hand.get(di), elems, simCp);
+					simCp[assignEi] += 2;
+					chosen.add(di);
+					if (p2CanAfford(card.cost(), elems, simCp)) {
+						int[] result = new int[1 + chosen.size()];
+						result[0] = cardIdx;
+						for (int k = 0; k < chosen.size(); k++) result[k + 1] = chosen.get(k);
+						return result;
+					}
 				}
 			}
 			return null;
+		}
+
+		/** Returns true when {@code cpByElemIdx} satisfies the cost and per-element minimums. */
+		private static boolean p2CanAfford(int cost, String[] elems, int[] cpByElemIdx) {
+			int total = 0;
+			for (int ei = 0; ei < elems.length; ei++) {
+				if (elems.length > 1 && cpByElemIdx[ei] < 1) return false;
+				total += cpByElemIdx[ei];
+			}
+			return total >= cost;
+		}
+
+		/**
+		 * Returns the index into {@code elems} that {@code dc} should contribute its CP to,
+		 * preferring elements that still need their per-element minimum of 1 CP.
+		 */
+		private static int p2BestDiscardElement(CardData dc, String[] elems, int[] simCp) {
+			int bestEi = -1;
+			int maxPriority = Integer.MIN_VALUE;
+			for (int ei = 0; ei < elems.length; ei++) {
+				if (!dc.containsElement(elems[ei])) continue;
+				// Deficit below minimum gets positive priority; surplus gets negative
+				int priority = simCp[ei] < 1 ? (1 - simCp[ei]) : -simCp[ei];
+				if (priority > maxPriority) { maxPriority = priority; bestEi = ei; }
+			}
+			return bestEi >= 0 ? bestEi : 0;
 		}
 	}
 
