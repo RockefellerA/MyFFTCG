@@ -125,11 +125,16 @@ public class CardParsingTest {
     }
 
     private static void printExamples(String label, List<String> examples) {
-        for (int i = 0; i < examples.size(); i++)
-            System.out.printf("--- Example: %s (%d/%d) ---%n%s%n",
-                    label, i + 1, examples.size(), examples.get(i));
-        if (examples.isEmpty())
-            System.out.printf("--- Example: %s ---%n(none)%n", label);
+        System.out.printf("--- %s ---%n", label);
+        if (examples.isEmpty()) {
+            System.out.println("(none)");
+        } else {
+            for (int i = 0; i < examples.size(); i++) {
+                if (i > 0) System.out.println();
+                System.out.print(examples.get(i));
+            }
+        }
+        System.out.println();
     }
 
     private static double pct(int n, int total) {
