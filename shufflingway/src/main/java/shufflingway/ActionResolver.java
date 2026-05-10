@@ -248,6 +248,15 @@ public class ActionResolver {
     );
 
     /**
+     * Matches "Activate &lt;cardName&gt;[.]" as a standalone named-card activate effect.
+     * Excludes the pronoun forms ("Activate it/them") and the mass form ("Activate all …"),
+     * which are handled separately.
+     */
+    private static final Pattern ACTIVATE_NAMED_CARD = Pattern.compile(
+        "(?i)Activate\\s+(?!(?:it|them|all)\\b)(?<card>[A-Za-z][^.]+?)\\.?\\s*$"
+    );
+
+    /**
      * Matches "Your opponent discards N card(s) [from his/her/their hand]".
      * <ul>
      *   <li>Group 1 — number of cards to discard</li>
@@ -593,6 +602,9 @@ public class ActionResolver {
         result = tryParseStandaloneDamageShields(effectText, source);
         if (result != null) return result;
 
+        result = tryParseActivateNamedCard(effectText);
+        if (result != null) return result;
+
         return null;
     }
 
@@ -614,6 +626,7 @@ public class ActionResolver {
         if (tryParseOpponentMill(effectText)                  != null) return "OpponentMill";
         if (tryParseOpponentRevealHand(effectText)            != null) return "OpponentRevealHand";
         if (tryParseStandaloneDamageShields(effectText, source) != null) return "StandaloneDamageShields";
+        if (tryParseActivateNamedCard(effectText)               != null) return "ActivateNamedCard";
         return null;
     }
 
@@ -709,6 +722,7 @@ public class ActionResolver {
         if (tryParseOpponentMill(effectText) != null)                       return "OpponentMill";
         if (tryParseOpponentRevealHand(effectText) != null)                 return "OpponentRevealHand";
         if (tryParseStandaloneDamageShields(effectText, source) != null)    return "StandaloneDamageShields";
+        if (tryParseActivateNamedCard(effectText) != null)                  return "ActivateNamedCard";
         return null;
     }
 
@@ -1899,6 +1913,20 @@ public class ActionResolver {
         }
 
         return null;
+    }
+
+    /** Parses "Activate &lt;cardName&gt;[.]" — activates the named card the ability user controls. */
+    private static Consumer<GameContext> tryParseActivateNamedCard(String text) {
+        Matcher m = ACTIVATE_NAMED_CARD.matcher(text);
+        if (!m.find()) return null;
+        String cardName = m.group("card").trim();
+        return ctx -> {
+            ctx.logEntry("Effect: Activate " + cardName);
+            List<ForwardTarget> ts = ctx.selectCharacters(
+                    1, false, false, true, null, null, -1, null,
+                    true, true, true, null, cardName, false);
+            ts.forEach(ctx::activateTarget);
+        };
     }
 
     /**

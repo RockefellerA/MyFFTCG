@@ -4918,6 +4918,7 @@ public class MainWindow {
 					int[] frame       = { 0 };
 					javax.swing.Timer timer = new javax.swing.Timer(16, null);
 					timer.addActionListener(ae -> {
+						if (p1BackupUrls[idx] == null) { timer.stop(); slot.setIcon(null); slot.setText(null); return; }
 						frame[0]++;
 						double progress = Math.min(1.0, (double) frame[0] / totalFrames);
 						// ease in-out
@@ -5108,7 +5109,8 @@ public class MainWindow {
 		String url  = p1BackupUrls[idx];
 		CardState state = p1BackupStates[idx];
 		JLabel slot  = p1BackupLabels[idx];
-		if (url == null || slot == null) return;
+		if (slot == null) return;
+		if (url == null) { slot.setIcon(null); slot.setText(null); return; }
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
@@ -5119,8 +5121,6 @@ public class MainWindow {
 			@Override protected void done() {
 				try {
 					ImageIcon icon = get();
-					// Guard against a break-zone cost racing this worker: if the slot was
-					// cleared while the image was loading, do not restore the card image.
 					if (icon != null && p1BackupUrls[idx] != null) { slot.setIcon(icon); slot.setText(null); }
 				} catch (InterruptedException | ExecutionException ignored) {}
 			}
@@ -5289,6 +5289,7 @@ public class MainWindow {
 					int totalFrames = 12; int[] frame = {0};
 					javax.swing.Timer timer = new javax.swing.Timer(16, null);
 					timer.addActionListener(ae -> {
+						if (p2BackupUrls[idx] == null) { timer.stop(); slot.setIcon(null); slot.setText(null); return; }
 						frame[0]++;
 						double progress = Math.min(1.0, (double) frame[0] / totalFrames);
 						double t = progress < 0.5 ? 2*progress*progress : 1 - Math.pow(-2*progress+2, 2)/2;
@@ -8915,7 +8916,8 @@ public class MainWindow {
 		String url    = p2BackupUrls[idx];
 		JLabel slot   = p2BackupLabels[idx];
 		CardState state = p2BackupStates[idx];
-		if (url == null || slot == null) return;
+		if (slot == null) return;
+		if (url == null) { slot.setIcon(null); slot.setText(null); return; }
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
