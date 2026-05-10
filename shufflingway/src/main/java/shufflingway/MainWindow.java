@@ -33,6 +33,7 @@ import java.awt.image.ColorConvertOp;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -2149,6 +2150,271 @@ public class MainWindow {
 			for (int i = 0; i < p2ForwardCards.size(); i++) refreshP2ForwardSlot(i);
 		}
 		refreshP2DeckLabel();
+	}
+
+	private void returnP1ForwardUnderDeckTop(int idx, int position) {
+		if (idx < 0 || idx >= p1ForwardCards.size()) return;
+		CardData card    = p1ForwardCards.get(idx);
+		CardData topCard = p1ForwardPrimedTop.get(idx);
+		if (topCard != null) {
+			gameState.getP1BreakZone().add(topCard);
+			gameState.addToP1PermanentRfp(topCard);
+			logEntry(topCard.name() + " → Removed From Game");
+		}
+		Deque<CardData> deck = gameState.getP1MainDeck();
+		List<CardData> preserved = new ArrayList<>();
+		for (int i = 0; i < position && !deck.isEmpty(); i++) preserved.add(deck.pollFirst());
+		deck.addFirst(card);
+		for (int i = preserved.size() - 1; i >= 0; i--) deck.addFirst(preserved.get(i));
+		logEntry(card.name() + " → under top " + position + " card(s) of deck");
+
+		p1ForwardCards.remove(idx);
+		p1ForwardUrls.remove(idx);
+		p1ForwardStates.remove(idx);
+		p1ForwardPlayedOnTurn.remove(idx);
+		p1ForwardDamage.remove(idx);
+		p1ForwardPowerBoost.remove(idx);
+		p1ForwardPowerReduction.remove(idx);
+		p1ForwardTempTraits.remove(idx);
+		p1ForwardRemovedTraits.remove(idx);
+		p1ForwardPrimedTop.remove(idx);
+		p1ForwardFrozen.remove(idx);
+		p1ForwardLabels.remove(idx);
+		shiftBlockSet(p1ForwardCannotBlock,            idx);
+		shiftBlockSet(p1ForwardMustBlock,              idx);
+		shiftBlockSet(p1ForwardCannotAttack,           idx);
+		shiftBlockSet(p1ForwardMustAttack,             idx);
+		shiftBlockSet(p1ForwardCannotAttackPersistent, idx);
+		shiftBlockSet(p1ForwardCannotBlockPersistent,  idx);
+
+		if (p1ForwardPanel != null) {
+			p1ForwardPanel.removeAll();
+			p1ForwardLabels.clear();
+			for (int i = 0; i < p1ForwardCards.size(); i++) {
+				final int fi = i;
+				JLabel lbl = new JLabel("", SwingConstants.CENTER);
+				lbl.setPreferredSize(new Dimension(CARD_H, CARD_H));
+				lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
+				lbl.setOpaque(false);
+				lbl.setForeground(Color.DARK_GRAY);
+				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+				lbl.setBorder(BorderFactory.createEmptyBorder());
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mousePressed(MouseEvent e) {
+						if (lbl.getIcon() == null) return;
+						if (SwingUtilities.isLeftMouseButton(e)
+								&& gameState.getCurrentPhase() == GameState.GamePhase.ATTACK) {
+							toggleAttackSelection(fi);
+						} else {
+							showForwardContextMenu(fi, lbl, e);
+						}
+					}
+					@Override public void mouseEntered(MouseEvent e) {
+						if (lbl.getIcon() == null) return;
+						CardData top = p1ForwardPrimedTop.get(fi);
+						showZoomAt(top != null ? top.imageUrl() : p1ForwardUrls.get(fi));
+					}
+					@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+				});
+				p1ForwardLabels.add(lbl);
+				p1ForwardPanel.add(lbl);
+			}
+			p1ForwardPanel.revalidate();
+			p1ForwardPanel.repaint();
+			for (int i = 0; i < p1ForwardCards.size(); i++) refreshP1ForwardSlot(i);
+		}
+		refreshP1DeckLabel();
+	}
+
+	private void returnP2ForwardUnderDeckTop(int idx, int position) {
+		if (idx < 0 || idx >= p2ForwardCards.size()) return;
+		CardData card = p2ForwardCards.get(idx);
+		Deque<CardData> deck = gameState.getP2MainDeck();
+		List<CardData> preserved = new ArrayList<>();
+		for (int i = 0; i < position && !deck.isEmpty(); i++) preserved.add(deck.pollFirst());
+		deck.addFirst(card);
+		for (int i = preserved.size() - 1; i >= 0; i--) deck.addFirst(preserved.get(i));
+		logEntry("[P2] " + card.name() + " → under top " + position + " card(s) of deck");
+
+		p2ForwardCards.remove(idx);
+		p2ForwardUrls.remove(idx);
+		p2ForwardStates.remove(idx);
+		p2ForwardPlayedOnTurn.remove(idx);
+		p2ForwardDamage.remove(idx);
+		p2ForwardPowerBoost.remove(idx);
+		p2ForwardPowerReduction.remove(idx);
+		p2ForwardTempTraits.remove(idx);
+		p2ForwardRemovedTraits.remove(idx);
+		p2ForwardFrozen.remove(idx);
+		p2ForwardLabels.remove(idx);
+		shiftBlockSet(p2ForwardCannotBlock,            idx);
+		shiftBlockSet(p2ForwardMustBlock,              idx);
+		shiftBlockSet(p2ForwardCannotAttack,           idx);
+		shiftBlockSet(p2ForwardMustAttack,             idx);
+		shiftBlockSet(p2ForwardCannotAttackPersistent, idx);
+		shiftBlockSet(p2ForwardCannotBlockPersistent,  idx);
+
+		if (p2ForwardPanel != null) {
+			p2ForwardPanel.removeAll();
+			p2ForwardLabels.clear();
+			for (int i = 0; i < p2ForwardCards.size(); i++) {
+				final int fi = i;
+				JLabel lbl = new JLabel("", SwingConstants.CENTER);
+				lbl.setPreferredSize(new Dimension(CARD_H, CARD_H));
+				lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
+				lbl.setOpaque(false);
+				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+				lbl.setBorder(BorderFactory.createEmptyBorder());
+				lbl.addMouseListener(new MouseAdapter() {
+					@Override public void mouseEntered(MouseEvent e) {
+						if (lbl.getIcon() != null) showZoomAt(p2ForwardUrls.get(fi));
+					}
+					@Override public void mouseExited(MouseEvent e) { hideZoom(); }
+				});
+				p2ForwardLabels.add(lbl);
+				p2ForwardPanel.add(lbl);
+			}
+			p2ForwardPanel.revalidate();
+			p2ForwardPanel.repaint();
+			for (int i = 0; i < p2ForwardCards.size(); i++) refreshP2ForwardSlot(i);
+		}
+		refreshP2DeckLabel();
+	}
+
+	private void searchDeckForCard(boolean inclForwards, boolean inclBackups,
+			boolean inclMonsters, boolean inclSummons,
+			int costVal, String costCmp, String cardNameFilter, String jobFilter,
+			String categoryFilter, String elementFilter, String excludeName,
+			String destination) {
+		boolean anyType = !inclForwards && !inclBackups && !inclMonsters && !inclSummons;
+		List<CardData> matches = new ArrayList<>();
+		for (CardData c : gameState.getP1MainDeck()) {
+			if (!anyType) {
+				if (c.isForward() && !inclForwards) continue;
+				if (c.isBackup()  && !inclBackups)  continue;
+				if (c.isMonster() && !inclMonsters) continue;
+				if (c.isSummon()  && !inclSummons)  continue;
+			}
+			if (!meetsCostConstraint(c.cost(), costVal, costCmp)) continue;
+			// Job+name: OR when both are set (e.g. "Job X or Card Name Y"); AND otherwise
+			boolean passesNameJob = (jobFilter == null && cardNameFilter == null)
+				|| (jobFilter != null && cardNameFilter != null
+					? meetsJobFilter(c, jobFilter) || meetsCardNameFilter(c, cardNameFilter)
+					: meetsJobFilter(c, jobFilter) && meetsCardNameFilter(c, cardNameFilter));
+			if (!passesNameJob) continue;
+			if (!meetsCategoryFilter(c, categoryFilter)) continue;
+			if (!meetsElementFilter(c, elementFilter)) continue;
+			if (excludeName != null && excludeName.equalsIgnoreCase(c.name())) continue;
+			matches.add(c);
+		}
+		if (matches.isEmpty()) {
+			shuffleP1MainDeck();
+			logEntry("Search: no matching card found in deck");
+			return;
+		}
+		CardData chosen = showDeckSearchSelectDialog(matches);
+		if (chosen != null) gameState.removeFromP1MainDeck(chosen);
+		shuffleP1MainDeck();
+		if (chosen == null) {
+			logEntry("Search: no card selected");
+			return;
+		}
+		switch (destination) {
+			case "hand" -> {
+				gameState.getP1Hand().add(chosen);
+				logEntry(chosen.name() + " → hand (search)");
+				refreshP1HandLabel();
+			}
+			case "field" -> {
+				logEntry(chosen.name() + " → field (search)");
+				if (chosen.isBackup())       placeCardInFirstBackupSlot(chosen);
+				else if (chosen.isMonster()) placeCardInMonsterZone(chosen);
+				else                         placeCardInForwardZone(chosen);
+			}
+			case "underTop" -> {
+				Deque<CardData> deck = gameState.getP1MainDeck();
+				if (deck.isEmpty()) {
+					deck.addFirst(chosen);
+				} else {
+					CardData top = deck.pollFirst();
+					deck.addFirst(chosen);
+					deck.addFirst(top);
+				}
+				logEntry(chosen.name() + " → under top card of deck (search)");
+				refreshP1DeckLabel();
+			}
+		}
+	}
+
+	private CardData showDeckSearchSelectDialog(List<CardData> matches) {
+		if (matches.size() == 1) return matches.get(0);
+		JDialog dlg = new JDialog(frame, "Search — choose a card (" + matches.size() + " found)", true);
+		dlg.setResizable(false);
+		dlg.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+
+		CardData[] selection = {matches.get(0)};
+
+		JPanel cardsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 12));
+		for (CardData candidate : matches) {
+			JPanel wrapper = new JPanel(new BorderLayout(0, 4));
+			wrapper.setBackground(cardsPanel.getBackground());
+
+			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
+			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H));
+			lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
+			lbl.setOpaque(true);
+			lbl.setBackground(Color.DARK_GRAY);
+			lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 2));
+			lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+			lbl.addMouseListener(new MouseAdapter() {
+				@Override public void mouseEntered(MouseEvent e) {
+					if (lbl.getIcon() != null) showZoomAt(candidate.imageUrl());
+					lbl.setBorder(BorderFactory.createLineBorder(Color.YELLOW, 3));
+				}
+				@Override public void mouseExited(MouseEvent e) {
+					hideZoom();
+					lbl.setBorder(BorderFactory.createLineBorder(
+							selection[0].equals(candidate) ? Color.YELLOW : Color.GRAY, 2));
+				}
+				@Override public void mousePressed(MouseEvent e) {
+					selection[0] = candidate;
+					dlg.dispose();
+				}
+			});
+
+			new SwingWorker<ImageIcon, Void>() {
+				@Override protected ImageIcon doInBackground() throws Exception {
+					Image img = ImageCache.load(candidate.imageUrl());
+					return img == null ? null
+							: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+				}
+				@Override protected void done() {
+					try { ImageIcon ic = get(); if (ic != null) { lbl.setIcon(ic); lbl.setText(null); } }
+					catch (InterruptedException | ExecutionException ignored) {}
+				}
+			}.execute();
+
+			JLabel nameLabel = new JLabel(candidate.name(), SwingConstants.CENTER);
+			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
+
+			wrapper.add(lbl, BorderLayout.CENTER);
+			wrapper.add(nameLabel, BorderLayout.SOUTH);
+			cardsPanel.add(wrapper);
+		}
+
+		JLabel hint = new JLabel("Click a card to select it", SwingConstants.CENTER);
+		hint.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+
+		dlg.getContentPane().setLayout(new BorderLayout(0, 6));
+		dlg.getContentPane().add(cardsPanel, BorderLayout.CENTER);
+		dlg.getContentPane().add(hint, BorderLayout.SOUTH);
+		dlg.pack();
+		dlg.setLocationRelativeTo(frame);
+		dlg.setVisible(true);
+
+		return selection[0];
 	}
 
 	private void returnP1ForwardToHand(int idx) {
@@ -6424,10 +6690,20 @@ public class MainWindow {
 						null, options, options[0]);
 				return result != 1;
 			}
-			@Override public void returnP1ForwardToDeckBottom(int idx) { returnP1ForwardToDeck(idx, true);  }
-			@Override public void returnP2ForwardToDeckBottom(int idx) { returnP2ForwardToDeck(idx, true);  }
-			@Override public void returnP1ForwardToDeckTop(int idx)    { returnP1ForwardToDeck(idx, false); }
-			@Override public void returnP2ForwardToDeckTop(int idx)    { returnP2ForwardToDeck(idx, false); }
+			@Override public void returnP1ForwardToDeckBottom(int idx)   { returnP1ForwardToDeck(idx, true);  }
+			@Override public void returnP2ForwardToDeckBottom(int idx)   { returnP2ForwardToDeck(idx, true);  }
+			@Override public void returnP1ForwardToDeckTop(int idx)      { returnP1ForwardToDeck(idx, false); }
+			@Override public void returnP2ForwardToDeckTop(int idx)      { returnP2ForwardToDeck(idx, false); }
+			@Override public void returnP1ForwardUnderDeckTop(int idx, int position) { MainWindow.this.returnP1ForwardUnderDeckTop(idx, position); }
+			@Override public void returnP2ForwardUnderDeckTop(int idx, int position) { MainWindow.this.returnP2ForwardUnderDeckTop(idx, position); }
+			@Override public void searchDeckForCard(boolean inclForwards, boolean inclBackups,
+					boolean inclMonsters, boolean inclSummons,
+					int costVal, String costCmp, String cardNameFilter, String jobFilter,
+					String categoryFilter, String elementFilter, String excludeName,
+					String destination) {
+				MainWindow.this.searchDeckForCard(inclForwards, inclBackups, inclMonsters, inclSummons,
+						costVal, costCmp, cardNameFilter, jobFilter, categoryFilter, elementFilter, excludeName, destination);
+			}
 
 			@Override public void returnP1BackupToHand(int idx) { MainWindow.this.returnP1BackupToHand(idx); }
 			@Override public void returnP2BackupToHand(int idx) { MainWindow.this.returnP2BackupToHand(idx); }
@@ -7245,6 +7521,15 @@ public class MainWindow {
 		String cf = categoryFilter.trim().toLowerCase();
 		return card.category1().toLowerCase().contains(cf)
 			|| card.category2().toLowerCase().contains(cf);
+	}
+
+	/** Returns {@code true} if the card contains at least one element from the bar-separated {@code elementFilter}, or if the filter is {@code null}. */
+	private static boolean meetsElementFilter(CardData card, String elementFilter) {
+		if (elementFilter == null) return true;
+		for (String e : elementFilter.split("\\|")) {
+			if (card.containsElement(e.trim())) return true;
+		}
+		return false;
 	}
 
 	/**

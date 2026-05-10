@@ -181,6 +181,14 @@ public class ActionResolver {
         "(?i)Put\\s+it\\s+on\\s+top\\s+of\\s+its\\s+owner's\\s+deck\\.?"
     );
 
+    /**
+     * Matches "Put it under the top [N] card(s) of its owner's/your deck."
+     * Group {@code numword} — present only when a number word precedes "cards" (currently only "four").
+     */
+    private static final Pattern FOLLOWUP_PUT_UNDER_TOP_OF_DECK = Pattern.compile(
+        "(?i)Put\\s+it\\s+under\\s+the\\s+top\\s+(?<numword>four\\s+)?cards?\\s+of\\s+(?:its\\s+owner's|your)\\s+deck\\.?"
+    );
+
     /** Matches "it cannot attack this turn" or "they cannot attack this turn". */
     private static final Pattern FOLLOWUP_CANNOT_ATTACK = Pattern.compile(
         "(?i)(?:it|they)\\s+cannot\\s+attack\\s+this\\s+turn\\.?"
@@ -327,6 +335,63 @@ public class ActionResolver {
         "(?<targets>Forwards?|Backups?|Monsters?|Characters?(?:\\s+Cards?)?)\\s*" +
         "(?:of\\s+cost\\s+(?<cost>\\d+|X)(?:\\s+or\\s+(?<costcmp>less|more))?\\s+)?" +
         "from\\s+your\\s+hand\\s+onto\\s+(?:the\\s+)?field[.!]?"
+    );
+
+    /**
+     * Matches "Search for 1 [filter] [elements] [type] [other than Card Name X] [of cost N [or less|more]] and [destination]".
+     * <ul>
+     *   <li>Group {@code bracketname} — {@code [Card Name (name)]} bracket notation (older cards)</li>
+     *   <li>Group {@code bracketjob}  — {@code [Job (name)]} bracket notation</li>
+     *   <li>Group {@code cardname}    — written card name without brackets, e.g. {@code "Cait Sith"}</li>
+     *   <li>Group {@code category}   — category substring, e.g. {@code "XV"}</li>
+     *   <li>Group {@code jobnmor}    — job part of {@code "Job X or Card Name Y"} (OR logic with {@code cnameor})</li>
+     *   <li>Group {@code cnameor}    — card name part of {@code "Job X or Card Name Y"}</li>
+     *   <li>Group {@code jobnm}      — written job name without brackets, e.g. {@code "King"}</li>
+     *   <li>Group {@code elements}   — one or more elements joined by {@code " or "}, e.g. {@code "Fire or Earth"}</li>
+     *   <li>Group {@code targets}    — card type word; absent or {@code "card"} means any type</li>
+     *   <li>Group {@code excludename}— card name to exclude, from {@code "other than Card Name X"}</li>
+     *   <li>Group {@code cost}       — optional cost number</li>
+     *   <li>Group {@code costcmp}    — optional {@code "less"} or {@code "more"}</li>
+     *   <li>Group {@code destination}— full destination phrase</li>
+     * </ul>
+     */
+    private static final Pattern SEARCH_DECK_PATTERN = Pattern.compile(
+        "(?i)Search\\s+for\\s+1\\s+" +
+        "(?:" +
+            // Bracket card name: [Card Name (name)]
+            "(?<bracketname>\\[Card\\s+Name\\s+\\([^)]+\\)\\])\\s+" +
+        "|" +
+            // Bracket job: [Job (name)]
+            "(?<bracketjob>\\[Job\\s+\\([^)]+\\)\\])\\s+" +
+        "|" +
+            // Written card name without brackets — ends at "of cost" or "and"
+            "Card\\s+Name\\s+(?<cardname>.+?)(?=\\s+of\\s+cost|\\s+and\\b)" +
+            "\\s+" +
+        "|" +
+            // Category filter — lookahead keeps the type word in the targets group
+            "Category\\s+(?<category>.+?)\\s+" +
+            "(?=Forwards?|Backups?|Monsters?|Summons?|Characters?|card\\b)" +
+        "|" +
+            // "Job X or Card Name Y" — OR logic; must come before plain Job alternative
+            "Job\\s+(?<jobnmor>.+?)\\s+or\\s+Card\\s+Name\\s+(?<cnameor>.+?)(?=\\s+of\\s+cost|\\s+and\\b)\\s*" +
+        "|" +
+            // Written job — lookahead keeps element, type word, or "and" ahead
+            "Job\\s+(?<jobnm>.+?)(?=\\s+(?:Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark)\\b" +
+            "|\\s+(?:Forwards?|Backups?|Monsters?|Summons?|Characters?|card)\\b" +
+            "|\\s+and\\b)\\s*" +
+        ")?" +
+        "(?:(?<elements>(?:Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark)" +
+            "(?:\\s+or\\s+(?:Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark))*)\\s+)?" +
+        "(?<targets>Forwards?|Backups?|Monsters?|Summons?|Characters?|card)?\\s*" +
+        "(?:\\s+other\\s+than\\s+Card\\s+Name\\s+(?<excludename>.+?)(?=\\s+of\\s+cost|\\s+and\\b))?" +
+        "(?:of\\s+cost\\s+(?<cost>\\d+)(?:\\s+or\\s+(?<costcmp>less|more))?\\s*)?" +
+        "and\\s+" +
+        "(?<destination>" +
+            "add\\s+it\\s+to\\s+your\\s+hand" +
+            "|play\\s+it\\s+onto\\s+(?:the\\s+)?field" +
+            "|put\\s+it\\s+under\\s+the\\s+top\\s+card\\s+of\\s+(?:your|its\\s+owner's)\\s+deck" +
+        ")" +
+        "[.!]?"
     );
 
     /** Matches "Your opponent shows/reveals his/her/their hand". */
@@ -602,6 +667,9 @@ public class ActionResolver {
         result = tryParseStandaloneDamageShields(effectText, source);
         if (result != null) return result;
 
+        result = tryParseSearchDeck(effectText);
+        if (result != null) return result;
+
         result = tryParseActivateNamedCard(effectText);
         if (result != null) return result;
 
@@ -626,6 +694,7 @@ public class ActionResolver {
         if (tryParseOpponentMill(effectText)                  != null) return "OpponentMill";
         if (tryParseOpponentRevealHand(effectText)            != null) return "OpponentRevealHand";
         if (tryParseStandaloneDamageShields(effectText, source) != null) return "StandaloneDamageShields";
+        if (tryParseSearchDeck(effectText)                      != null) return "SearchDeck";
         if (tryParseActivateNamedCard(effectText)               != null) return "ActivateNamedCard";
         return null;
     }
@@ -652,6 +721,7 @@ public class ActionResolver {
         if (FOLLOWUP_PUT_TOP_OR_BOTTOM_OF_DECK.matcher(followupText).find())          return "PutTopOrBottomOfDeck";
         if (FOLLOWUP_PUT_BOTTOM_OF_DECK.matcher(followupText).find())                 return "PutBottomOfDeck";
         if (FOLLOWUP_PUT_TOP_OF_DECK.matcher(followupText).find())                    return "PutTopOfDeck";
+        if (FOLLOWUP_PUT_UNDER_TOP_OF_DECK.matcher(followupText).find())              return "PutUnderTopOfDeck";
         if (FOLLOWUP_CANNOT_BLOCK.matcher(followupText).find())                       return "CannotBlock";
         if (FOLLOWUP_MUST_BLOCK.matcher(followupText).find())                         return "MustBlock";
         if (FOLLOWUP_CANNOT_ATTACK.matcher(followupText).find())                      return "CannotAttack";
@@ -722,6 +792,7 @@ public class ActionResolver {
         if (tryParseOpponentMill(effectText) != null)                       return "OpponentMill";
         if (tryParseOpponentRevealHand(effectText) != null)                 return "OpponentRevealHand";
         if (tryParseStandaloneDamageShields(effectText, source) != null)    return "StandaloneDamageShields";
+        if (tryParseSearchDeck(effectText) != null)                         return "SearchDeck";
         if (tryParseActivateNamedCard(effectText) != null)                  return "ActivateNamedCard";
         return null;
     }
@@ -1217,6 +1288,24 @@ public class ActionResolver {
                     if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
                     if (t.isP1()) ctx.returnP1ForwardToDeckTop(t.idx());
                     else          ctx.returnP2ForwardToDeckTop(t.idx());
+                }
+                if (secondary != null) secondary.accept(ctx);
+            };
+        }
+
+        // --- Put under top N cards of owner's deck followup ---
+        Matcher underTopM = FOLLOWUP_PUT_UNDER_TOP_OF_DECK.matcher(primaryFollowup);
+        if (underTopM.find()) {
+            int underPos = underTopM.group("numword") != null ? 4 : 1;
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — Put under top " + underPos + " card(s) of owner's deck");
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
+                for (ForwardTarget t : ts) {
+                    if (t.zone() != ForwardTarget.CardZone.FORWARD) continue;
+                    if (t.isP1()) ctx.returnP1ForwardUnderDeckTop(t.idx(), underPos);
+                    else          ctx.returnP2ForwardUnderDeckTop(t.idx(), underPos);
                 }
                 if (secondary != null) secondary.accept(ctx);
             };
@@ -1926,6 +2015,101 @@ public class ActionResolver {
                     1, false, false, true, null, null, -1, null,
                     true, true, true, null, cardName, false);
             ts.forEach(ctx::activateTarget);
+        };
+    }
+
+    /**
+     * Parses "Search for 1 [filter] [elements] [type] [other than Card Name X] [of cost N] and [destination]".
+     * Supported destinations: "add it to your hand", "play it onto the field",
+     * "put it under the top card of your/its owner's deck".
+     */
+    private static Consumer<GameContext> tryParseSearchDeck(String text) {
+        Matcher m = SEARCH_DECK_PATTERN.matcher(text);
+        if (!m.find()) return null;
+
+        // --- Card name filter ---
+        String cardNameFilter = null;
+        String bracketName = m.group("bracketname");
+        if (bracketName != null) {
+            Matcher nm = CARD_NAME_BRACKET_PATTERN.matcher(bracketName);
+            if (nm.find()) cardNameFilter = nm.group(1).trim();
+        } else {
+            String written = m.group("cardname");
+            if (written != null) cardNameFilter = written.trim();
+        }
+
+        // --- Job filter ---
+        String jobFilter = null;
+        String bracketJob = m.group("bracketjob");
+        if (bracketJob != null) {
+            Matcher jm = JOB_BRACKET_PATTERN.matcher(bracketJob);
+            if (jm.find()) jobFilter = jm.group(1).trim();
+        } else {
+            String writtenJob = m.group("jobnm");
+            if (writtenJob != null) {
+                // "Chocobo or Job Moogle or Job Ninja" → "Chocobo|Moogle|Ninja"
+                String[] parts = writtenJob.trim().split("(?i)\\s+or\\s+Job\\s+");
+                jobFilter = String.join("|", parts);
+            }
+        }
+
+        // --- "Job X or Card Name Y" — sets both filters; OR logic applied at match time ---
+        String jobnmOr = m.group("jobnmor");
+        if (jobnmOr != null) {
+            jobFilter = jobnmOr.trim();
+            String cnameOr = m.group("cnameor");
+            if (cnameOr != null) cardNameFilter = cnameOr.trim();
+        }
+
+        // --- Category filter ---
+        String categoryFilter = m.group("category") != null ? m.group("category").trim() : null;
+
+        // --- Element filter (e.g. "Fire or Earth" → "Fire|Earth") ---
+        String elementsRaw = m.group("elements");
+        String elementFilter = elementsRaw != null
+                ? elementsRaw.trim().replaceAll("(?i)\\s+or\\s+", "|") : null;
+
+        // --- Exclude name (other than Card Name X) ---
+        String excludeName = m.group("excludename") != null ? m.group("excludename").trim() : null;
+
+        // --- Type flags ---
+        String  targets  = m.group("targets");
+        boolean anyType  = targets == null || targets.equalsIgnoreCase("card");
+        String  tgtLower;
+        if (anyType || targets == null) { tgtLower = ""; }
+        else                            { tgtLower = targets.toLowerCase(); }
+        boolean inclForwards = anyType || tgtLower.contains("forward") || tgtLower.contains("character");
+        boolean inclBackups  = anyType || tgtLower.contains("backup")  || tgtLower.contains("character");
+        boolean inclMonsters = anyType || tgtLower.contains("monster") || tgtLower.contains("character");
+        boolean inclSummons  = anyType || tgtLower.contains("summon");
+
+        // --- Cost filter ---
+        String costStr = m.group("cost");
+        int    costVal = costStr == null ? -1 : Integer.parseInt(costStr);
+        String costCmp = m.group("costcmp");
+
+        // --- Destination ---
+        String destText   = m.group("destination").toLowerCase();
+        String destination = destText.contains("hand")    ? "hand"
+                           : destText.contains("field")   ? "field"
+                           :                                "underTop";
+
+        // Build log label
+        StringBuilder filterDesc = new StringBuilder();
+        if (cardNameFilter  != null) filterDesc.append(" [Name ").append(cardNameFilter).append("]");
+        if (jobFilter       != null) filterDesc.append(" [Job ").append(jobFilter).append("]");
+        if (categoryFilter  != null) filterDesc.append(" [Cat ").append(categoryFilter).append("]");
+        if (elementFilter   != null) filterDesc.append(" [").append(elementsRaw).append("]");
+        if (excludeName     != null) filterDesc.append(" [not ").append(excludeName).append("]");
+        String typeDesc  = (targets != null && !anyType) ? " " + targets : "";
+        String costLabel = costVal >= 0 ? " of cost " + costVal + (costCmp != null ? " or " + costCmp : "") : "";
+
+        final String fName = cardNameFilter, fJob = jobFilter, fCat = categoryFilter;
+        final String fElem = elementFilter, fExclude = excludeName;
+        final boolean fwd = inclForwards, bk = inclBackups, mn = inclMonsters, sm = inclSummons;
+        return ctx -> {
+            ctx.logEntry("Effect: Search deck for 1" + filterDesc + typeDesc + costLabel + " → " + destination);
+            ctx.searchDeckForCard(fwd, bk, mn, sm, costVal, costCmp, fName, fJob, fCat, fElem, fExclude, destination);
         };
     }
 

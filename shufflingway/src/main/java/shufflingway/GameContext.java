@@ -351,6 +351,34 @@ public interface GameContext {
     /** Removes P2's forward at {@code idx} from the field and places it on top of P2's deck. */
     void returnP2ForwardToDeckTop(int idx);
 
+    /** Removes P1's forward at {@code idx} from the field and places it {@code position} cards from the top of P1's deck. */
+    void returnP1ForwardUnderDeckTop(int idx, int position);
+
+    /** Removes P2's forward at {@code idx} from the field and places it {@code position} cards from the top of P2's deck. */
+    void returnP2ForwardUnderDeckTop(int idx, int position);
+
+    /**
+     * Searches P1's deck for a card matching the given filters, prompts the player to choose one,
+     * moves it to the specified destination, then shuffles the deck.
+     *
+     * @param inclForwards   include Forwards as eligible search hits
+     * @param inclBackups    include Backups as eligible search hits
+     * @param inclMonsters   include Monsters as eligible search hits
+     * @param inclSummons    include Summons as eligible search hits
+     * @param costVal        CP cost filter; {@code -1} = no filter
+     * @param costCmp        {@code "less"}, {@code "more"}, or {@code null} for exact
+     * @param cardNameFilter exact card name to search for; {@code null} = any
+     * @param jobFilter      bar-separated job name(s) to match; {@code null} = any
+     * @param categoryFilter category substring to match; {@code null} = any
+     * @param elementFilter  bar-separated element(s) — card must contain at least one; {@code null} = any
+     * @param excludeName    exact card name to exclude from results; {@code null} = no exclusion
+     * @param destination    {@code "hand"} — add to hand, {@code "field"} — play onto field,
+     *                       {@code "underTop"} — place second from top of deck
+     */
+    void searchDeckForCard(boolean inclForwards, boolean inclBackups, boolean inclMonsters, boolean inclSummons,
+            int costVal, String costCmp, String cardNameFilter, String jobFilter,
+            String categoryFilter, String elementFilter, String excludeName, String destination);
+
     /** Removes P1's backup at {@code idx} from the field and adds it to P1's hand. */
     void returnP1BackupToHand(int idx);
 
