@@ -5119,7 +5119,9 @@ public class MainWindow {
 			@Override protected void done() {
 				try {
 					ImageIcon icon = get();
-					if (icon != null) { slot.setIcon(icon); slot.setText(null); }
+					// Guard against a break-zone cost racing this worker: if the slot was
+					// cleared while the image was loading, do not restore the card image.
+					if (icon != null && p1BackupUrls[idx] != null) { slot.setIcon(icon); slot.setText(null); }
 				} catch (InterruptedException | ExecutionException ignored) {}
 			}
 		}.execute();
@@ -8923,7 +8925,7 @@ public class MainWindow {
 			@Override protected void done() {
 				try {
 					ImageIcon icon = get();
-					if (icon != null) { slot.setIcon(icon); slot.setText(null); }
+					if (icon != null && p2BackupUrls[idx] != null) { slot.setIcon(icon); slot.setText(null); }
 				} catch (InterruptedException | ExecutionException ignored) {}
 			}
 		}.execute();
