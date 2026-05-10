@@ -3986,13 +3986,8 @@ public class MainWindow {
 			int unsatisfied = (int) java.util.stream.IntStream.range(0, elems.length)
 					.filter(ei -> cpByElem.getOrDefault(elems[ei], 0) < costByElem.get(elems[ei]))
 					.count();
-			// Max allowed total CP = cost + one overpay slot per distinct specific element +
-			// one extra slot when the cost is odd (unavoidable when paying via 2-CP discards).
-			int maxAllowed = totalCost + elems.length + (totalCost % 2);
 			boolean canAddBackup = total < totalCost;
-			// A discard may only be added if it keeps us within the overpay budget
-			// AND we still need more total CP or have at least one unsatisfied element.
-			canAddDiscard[0] = (total + 2 <= maxAllowed) && (total < totalCost || unsatisfied > 0);
+			canAddDiscard[0] = (total < totalCost) || (unsatisfied > 0 && total + 2 <= totalCost + 2 * unsatisfied);
 			boolean satisfied    = cpByElem.entrySet().stream()
 					.allMatch(e -> e.getValue() >= costByElem.getOrDefault(e.getKey(), 0));
 			confirmBtn.setEnabled(total >= totalCost && satisfied);
@@ -4354,12 +4349,9 @@ public class MainWindow {
 			int total = cpByElem.values().stream().mapToInt(Integer::intValue).sum() + extraCp;
 			int unsatisfiedElems = isLD ? 0 : (int) cpByElem.values().stream().filter(v -> v < 1).count();
 			boolean canAddBackup  = total < cost;
-			// Max total CP = cost + one overpay slot per distinct element + one if odd cost.
-			// For L/D cards any element is accepted so only require total < cost.
-			int maxAllowed = isLD ? cost : cost + elems.length + (cost % 2);
 			canAddDiscard[0] = isLD
 					? total < cost
-					: (total + 2 <= maxAllowed) && (total < cost || unsatisfiedElems > 0);
+					: (total < cost) || (unsatisfiedElems > 0 && total + 2 <= cost + 2 * unsatisfiedElems);
 			boolean allElemsPresent = isLD || cpByElem.values().stream().allMatch(v -> v >= 1);
 			confirmBtn.setEnabled(total >= cost && allElemsPresent);
 			if (elems.length == 1) {
@@ -4890,12 +4882,9 @@ public class MainWindow {
 			int total = cpByElem.values().stream().mapToInt(Integer::intValue).sum() + extraCp;
 			int unsatisfiedElems = isLD ? 0 : (int) cpByElem.values().stream().filter(v -> v < 1).count();
 			boolean canAddBackup  = total < cost;
-			// Max total CP = cost + one overpay slot per distinct element + one if odd cost.
-			// For L/D cards any element is accepted so only require total < cost.
-			int maxAllowed = isLD ? cost : cost + elems.length + (cost % 2);
 			canAddDiscard[0] = isLD
 					? total < cost
-					: (total + 2 <= maxAllowed) && (total < cost || unsatisfiedElems > 0);
+					: (total < cost) || (unsatisfiedElems > 0 && total + 2 <= cost + 2 * unsatisfiedElems);
 			boolean allElemsPresent = isLD || cpByElem.values().stream().allMatch(v -> v >= 1);
 			confirmBtn.setEnabled(total >= cost && allElemsPresent);
 			if (elems.length == 1) {
@@ -7758,7 +7747,7 @@ public class MainWindow {
 	private static final int FORWARD_ZONE_H = CARD_H * 5 / 4;
 
 	private JScrollPane buildForwardZonePanel(boolean isP1) {
-		JPanel forwardInner = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0)) {
+		JPanel forwardInner = new JPanel(new FlowLayout(FlowLayout.CENTER, 4, 0)) {
 			@Override
 			public Dimension getPreferredSize() {
 				int gap   = 4;
