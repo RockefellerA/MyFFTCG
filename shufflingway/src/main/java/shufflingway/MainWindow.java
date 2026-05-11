@@ -927,6 +927,10 @@ public class MainWindow {
 								eligible.get(new java.util.Random().nextInt(eligible.size()));
 						p2DeckName = chosen.name();
 						p2Cards    = db.getDeckCardsDetailed(chosen.id());
+					} else {
+						// Only one deck available — P2 uses the same deck as P1
+						p2DeckName = "(same as P1)";
+						p2Cards = new java.util.ArrayList<>(p1Cards);
 					}
 				}
 				return null;
