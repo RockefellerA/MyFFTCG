@@ -338,7 +338,7 @@ public class ActionResolver {
     );
 
     /**
-     * Matches "Search for 1 [filter] [elements] [type] [other than Card Name X] [of cost N [or less|more]] and [destination]".
+     * Matches "Search for [up to] 1 [elements] [filter] [elements] [type] [other than Card Name X] [of cost N [or less|more]] and [destination]".
      * <ul>
      *   <li>Group {@code bracketname} — {@code [Card Name (name)]} bracket notation (older cards)</li>
      *   <li>Group {@code bracketjob}  — {@code [Job (name)]} bracket notation</li>
@@ -347,7 +347,8 @@ public class ActionResolver {
      *   <li>Group {@code jobnmor}    — job part of {@code "Job X or Card Name Y"} (OR logic with {@code cnameor})</li>
      *   <li>Group {@code cnameor}    — card name part of {@code "Job X or Card Name Y"}</li>
      *   <li>Group {@code jobnm}      — written job name without brackets, e.g. {@code "King"}</li>
-     *   <li>Group {@code elements}   — one or more elements joined by {@code " or "}, e.g. {@code "Fire or Earth"}</li>
+     *   <li>Group {@code preelems}   — element(s) appearing BEFORE the job/name filter, e.g. {@code "Fire"} in {@code "Search for 1 Fire Job Knight"}</li>
+     *   <li>Group {@code elements}   — element(s) appearing AFTER the job/name filter; {@code preelems} takes priority when both could apply</li>
      *   <li>Group {@code targets}    — card type word; absent or {@code "card"} means any type</li>
      *   <li>Group {@code excludename}— card name to exclude, from {@code "other than Card Name X"}</li>
      *   <li>Group {@code cost}       — optional cost number</li>
@@ -356,7 +357,10 @@ public class ActionResolver {
      * </ul>
      */
     private static final Pattern SEARCH_DECK_PATTERN = Pattern.compile(
-        "(?i)Search\\s+for\\s+1\\s+" +
+        "(?i)Search\\s+for\\s+(?:up\\s+to\\s+)?1\\s+" +
+        // Element(s) that precede the job/name filter (e.g. "Fire Job Knight")
+        "(?:(?<preelems>(?:Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark)" +
+            "(?:\\s+or\\s+(?:Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark))*)\\s+)?" +
         "(?:" +
             // Bracket card name: [Card Name (name)]
             "(?<bracketname>\\[Card\\s+Name\\s+\\([^)]+\\)\\])\\s+" +
@@ -375,10 +379,10 @@ public class ActionResolver {
             // "Job X or Card Name Y" — OR logic; must come before plain Job alternative
             "Job\\s+(?<jobnmor>.+?)\\s+or\\s+Card\\s+Name\\s+(?<cnameor>.+?)(?=\\s+of\\s+cost|\\s+and\\b)\\s*" +
         "|" +
-            // Written job — lookahead keeps element, type word, or "and" ahead
+            // Written job — lookahead keeps element, type word, "other than", or "and" ahead
             "Job\\s+(?<jobnm>.+?)(?=\\s+(?:Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark)\\b" +
             "|\\s+(?:Forwards?|Backups?|Monsters?|Summons?|Characters?|card)\\b" +
-            "|\\s+and\\b)\\s*" +
+            "|\\s+other\\b|\\s+and\\b)\\s*" +
         ")?" +
         "(?:(?<elements>(?:Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark)" +
             "(?:\\s+or\\s+(?:Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark))*)\\s+)?" +
@@ -2065,7 +2069,11 @@ public class ActionResolver {
         String categoryFilter = m.group("category") != null ? m.group("category").trim() : null;
 
         // --- Element filter (e.g. "Fire or Earth" → "Fire|Earth") ---
-        String elementsRaw = m.group("elements");
+        // preelems captures elements that precede a Job/Name filter (e.g. "Fire Job Knight");
+        // elements captures elements that follow the filter (classic ordering).
+        String preElemsRaw = m.group("preelems");
+        String postElemsRaw = m.group("elements");
+        String elementsRaw = preElemsRaw != null ? preElemsRaw : postElemsRaw;
         String elementFilter = elementsRaw != null
                 ? elementsRaw.trim().replaceAll("(?i)\\s+or\\s+", "|") : null;
 
