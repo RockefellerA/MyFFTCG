@@ -7246,13 +7246,14 @@ public class MainWindow {
 			public void applyMassFieldEffect(GameContext.MassAction action,
 					boolean forwards, boolean backups, boolean monsters,
 					boolean opponentOnly, boolean selfOnly,
-					String element, int costVal, String costCmp) {
+					String element, int costVal, String costCmp, int excludeCostVal) {
 				if (!opponentOnly) {
 					if (forwards) {
 						for (int i = p1ForwardCards.size() - 1; i >= 0; i--) {
 							CardData c = p1Forward(i);
 							if (element != null && !c.containsElement(element)) continue;
 							if (!meetsCostConstraint(c.cost(), costVal, costCmp)) continue;
+							if (excludeCostVal >= 0 && c.cost() == excludeCostVal) continue;
 							switch (action) {
 								case BREAK          -> breakP1Forward(i);
 								case DULL           -> dullP1Forward(i);
@@ -7268,6 +7269,7 @@ public class MainWindow {
 							CardData c = p1BackupCards[i];
 							if (element != null && !c.containsElement(element)) continue;
 							if (!meetsCostConstraint(c.cost(), costVal, costCmp)) continue;
+							if (excludeCostVal >= 0 && c.cost() == excludeCostVal) continue;
 							switch (action) {
 								case BREAK -> {
 									logEntry(c.name() + " is broken");
@@ -7289,6 +7291,7 @@ public class MainWindow {
 							CardData c = p1MonsterCards.get(i);
 							if (element != null && !c.containsElement(element)) continue;
 							if (!meetsCostConstraint(c.cost(), costVal, costCmp)) continue;
+							if (excludeCostVal >= 0 && c.cost() == excludeCostVal) continue;
 							switch (action) {
 								case BREAK -> {
 									logEntry(c.name() + " is broken");
@@ -7318,6 +7321,7 @@ public class MainWindow {
 							CardData c = p2ForwardCards.get(i);
 							if (element != null && !c.containsElement(element)) continue;
 							if (!meetsCostConstraint(c.cost(), costVal, costCmp)) continue;
+							if (excludeCostVal >= 0 && c.cost() == excludeCostVal) continue;
 							switch (action) {
 								case BREAK          -> breakP2Forward(i);
 								case DULL           -> dullP2Forward(i);
@@ -7333,6 +7337,7 @@ public class MainWindow {
 							CardData c = p2BackupCards[i];
 							if (element != null && !c.containsElement(element)) continue;
 							if (!meetsCostConstraint(c.cost(), costVal, costCmp)) continue;
+							if (excludeCostVal >= 0 && c.cost() == excludeCostVal) continue;
 							switch (action) {
 								case BREAK -> {
 									logEntry("[P2] " + c.name() + " is broken");
@@ -7354,6 +7359,7 @@ public class MainWindow {
 							CardData c = p2MonsterCards.get(i);
 							if (element != null && !c.containsElement(element)) continue;
 							if (!meetsCostConstraint(c.cost(), costVal, costCmp)) continue;
+							if (excludeCostVal >= 0 && c.cost() == excludeCostVal) continue;
 							switch (action) {
 								case BREAK -> {
 									logEntry("[P2] " + c.name() + " is broken");

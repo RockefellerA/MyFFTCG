@@ -516,14 +516,15 @@ public class ActionResolver {
 
     /**
      * Matches mass-effect actions on all field cards of a given type:
-     * "[action] all [the] [element] [targets] [of cost X [or less|more]] [control]"
+     * "[action] all [the] [element] [targets] [of cost X [or less|more]] [other than cost Y] [control]"
      * <ul>
-     *   <li>Group {@code action}  — "Break", "dull", "freeze", "dull and freeze", or "Activate"</li>
-     *   <li>Group {@code element} — optional element name</li>
-     *   <li>Group {@code targets} — "Forwards", "Backups", "Forwards and Monsters", or "Characters"</li>
-     *   <li>Group {@code cost}    — optional CP cost value</li>
-     *   <li>Group {@code costcmp} — optional comparison: "less" or "more"</li>
-     *   <li>Group {@code control} — optional: "opponent controls" or "you control"</li>
+     *   <li>Group {@code action}      — "Break", "dull", "freeze", "dull and freeze", or "Activate"</li>
+     *   <li>Group {@code element}     — optional element name</li>
+     *   <li>Group {@code targets}     — "Forwards", "Backups", "Forwards and Monsters", or "Characters"</li>
+     *   <li>Group {@code cost}        — optional CP cost value (inclusive filter)</li>
+     *   <li>Group {@code costcmp}     — optional comparison: "less" or "more"</li>
+     *   <li>Group {@code excludecost} — optional exact cost to exclude, from "other than cost N"</li>
+     *   <li>Group {@code control}     — optional: "opponent controls" or "you control"</li>
      * </ul>
      */
     private static final Pattern ALL_FIELD_EFFECT_PATTERN = Pattern.compile(
@@ -532,6 +533,7 @@ public class ActionResolver {
         "(?:(?<element>Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark)\\s+)?" +
         "(?<targets>Forwards?(?:\\s+and\\s+Monsters?)?|Backups?|Characters?)" +
         "(?:\\s+of\\s+cost\\s+(?<cost>\\d+)(?:\\s+or\\s+(?<costcmp>less|more))?)?" +
+        "(?:\\s+other\\s+than\\s+cost\\s+(?<excludecost>\\d+))?" +
         "(?:\\s+(?<control>(?:your\\s+)?opponent\\s+controls?|you\\s+control))?" +
         "[.]?"
     );
@@ -579,17 +581,24 @@ public class ActionResolver {
     );
 
     /**
-     * Matches: "Deal X damage to all [the] [condition] Forwards[.] [opponent controls]"
+     * Matches: "Deal X damage to all [the] [condition] Forwards [of cost N [or less|more]] [other than Job Y] [opponent controls]"
      * <ul>
-     *   <li>Group {@code amount}    — numeric damage value</li>
-     *   <li>Group {@code condition} — optional "damaged" or "dull"</li>
-     *   <li>Group {@code opponent}  — present when "opponent controls" appears</li>
+     *   <li>Group {@code amount}     — numeric damage value</li>
+     *   <li>Group {@code condition}  — optional "damaged", "dull", "attacking", or "blocking"</li>
+     *   <li>Group {@code cost}       — optional cost filter value</li>
+     *   <li>Group {@code costcmp}    — optional comparison: "less" or "more"</li>
+     *   <li>Group {@code excludejob} — optional job name to exclude, from "other than Job Y"</li>
+     *   <li>Group {@code opponent}   — present when "opponent controls" appears</li>
      * </ul>
      */
     private static final Pattern DEAL_DAMAGE_TO_FORWARDS = Pattern.compile(
         "(?i)Deal\\s+(?<amount>\\d+)\\s+damage\\s+to\\s+all(?:\\s+the)?\\s+" +
         "(?:(?<condition>damaged|dull|attacking|blocking)\\s+)?" +
-        "Forwards?(?:\\s+(?<opponent>opponent\\s+controls))?"
+        "Forwards?" +
+        "(?:\\s+of\\s+cost\\s+(?<cost>\\d+)(?:\\s+or\\s+(?<costcmp>less|more))?)?" +
+        "(?:\\s+other\\s+than\\s+Job\\s+(?<excludejob>.+?)(?=\\s+(?:your\\s+)?opponent\\s+controls\\b|[.!]?$))?" +
+        "(?:\\s+(?<opponent>(?:your\\s+)?opponent\\s+controls))?" +
+        "[.!]?"
     );
 
     // -------------------------------------------------------------------------
@@ -853,19 +862,28 @@ public class ActionResolver {
         Matcher m = DEAL_DAMAGE_TO_FORWARDS.matcher(text);
         if (!m.find()) return null;
 
-        int    damage       = Integer.parseInt(m.group("amount"));
-        String condition    = m.group("condition");   // nullable
+        int    damage        = Integer.parseInt(m.group("amount"));
+        String condition     = m.group("condition");   // nullable
+        String costStr       = m.group("cost");
+        int    costVal       = costStr != null ? Integer.parseInt(costStr) : -1;
+        String costCmp       = m.group("costcmp");
+        String excludeJob    = m.group("excludejob") != null ? m.group("excludejob").trim() : null;
         boolean opponentOnly = m.group("opponent") != null;
 
         return ctx -> {
-            String condLabel = condition != null ? (condition + " ") : "";
-            String scopeLabel = opponentOnly ? "P2's " : "all ";
+            String condLabel   = condition  != null ? (condition + " ")   : "";
+            String costLabel   = costVal >= 0 ? " of cost " + costVal + (costCmp != null ? " or " + costCmp : "") : "";
+            String exclLabel   = excludeJob != null ? " [not Job " + excludeJob + "]" : "";
+            String scopeLabel  = opponentOnly ? "P2's " : "all ";
             ctx.logEntry("Effect: Deal " + damage + " damage to "
-                    + scopeLabel + condLabel + "Forwards");
+                    + scopeLabel + condLabel + "Forwards" + costLabel + exclLabel);
 
             // --- P2 forwards (always included) ---
             List<Integer> p2Targets = new ArrayList<>();
             for (int i = 0; i < ctx.p2ForwardCount(); i++) {
+                CardData c = ctx.p2Forward(i);
+                if (!meetsCostFilter(c.cost(), costVal, costCmp)) continue;
+                if (excludeJob != null && excludeJob.equalsIgnoreCase(c.job())) continue;
                 if (meetsCondition(ctx.p2ForwardState(i), ctx.p2ForwardCurrentDamage(i),
                         ctx.isP2ForwardAttacking(i), ctx.isP2ForwardBlocking(i), condition))
                     p2Targets.add(i);
@@ -880,6 +898,9 @@ public class ActionResolver {
             if (!opponentOnly) {
                 List<Integer> p1Targets = new ArrayList<>();
                 for (int i = 0; i < ctx.p1ForwardCount(); i++) {
+                    CardData c = ctx.p1Forward(i);
+                    if (!meetsCostFilter(c.cost(), costVal, costCmp)) continue;
+                    if (excludeJob != null && excludeJob.equalsIgnoreCase(c.job())) continue;
                     if (meetsCondition(ctx.p1ForwardState(i), ctx.p1ForwardCurrentDamage(i),
                             ctx.isP1ForwardAttacking(i), ctx.isP1ForwardBlocking(i), condition))
                         p1Targets.add(i);
@@ -896,6 +917,13 @@ public class ActionResolver {
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    /** Returns {@code true} if {@code cardCost} satisfies the cost constraint, or if {@code costVal < 0} (no filter). */
+    private static boolean meetsCostFilter(int cardCost, int costVal, String costCmp) {
+        if (costVal < 0) return true;
+        if (costCmp == null) return cardCost == costVal;
+        return costCmp.equalsIgnoreCase("less") ? cardCost <= costVal : cardCost >= costVal;
+    }
 
     /**
      * Returns {@code true} if a forward satisfies {@code condition}.
@@ -1800,6 +1828,9 @@ public class ActionResolver {
         String costCmp = m.group("costcmp");
         int    costVal = costStr != null ? Integer.parseInt(costStr) : -1;
 
+        String excludeCostStr = m.group("excludecost");
+        int    excludeCostVal = excludeCostStr != null ? Integer.parseInt(excludeCostStr) : -1;
+
         String control      = m.group("control");
         boolean opponentOnly = control != null && !control.toLowerCase().contains("you control");
         boolean selfOnly     = control != null && control.toLowerCase().contains("you control");
@@ -1813,13 +1844,14 @@ public class ActionResolver {
         };
         String costLabel    = costVal >= 0
                 ? " of cost " + costVal + (costCmp != null ? " or " + costCmp : "") : "";
+        String exclLabel    = excludeCostVal >= 0 ? " [not cost " + excludeCostVal + "]" : "";
         String controlLabel = opponentOnly ? " (opponent)" : selfOnly ? " (yours)" : "";
-        String logMsg = actionLabel + " all " + targets + costLabel + controlLabel;
+        String logMsg = actionLabel + " all " + targets + costLabel + exclLabel + controlLabel;
 
         return ctx -> {
             ctx.logEntry("Effect: " + logMsg);
             ctx.applyMassFieldEffect(action, inclForwards, inclBackups, inclMonsters,
-                    opponentOnly, selfOnly, element, costVal, costCmp);
+                    opponentOnly, selfOnly, element, costVal, costCmp, excludeCostVal);
         };
     }
 

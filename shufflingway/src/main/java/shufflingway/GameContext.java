@@ -453,17 +453,18 @@ public interface GameContext {
     /**
      * Applies {@code action} to every field card that matches all filters.
      *
-     * @param forwards     include Forwards in the sweep
-     * @param backups      include Backups in the sweep
-     * @param monsters     include Monsters in the sweep
-     * @param opponentOnly only affect P2's cards
-     * @param selfOnly     only affect P1's cards
-     * @param element      optional element filter; {@code null} = any
-     * @param costVal      CP cost filter value; {@code -1} = no filter
-     * @param costCmp      {@code "less"}, {@code "more"}, or {@code null} for exact
+     * @param forwards        include Forwards in the sweep
+     * @param backups         include Backups in the sweep
+     * @param monsters        include Monsters in the sweep
+     * @param opponentOnly    only affect P2's cards
+     * @param selfOnly        only affect P1's cards
+     * @param element         optional element filter; {@code null} = any
+     * @param costVal         CP cost filter value; {@code -1} = no filter
+     * @param costCmp         {@code "less"}, {@code "more"}, or {@code null} for exact
+     * @param excludeCostVal  exact cost to exclude; {@code -1} = no exclusion
      */
     void applyMassFieldEffect(MassAction action,
             boolean forwards, boolean backups, boolean monsters,
             boolean opponentOnly, boolean selfOnly,
-            String element, int costVal, String costCmp);
+            String element, int costVal, String costCmp, int excludeCostVal);
 }
