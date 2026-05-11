@@ -49,6 +49,7 @@ import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JLayeredPane;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
@@ -126,6 +127,7 @@ public class MainWindow {
 	private BufferedImage previewImage;       // current card to draw (null = empty)
 	private float         previewAlpha  = 0f; // 0 = transparent, 1 = fully opaque
 	private javax.swing.Timer fadeTimer;      // drives fade-in / fade-out animation
+	private CardSlideAnimator cardSlideAnimator;
 	// Opening hand confirmation popup
 	private JWindow openingHandPopup;
 	// Hand hover popover (deck zone mouseover)
@@ -853,6 +855,7 @@ public class MainWindow {
 		// --- Assemble ---
 		frame.getContentPane().add(mainArea, BorderLayout.CENTER);
 		applySidePanelSide(AppSettings.getSidePanelSide());
+		cardSlideAnimator = CardSlideAnimator.install(frame);
 	}
 
 	// -------------------------------------------------------------------------
@@ -1245,6 +1248,7 @@ public class MainWindow {
 				gameState.advancePhase();   // ACTIVE → DRAW
 				int drawCount = gameState.getTurnNumber() == 1 ? 1 : 2;
 				List<CardData> drawn = gameState.drawToHand(drawCount);
+				animateCardDraw(true, drawn.size());
 				refreshP1HandLabel();
 				refreshP1DeckLabel();
 				logEntry("Draw Phase — Drew " + drawn.size()
@@ -3761,6 +3765,32 @@ public class MainWindow {
 				} catch (InterruptedException | ExecutionException ignored) {}
 			}
 		}.execute();
+	}
+
+	// -------------------------------------------------------------------------
+	// Draw animation
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Triggers a card-slide animation from the deck toward the player's hand
+	 * (off-screen bottom-center for P1, off-screen top-center for P2).
+	 */
+	private void animateCardDraw(boolean isP1, int count) {
+		JLabel       deck = isP1 ? p1DeckLabel : p2DeckLabel;
+		JLayeredPane lp   = frame.getRootPane().getLayeredPane();
+
+		Point start = SwingUtilities.convertPoint(
+				deck, deck.getWidth() / 2, deck.getHeight() / 2, lp);
+
+		int   cx  = lp.getWidth() / 2;
+		Point end = isP1
+				? new Point(cx, lp.getHeight() + CardAnimation.CARD_H)
+				: new Point(cx, -CardAnimation.CARD_H);
+
+		BufferedImage img = CardAnimation.toARGB(
+				loadCardbackImage(), CardAnimation.CARD_W, CardAnimation.CARD_H);
+		for (int i = 0; i < count; i++)
+			cardSlideAnimator.startSlide(img, start, end, i * 5);
 	}
 
 	// -------------------------------------------------------------------------
@@ -7208,10 +7238,12 @@ public class MainWindow {
 			@Override public void drawCards(int count) {
 				if (isP1) {
 					gameState.drawToHand(count);
+					animateCardDraw(true, count);
 					refreshP1HandLabel();
 					refreshP1DeckLabel();
 				} else {
 					gameState.drawP2ToHand(count);
+					animateCardDraw(false, count);
 					refreshP2DeckLabel();
 					refreshP2HandCountLabel();
 				}
@@ -9319,6 +9351,7 @@ public class MainWindow {
 		private void doDrawPhase() {
 			int drawCount = gameState.getTurnNumber() == 1 ? 1 : 2;
 			List<CardData> drawn = gameState.drawP2ToHand(drawCount);
+			animateCardDraw(false, drawn.size());
 			refreshP2DeckLabel();
 			refreshP2HandCountLabel();
 			if (drawn.size() < drawCount) {
@@ -9526,6 +9559,7 @@ public class MainWindow {
 			gameState.advancePhase(); // ACTIVE → DRAW
 
 			List<CardData> drawn = gameState.drawToHand(2);
+			animateCardDraw(true, drawn.size());
 			refreshP1HandLabel();
 			refreshP1DeckLabel();
 			if (drawn.size() < 2) {
