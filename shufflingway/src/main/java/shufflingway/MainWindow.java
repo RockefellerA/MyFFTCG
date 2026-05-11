@@ -334,7 +334,7 @@ public class MainWindow {
 		p2LimitButton = new JButton("LIMIT");
 		JButton lblLimit_1 = p2LimitButton;
 		lblLimit_1.setToolTipText("Player 2 LB Deck");
-		lblLimit_1.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+		lblLimit_1.setFont(FontLoader.loadPixelNESFont(10));
 		lblLimit_1.setBackground(new Color(212, 175, 55));
 		lblLimit_1.setForeground(Color.BLACK);
 		lblLimit_1.setOpaque(true);
@@ -348,7 +348,7 @@ public class MainWindow {
 		p2BreakLabel = new JLabel("BREAK");
 		p2BreakLabel.setToolTipText("Player 2 Break Zone");
 		p2BreakLabel.setHorizontalAlignment(SwingConstants.CENTER);
-		p2BreakLabel.setFont(new Font("Pixel NES", Font.PLAIN, 18));
+		p2BreakLabel.setFont(FontLoader.loadPixelNESFont(18));
 		p2BreakLabel.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
 		p2BreakLabel.setBackground(Color.DARK_GRAY);
 		p2BreakLabel.setForeground(Color.WHITE);
@@ -367,7 +367,7 @@ public class MainWindow {
 		});
 
 		p2DeckLabel = new JLabel("DECK");
-		p2DeckLabel.setFont(new Font("Pixel NES", Font.PLAIN, 18));
+		p2DeckLabel.setFont(FontLoader.loadPixelNESFont(18));
 		p2DeckLabel.setToolTipText("Player 2 Deck");
 		p2DeckLabel.setHorizontalAlignment(SwingConstants.CENTER);
 		p2DeckLabel.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
@@ -377,7 +377,7 @@ public class MainWindow {
 
 		p2RemoveButton = new JButton("RFP");
 		p2RemoveButton.setToolTipText("Player 2 Removed From Play");
-		p2RemoveButton.setFont(new Font("Pixel NES", Font.PLAIN, 7));
+		p2RemoveButton.setFont(FontLoader.loadPixelNESFont(7));
 		p2RemoveButton.setBackground(new Color(30, 30, 30));
 		p2RemoveButton.setForeground(Color.LIGHT_GRAY);
 		p2RemoveButton.setOpaque(true);
@@ -429,7 +429,7 @@ public class MainWindow {
 				g2.dispose();
 			}
 		};
-		p2HandCountLabel.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+		p2HandCountLabel.setFont(FontLoader.loadPixelNESFont(10));
 		p2HandCountLabel.setForeground(Color.LIGHT_GRAY);
 		p2HandCountLabel.setOpaque(false);
 
@@ -493,7 +493,7 @@ public class MainWindow {
 
 		// P1 deck label — interactive
 		p1DeckLabel = new JLabel("DECK");
-		p1DeckLabel.setFont(new Font("Pixel NES", Font.PLAIN, 18));
+		p1DeckLabel.setFont(FontLoader.loadPixelNESFont(18));
 		p1DeckLabel.setToolTipText("Player 1 Deck");
 		p1DeckLabel.setHorizontalAlignment(SwingConstants.CENTER);
 		p1DeckLabel.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
@@ -510,7 +510,7 @@ public class MainWindow {
 		p1BreakLabel = new JLabel("BREAK");
 		p1BreakLabel.setToolTipText("Player 1 Break Zone");
 		p1BreakLabel.setHorizontalAlignment(SwingConstants.CENTER);
-		p1BreakLabel.setFont(new Font("Pixel NES", Font.PLAIN, 18));
+		p1BreakLabel.setFont(FontLoader.loadPixelNESFont(18));
 		p1BreakLabel.setBorder(new SoftBevelBorder(BevelBorder.LOWERED, null, null, null, null));
 		p1BreakLabel.setBackground(Color.DARK_GRAY);
 		p1BreakLabel.setForeground(Color.WHITE);
@@ -531,7 +531,7 @@ public class MainWindow {
 		// P1 limit button — gold, 3/4 of card width
 		p1LimitLabel = new JButton("LIMIT");
 		p1LimitLabel.setToolTipText("Player 1 LB Deck");
-		p1LimitLabel.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+		p1LimitLabel.setFont(FontLoader.loadPixelNESFont(10));
 		p1LimitLabel.setBackground(new Color(212, 175, 55));
 		p1LimitLabel.setForeground(Color.BLACK);
 		p1LimitLabel.setOpaque(true);
@@ -551,7 +551,7 @@ public class MainWindow {
 
 		p1RemoveButton = new JButton("RFP");
 		p1RemoveButton.setToolTipText("Player 1 Removed From Play");
-		p1RemoveButton.setFont(new Font("Pixel NES", Font.PLAIN, 7));
+		p1RemoveButton.setFont(FontLoader.loadPixelNESFont(7));
 		p1RemoveButton.setBackground(new Color(30, 30, 30));
 		p1RemoveButton.setForeground(Color.LIGHT_GRAY);
 		p1RemoveButton.setOpaque(true);
@@ -625,7 +625,7 @@ public class MainWindow {
 
 		// --- Next Phase Button ---
 		nextPhaseButton = new JButton("<html><center>NEXT<br>&#9658;</center></html>");
-		nextPhaseButton.setFont(new Font("Pixel NES", Font.PLAIN, 14));
+		nextPhaseButton.setFont(FontLoader.loadPixelNESFont(14));
 		nextPhaseButton.setEnabled(false);
 		nextPhaseButton.setFocusPainted(false);
 		nextPhaseButton.addActionListener(e -> onNextPhase());
@@ -738,7 +738,7 @@ public class MainWindow {
 
 		// Attack button (enabled only during P1's Attack Phase with a selection)
 		attackButton = new JButton("Attack");
-		attackButton.setFont(new Font("Pixel NES", Font.PLAIN, 12));
+		attackButton.setFont(FontLoader.loadPixelNESFont(12));
 		attackButton.setEnabled(false);
 		attackButton.setFocusPainted(false);
 		attackButton.addActionListener(e -> {
@@ -1032,7 +1032,7 @@ public class MainWindow {
 			lbl.setOpaque(true);
 			lbl.setBackground(Color.DARK_GRAY);
 			lbl.setForeground(Color.WHITE);
-			lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+			lbl.setFont(FontLoader.loadPixelNESFont(10));
 			lbl.setHorizontalAlignment(SwingConstants.CENTER);
 
 			lbl.addMouseListener(new MouseAdapter() {
@@ -1104,11 +1104,11 @@ public class MainWindow {
 		JLabel instructions = new JLabel(
 				mulliganAvailable ? "Click a card to select it, then click another to swap positions." : " ",
 				SwingConstants.CENTER);
-		instructions.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+		instructions.setFont(FontLoader.loadPixelNESFont(10));
 
 		// ── Buttons ──────────────────────────────────────────────────────────
 		JButton keepBtn = new JButton(mulliganAvailable ? "Keep Hand" : "Take Hand");
-		keepBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		keepBtn.setFont(FontLoader.loadPixelNESFont(11));
 		keepBtn.addActionListener(e -> {
 			hideZoom();
 			openingHandPopup.dispose();
@@ -1133,7 +1133,7 @@ public class MainWindow {
 		});
 
 		JButton mulliganBtn = new JButton("Mulligan");
-		mulliganBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		mulliganBtn.setFont(FontLoader.loadPixelNESFont(11));
 		mulliganBtn.setEnabled(mulliganAvailable);
 		mulliganBtn.setToolTipText(mulliganAvailable
 				? "Put these cards on the bottom (in this order) and draw 5 new cards"
@@ -1153,7 +1153,7 @@ public class MainWindow {
 
 		// ── Assemble ─────────────────────────────────────────────────────────
 		JLabel titleLabel = new JLabel("Opening Hand", SwingConstants.CENTER);
-		titleLabel.setFont(new Font("Pixel NES", Font.PLAIN, 14));
+		titleLabel.setFont(FontLoader.loadPixelNESFont(14));
 
 		JPanel bottomPanel = new JPanel(new BorderLayout(0, 2));
 		bottomPanel.add(instructions, BorderLayout.NORTH);
@@ -1188,7 +1188,7 @@ public class MainWindow {
 		int n = gameState.getP1Hand().size();
 		String text = n == 0 ? "HAND" : "HAND -" + n + "-";
 		JLabel lbl = new JLabel(text, SwingConstants.CENTER);
-		lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		lbl.setFont(FontLoader.loadPixelNESFont(11));
 		lbl.setForeground(Color.LIGHT_GRAY);
 		lbl.setBounds(0, 0, handPanel.getWidth() > 0 ? handPanel.getWidth() : sidePanelW, CARD_H);
 		handPanel.add(lbl);
@@ -1563,7 +1563,7 @@ public class MainWindow {
 			JPanel wrapper = new JPanel(new BorderLayout(0, 4));
 			wrapper.setBackground(cardsPanel.getBackground());
 			JLabel nameLabel = new JLabel(spent ? cd.name() : "???", SwingConstants.CENTER);
-			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			nameLabel.setFont(FontLoader.loadPixelNESFont(9));
 			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
 			wrapper.add(lbl,       BorderLayout.CENTER);
 			wrapper.add(nameLabel, BorderLayout.SOUTH);
@@ -1577,7 +1577,7 @@ public class MainWindow {
 				Math.min(lbDeck.size() * (CARD_W + 16) + 16, 900), CARD_H + 60));
 
 		JButton closeBtn = new JButton("Close");
-		closeBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		closeBtn.setFont(FontLoader.loadPixelNESFont(11));
 		closeBtn.addActionListener(ae -> { hideZoom(); dlg.dispose(); });
 
 		JPanel south = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
@@ -1684,7 +1684,7 @@ public class MainWindow {
 			wrapper.setBackground(cardsPanel.getBackground());
 			JLabel lbl = makeRfpCardLabel(entry.card.imageUrl());
 			JLabel info = new JLabel(entry.card.name() + "  [" + entry.counters + "]", SwingConstants.CENTER);
-			info.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			info.setFont(FontLoader.loadPixelNESFont(9));
 			info.setPreferredSize(new Dimension(CARD_W, 18));
 			wrapper.add(lbl, BorderLayout.CENTER);
 			wrapper.add(info, BorderLayout.SOUTH);
@@ -1697,7 +1697,7 @@ public class MainWindow {
 			wrapper.setBackground(cardsPanel.getBackground());
 			JLabel lbl = makeRfpCardLabel(card.imageUrl());
 			JLabel info = new JLabel(card.name() + "  [RFG]", SwingConstants.CENTER);
-			info.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			info.setFont(FontLoader.loadPixelNESFont(9));
 			info.setPreferredSize(new Dimension(CARD_W, 18));
 			wrapper.add(lbl, BorderLayout.CENTER);
 			wrapper.add(info, BorderLayout.SOUTH);
@@ -1784,7 +1784,7 @@ public class MainWindow {
 			}.execute();
 
 			JLabel nameLabel = new JLabel(cd.name(), SwingConstants.CENTER);
-			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			nameLabel.setFont(FontLoader.loadPixelNESFont(9));
 			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
 
 			cardWrapper.add(lbl,       BorderLayout.CENTER);
@@ -1800,7 +1800,7 @@ public class MainWindow {
 				CARD_H + 60));
 
 		JButton closeBtn = new JButton("Close");
-		closeBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		closeBtn.setFont(FontLoader.loadPixelNESFont(11));
 		closeBtn.addActionListener(ae -> { hideZoom(); dlg.dispose(); });
 
 		JPanel south = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
@@ -1959,7 +1959,7 @@ public class MainWindow {
 				lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
 				lbl.setOpaque(false);
 				lbl.setForeground(Color.DARK_GRAY);
-				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+				lbl.setFont(FontLoader.loadPixelNESFont(11));
 				lbl.setBorder(BorderFactory.createEmptyBorder());
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mousePressed(MouseEvent e) {
@@ -2022,7 +2022,7 @@ public class MainWindow {
 				lbl.setPreferredSize(new Dimension(CARD_H, CARD_H));
 				lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
 				lbl.setOpaque(false);
-				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+				lbl.setFont(FontLoader.loadPixelNESFont(11));
 				lbl.setBorder(BorderFactory.createEmptyBorder());
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mouseEntered(MouseEvent e) {
@@ -2083,7 +2083,7 @@ public class MainWindow {
 				lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
 				lbl.setOpaque(false);
 				lbl.setForeground(Color.DARK_GRAY);
-				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+				lbl.setFont(FontLoader.loadPixelNESFont(11));
 				lbl.setBorder(BorderFactory.createEmptyBorder());
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mousePressed(MouseEvent e) {
@@ -2147,7 +2147,7 @@ public class MainWindow {
 				lbl.setPreferredSize(new Dimension(CARD_H, CARD_H));
 				lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
 				lbl.setOpaque(false);
-				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+				lbl.setFont(FontLoader.loadPixelNESFont(11));
 				lbl.setBorder(BorderFactory.createEmptyBorder());
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mouseEntered(MouseEvent e) {
@@ -2210,7 +2210,7 @@ public class MainWindow {
 				lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
 				lbl.setOpaque(false);
 				lbl.setForeground(Color.DARK_GRAY);
-				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+				lbl.setFont(FontLoader.loadPixelNESFont(11));
 				lbl.setBorder(BorderFactory.createEmptyBorder());
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mousePressed(MouseEvent e) {
@@ -2276,7 +2276,7 @@ public class MainWindow {
 				lbl.setPreferredSize(new Dimension(CARD_H, CARD_H));
 				lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
 				lbl.setOpaque(false);
-				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+				lbl.setFont(FontLoader.loadPixelNESFont(11));
 				lbl.setBorder(BorderFactory.createEmptyBorder());
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mouseEntered(MouseEvent e) {
@@ -2409,7 +2409,7 @@ public class MainWindow {
 			}.execute();
 
 			JLabel nameLabel = new JLabel(candidate.name(), SwingConstants.CENTER);
-			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			nameLabel.setFont(FontLoader.loadPixelNESFont(9));
 			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
 
 			wrapper.add(lbl, BorderLayout.CENTER);
@@ -2418,7 +2418,7 @@ public class MainWindow {
 		}
 
 		JLabel hint = new JLabel("Click a card to select it", SwingConstants.CENTER);
-		hint.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+		hint.setFont(FontLoader.loadPixelNESFont(9));
 
 		dlg.getContentPane().setLayout(new BorderLayout(0, 6));
 		dlg.getContentPane().add(cardsPanel, BorderLayout.CENTER);
@@ -2471,7 +2471,7 @@ public class MainWindow {
 				lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
 				lbl.setOpaque(false);
 				lbl.setForeground(Color.DARK_GRAY);
-				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+				lbl.setFont(FontLoader.loadPixelNESFont(11));
 				lbl.setBorder(BorderFactory.createEmptyBorder());
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mousePressed(MouseEvent e) {
@@ -2533,7 +2533,7 @@ public class MainWindow {
 				lbl.setPreferredSize(new Dimension(CARD_H, CARD_H));
 				lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
 				lbl.setOpaque(false);
-				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+				lbl.setFont(FontLoader.loadPixelNESFont(11));
 				lbl.setBorder(BorderFactory.createEmptyBorder());
 				lbl.addMouseListener(new MouseAdapter() {
 					@Override public void mouseEntered(MouseEvent e) {
@@ -2777,7 +2777,7 @@ public class MainWindow {
 		panel.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
 
 		JLabel header = new JLabel("[P2] " + attacker.name() + " (" + effectiveP2ForwardPower(attackerIdx) + ") attacks!");
-		header.setFont(new Font("Pixel NES", Font.PLAIN, 12));
+		header.setFont(FontLoader.loadPixelNESFont(12));
 		header.setHorizontalAlignment(SwingConstants.CENTER);
 		panel.add(header, BorderLayout.NORTH);
 
@@ -2788,7 +2788,7 @@ public class MainWindow {
 			CardData top = p1ForwardPrimedTop.get(bi);
 			CardData display = top != null ? top : p1ForwardCards.get(bi);
 			JButton btn = new JButton("<html><center>" + display.name() + "<br>(" + effectiveP1ForwardPower(bi) + ")</center></html>");
-			btn.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+			btn.setFont(FontLoader.loadPixelNESFont(10));
 			btn.setPreferredSize(new Dimension(130, 60));
 			final int blockerIdx = bi;
 			btn.addActionListener(ae -> { chosen[0] = blockerIdx; dlg.dispose(); });
@@ -2798,7 +2798,7 @@ public class MainWindow {
 
 		if (!mustBlockOnly) {
 			JButton noBlockBtn = new JButton("No Block (Take Damage)");
-			noBlockBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+			noBlockBtn.setFont(FontLoader.loadPixelNESFont(11));
 			noBlockBtn.addActionListener(ae -> dlg.dispose());
 			panel.add(noBlockBtn, BorderLayout.SOUTH);
 		}
@@ -2883,7 +2883,7 @@ public class MainWindow {
 					g2.dispose();
 				}
 			} : new JLabel(labelText, SwingConstants.CENTER);
-			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			nameLabel.setFont(FontLoader.loadPixelNESFont(9));
 			if (!cd.exBurst()) nameLabel.setForeground(null);
 			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
 
@@ -2900,7 +2900,7 @@ public class MainWindow {
 				CARD_H + 60));
 
 		JButton closeBtn = new JButton("Close");
-		closeBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		closeBtn.setFont(FontLoader.loadPixelNESFont(11));
 		closeBtn.addActionListener(ae -> { hideZoom(); dlg.dispose(); });
 
 		JPanel south = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
@@ -2978,7 +2978,7 @@ public class MainWindow {
 					g2.dispose();
 				}
 			} : new JLabel(labelText, SwingConstants.CENTER);
-			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			nameLabel.setFont(FontLoader.loadPixelNESFont(9));
 			if (!cd.exBurst()) nameLabel.setForeground(null);
 			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
 
@@ -2995,7 +2995,7 @@ public class MainWindow {
 				CARD_H + 60));
 
 		JButton closeBtn = new JButton("Close");
-		closeBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		closeBtn.setFont(FontLoader.loadPixelNESFont(11));
 		closeBtn.addActionListener(ae -> { hideZoom(); dlg.dispose(); });
 
 		JPanel south = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
@@ -3024,14 +3024,14 @@ public class MainWindow {
 		Set<Integer> paymentSet = new java.util.HashSet<>();
 
 		JLabel statusLabel = new JLabel(" ", SwingConstants.CENTER);
-		statusLabel.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+		statusLabel.setFont(FontLoader.loadPixelNESFont(10));
 
 		JButton confirmCastBtn = new JButton("Confirm Cast");
-		confirmCastBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		confirmCastBtn.setFont(FontLoader.loadPixelNESFont(11));
 		confirmCastBtn.setVisible(false);
 
 		JButton cancelCastBtn = new JButton("Cancel");
-		cancelCastBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		cancelCastBtn.setFont(FontLoader.loadPixelNESFont(11));
 		cancelCastBtn.setVisible(false);
 
 		// One label per LB card
@@ -3188,7 +3188,7 @@ public class MainWindow {
 
 			JLabel nameLabel = new JLabel(cd.name() + " - LB " + cd.lbCost() + "",
 					SwingConstants.CENTER);
-			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			nameLabel.setFont(FontLoader.loadPixelNESFont(9));
 			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
 
 			cardWrapper.add(lbl,       BorderLayout.CENTER);
@@ -3211,7 +3211,7 @@ public class MainWindow {
 		statusBar.add(cancelCastBtn);
 
 		JButton closeBtn = new JButton("Close");
-		closeBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		closeBtn.setFont(FontLoader.loadPixelNESFont(11));
 		closeBtn.addActionListener(ae -> { hideZoom(); dlg.dispose(); });
 
 		JPanel south = new JPanel(new BorderLayout());
@@ -3239,13 +3239,13 @@ public class MainWindow {
 		int mustDiscard = hand.size() - 5;
 
 		JLabel statusLabel = new JLabel("Select " + mustDiscard + " card(s) to discard.", SwingConstants.CENTER);
-		statusLabel.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+		statusLabel.setFont(FontLoader.loadPixelNESFont(10));
 
 		List<JLabel> cardLabels = new ArrayList<>();
 		JPanel cardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
 
 		JButton confirmBtn = new JButton("Confirm");
-		confirmBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		confirmBtn.setFont(FontLoader.loadPixelNESFont(11));
 		confirmBtn.setEnabled(false);
 
 		Runnable refresh = () -> {
@@ -3304,7 +3304,7 @@ public class MainWindow {
 			}.execute();
 
 			JLabel nameLabel = new JLabel(cd.name(), SwingConstants.CENTER);
-			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			nameLabel.setFont(FontLoader.loadPixelNESFont(9));
 			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
 
 			wrapper.add(lbl,       BorderLayout.CENTER);
@@ -3362,13 +3362,13 @@ public class MainWindow {
 		Set<Integer> selected = new java.util.HashSet<>();
 
 		JLabel statusLabel = new JLabel("Select " + mustDiscard + " card(s) to discard.", SwingConstants.CENTER);
-		statusLabel.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+		statusLabel.setFont(FontLoader.loadPixelNESFont(10));
 
 		List<JLabel> cardLabels = new ArrayList<>();
 		JPanel cardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
 
 		JButton confirmBtn = new JButton("Discard");
-		confirmBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		confirmBtn.setFont(FontLoader.loadPixelNESFont(11));
 		confirmBtn.setEnabled(false);
 
 		Runnable refresh = () -> {
@@ -3428,7 +3428,7 @@ public class MainWindow {
 			}.execute();
 
 			JLabel nameLabel = new JLabel(cd.name(), SwingConstants.CENTER);
-			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			nameLabel.setFont(FontLoader.loadPixelNESFont(9));
 			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
 
 			wrapper.add(lbl,       BorderLayout.CENTER);
@@ -3607,7 +3607,7 @@ public class MainWindow {
 			lbl.setOpaque(true);
 			lbl.setBackground(Color.DARK_GRAY);
 			lbl.setForeground(Color.WHITE);
-			lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+			lbl.setFont(FontLoader.loadPixelNESFont(10));
 			lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
 			lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 
@@ -3732,7 +3732,7 @@ public class MainWindow {
 		List<CardData> zone = gameState.getP1BreakZone();
 		if (zone.isEmpty()) {
 			p1BreakLabel.setIcon(null);
-			p1BreakLabel.setFont(new Font("Pixel NES", Font.PLAIN, 18));
+			p1BreakLabel.setFont(FontLoader.loadPixelNESFont(18));
 			p1BreakLabel.setText("BREAK");
 			return;
 		}
@@ -3756,7 +3756,7 @@ public class MainWindow {
 		List<CardData> zone = gameState.getP2BreakZone();
 		if (zone.isEmpty()) {
 			p2BreakLabel.setIcon(null);
-			p2BreakLabel.setFont(new Font("Pixel NES", Font.PLAIN, 18));
+			p2BreakLabel.setFont(FontLoader.loadPixelNESFont(18));
 			p2BreakLabel.setText("BREAK");
 			return;
 		}
@@ -3959,11 +3959,11 @@ public class MainWindow {
 		}
 
 		JLabel cpLabel = new JLabel();
-		cpLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		cpLabel.setFont(FontLoader.loadPixelNESFont(11));
 		cpLabel.setHorizontalAlignment(SwingConstants.CENTER);
 
 		JButton confirmBtn = new JButton("Confirm Warp");
-		confirmBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		confirmBtn.setFont(FontLoader.loadPixelNESFont(11));
 
 		List<JLabel>   backupLbls   = new ArrayList<>();
 		List<Integer>  backupSlots  = new ArrayList<>();
@@ -4040,7 +4040,7 @@ public class MainWindow {
 
 		if (!eligibleBackupSlots.isEmpty()) {
 			JLabel hdr = new JLabel("Backups — dull for 1 CP each:");
-			hdr.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			hdr.setFont(FontLoader.loadPixelNESFont(9));
 			hdr.setAlignmentX(Component.LEFT_ALIGNMENT);
 			JPanel backupCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
 			backupCardsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -4051,7 +4051,7 @@ public class MainWindow {
 				lbl.setOpaque(true);
 				lbl.setBackground(Color.DARK_GRAY);
 				lbl.setForeground(Color.WHITE);
-				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+				lbl.setFont(FontLoader.loadPixelNESFont(10));
 				lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
 				lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 				final String url = p1BackupUrls[slot];
@@ -4086,7 +4086,7 @@ public class MainWindow {
 		}
 
 		JLabel discardHdr = new JLabel("Hand — discard for 2 CP each:");
-		discardHdr.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+		discardHdr.setFont(FontLoader.loadPixelNESFont(9));
 		discardHdr.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JPanel discardCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
 		discardCardsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -4101,7 +4101,7 @@ public class MainWindow {
 			lbl.setOpaque(true);
 			lbl.setBackground(payable ? Color.DARK_GRAY : new Color(50, 50, 50));
 			lbl.setForeground(Color.WHITE);
-			lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+			lbl.setFont(FontLoader.loadPixelNESFont(10));
 			lbl.setBorder(BorderFactory.createLineBorder(payable ? Color.GRAY : new Color(80, 80, 80), 1));
 			lbl.setCursor(payable ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
 			final String imgUrl = hc.imageUrl();
@@ -4140,7 +4140,7 @@ public class MainWindow {
 		centerPanel.add(discardCardsPanel);
 
 		JButton cancelBtn = new JButton("Cancel");
-		cancelBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		cancelBtn.setFont(FontLoader.loadPixelNESFont(11));
 		cancelBtn.addActionListener(e -> dlg.dispose());
 		confirmBtn.addActionListener(e -> {
 			dlg.dispose();
@@ -4165,7 +4165,7 @@ public class MainWindow {
 		JLabel titleLabel = new JLabel(
 				"Warp cost for: " + card.name() + "  (" + (costDesc.length() > 0 ? costDesc : "free") + ")",
 				SwingConstants.CENTER);
-		titleLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		titleLabel.setFont(FontLoader.loadPixelNESFont(11));
 
 		JPanel topPanel = new JPanel(new BorderLayout(0, 4));
 		topPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
@@ -4306,11 +4306,11 @@ public class MainWindow {
 		}
 
 		JLabel cpLabel = new JLabel();
-		cpLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		cpLabel.setFont(FontLoader.loadPixelNESFont(11));
 		cpLabel.setHorizontalAlignment(SwingConstants.CENTER);
 
 		JButton confirmBtn = new JButton("Confirm");
-		confirmBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		confirmBtn.setFont(FontLoader.loadPixelNESFont(11));
 
 		List<JLabel>   backupLbls  = new ArrayList<>();
 		List<Integer>  backupSlots = new ArrayList<>();
@@ -4400,7 +4400,7 @@ public class MainWindow {
 
 		if (!eligibleBackupSlots.isEmpty()) {
 			JLabel backupHeader = new JLabel("Backups — dull for 1 CP each:");
-			backupHeader.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			backupHeader.setFont(FontLoader.loadPixelNESFont(9));
 			backupHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
 			JPanel backupCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
 			backupCardsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -4412,7 +4412,7 @@ public class MainWindow {
 				lbl.setOpaque(true);
 				lbl.setBackground(Color.DARK_GRAY);
 				lbl.setForeground(Color.WHITE);
-				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+				lbl.setFont(FontLoader.loadPixelNESFont(10));
 				lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
 				lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 				final String url = p1BackupUrls[slot];
@@ -4454,7 +4454,7 @@ public class MainWindow {
 
 		// ── Hand discard section ─────────────────────────────────────────────
 		JLabel discardHeader = new JLabel("Hand — discard for 2 CP each:");
-		discardHeader.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+		discardHeader.setFont(FontLoader.loadPixelNESFont(9));
 		discardHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JPanel discardCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
 		discardCardsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -4471,7 +4471,7 @@ public class MainWindow {
 			lbl.setOpaque(true);
 			lbl.setBackground(payable ? Color.DARK_GRAY : new Color(50, 50, 50));
 			lbl.setForeground(Color.WHITE);
-			lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+			lbl.setFont(FontLoader.loadPixelNESFont(10));
 			lbl.setBorder(BorderFactory.createLineBorder(payable ? Color.GRAY : new Color(80, 80, 80), 1));
 			lbl.setCursor(payable
 					? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
@@ -4535,11 +4535,11 @@ public class MainWindow {
 				"<html><center>Backups: dull for 1 CP. Hand cards (" + elem
 				+ ", non-Light/Dark): discard for 2 CP.</center></html>",
 				SwingConstants.CENTER);
-		hint.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+		hint.setFont(FontLoader.loadPixelNESFont(9));
 
 		// ── Buttons ──────────────────────────────────────────────────────────
 		JButton cancelBtn = new JButton("Cancel");
-		cancelBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		cancelBtn.setFont(FontLoader.loadPixelNESFont(11));
 		cancelBtn.addActionListener(e -> dlg.dispose());
 
 		confirmBtn.addActionListener(e -> {
@@ -4555,7 +4555,7 @@ public class MainWindow {
 		JLabel titleLabel = new JLabel(
 				"Pay for: " + card.name() + "  (Cost " + cost + " " + elem + " CP)",
 				SwingConstants.CENTER);
-		titleLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		titleLabel.setFont(FontLoader.loadPixelNESFont(11));
 
 		JPanel topPanel = new JPanel(new BorderLayout(0, 4));
 		topPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
@@ -4681,7 +4681,7 @@ public class MainWindow {
 
 		String headerText = entry.isSummon() ? "S U M M O N" : "A C T I O N";
 		JLabel header = new JLabel(headerText, SwingConstants.CENTER);
-		header.setFont(new Font("Pixel NES", Font.PLAIN, 13));
+		header.setFont(FontLoader.loadPixelNESFont(13));
 		header.setForeground(new Color(210, 170, 255));
 		panel.add(header, BorderLayout.NORTH);
 
@@ -4689,7 +4689,7 @@ public class MainWindow {
 		cardImg.setPreferredSize(new Dimension(CardAnimation.CARD_W, CardAnimation.CARD_H));
 
 		JLabel nameLabel = new JLabel(entry.source().name(), SwingConstants.CENTER);
-		nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+		nameLabel.setFont(FontLoader.loadPixelNESFont(10));
 		nameLabel.setForeground(Color.WHITE);
 
 		JPanel imagePanel = new JPanel(new BorderLayout(3, 3));
@@ -4700,13 +4700,13 @@ public class MainWindow {
 
 		int[] countdown = { 10 };
 		JLabel countdownLabel = new JLabel("Resolving in 10...", SwingConstants.CENTER);
-		countdownLabel.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+		countdownLabel.setFont(FontLoader.loadPixelNESFont(10));
 		countdownLabel.setForeground(Color.LIGHT_GRAY);
 
 		JButton okBtn      = new JButton("OK");
 		JButton respondBtn = new JButton("Respond");
-		okBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
-		respondBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		okBtn.setFont(FontLoader.loadPixelNESFont(11));
+		respondBtn.setFont(FontLoader.loadPixelNESFont(11));
 
 		JPanel btnPanel = new JPanel(new java.awt.GridLayout(1, 2, 4, 0));
 		btnPanel.setOpaque(false);
@@ -4852,11 +4852,11 @@ public class MainWindow {
 		}
 
 		JLabel cpLabel = new JLabel();
-		cpLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		cpLabel.setFont(FontLoader.loadPixelNESFont(11));
 		cpLabel.setHorizontalAlignment(SwingConstants.CENTER);
 
 		JButton confirmBtn = new JButton("Confirm");
-		confirmBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		confirmBtn.setFont(FontLoader.loadPixelNESFont(11));
 
 		List<JLabel>  backupLbls  = new ArrayList<>();
 		List<Integer> backupSlots = new ArrayList<>();
@@ -4932,7 +4932,7 @@ public class MainWindow {
 
 		if (!eligibleBackupSlots.isEmpty()) {
 			JLabel backupHeader = new JLabel("Backups — dull for 1 CP each:");
-			backupHeader.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			backupHeader.setFont(FontLoader.loadPixelNESFont(9));
 			backupHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
 			JPanel backupCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
 			backupCardsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -4944,7 +4944,7 @@ public class MainWindow {
 				lbl.setOpaque(true);
 				lbl.setBackground(Color.DARK_GRAY);
 				lbl.setForeground(Color.WHITE);
-				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+				lbl.setFont(FontLoader.loadPixelNESFont(10));
 				lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
 				lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 				final String url = p1BackupUrls[slot];
@@ -4985,7 +4985,7 @@ public class MainWindow {
 		}
 
 		JLabel discardHeader = new JLabel("Hand — discard for 2 CP each:");
-		discardHeader.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+		discardHeader.setFont(FontLoader.loadPixelNESFont(9));
 		discardHeader.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JPanel discardCardsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6));
 		discardCardsPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -5001,7 +5001,7 @@ public class MainWindow {
 			lbl.setOpaque(true);
 			lbl.setBackground(payable ? Color.DARK_GRAY : new Color(50, 50, 50));
 			lbl.setForeground(Color.WHITE);
-			lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+			lbl.setFont(FontLoader.loadPixelNESFont(10));
 			lbl.setBorder(BorderFactory.createLineBorder(payable ? Color.GRAY : new Color(80, 80, 80), 1));
 			lbl.setCursor(payable
 					? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
@@ -5064,10 +5064,10 @@ public class MainWindow {
 				"<html><center>Backups: dull for 1 CP. Hand cards (" + elem
 				+ ", non-Light/Dark): discard for 2 CP.</center></html>",
 				SwingConstants.CENTER);
-		hint.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+		hint.setFont(FontLoader.loadPixelNESFont(9));
 
 		JButton cancelBtn = new JButton("Cancel");
-		cancelBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		cancelBtn.setFont(FontLoader.loadPixelNESFont(11));
 		cancelBtn.addActionListener(e -> { hideZoom(); dlg.dispose(); });
 
 		confirmBtn.addActionListener(e -> {
@@ -5085,7 +5085,7 @@ public class MainWindow {
 		JLabel titleLabel = new JLabel(
 				"Pay for LB: " + card.name() + "  (Cost " + cost + " " + elem + " CP)",
 				SwingConstants.CENTER);
-		titleLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		titleLabel.setFont(FontLoader.loadPixelNESFont(11));
 
 		JPanel topPanel = new JPanel(new BorderLayout(0, 4));
 		topPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
@@ -5994,11 +5994,11 @@ public class MainWindow {
 		}
 
 		JLabel cpLabel     = new JLabel();
-		cpLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		cpLabel.setFont(FontLoader.loadPixelNESFont(11));
 		cpLabel.setHorizontalAlignment(SwingConstants.CENTER);
 
 		JButton confirmBtn = new JButton("Confirm");
-		confirmBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		confirmBtn.setFont(FontLoader.loadPixelNESFont(11));
 
 		List<JLabel>  backupLbls  = new ArrayList<>();
 		List<Integer> backupSlots = new ArrayList<>();
@@ -6079,13 +6079,13 @@ public class MainWindow {
 
 		if (!eligibleBackupSlots.isEmpty()) {
 			JLabel hdr = new JLabel("Backups — dull for 1 CP each:");
-			hdr.setFont(new Font("Pixel NES", Font.PLAIN, 9)); hdr.setAlignmentX(Component.LEFT_ALIGNMENT);
+			hdr.setFont(FontLoader.loadPixelNESFont(9)); hdr.setAlignmentX(Component.LEFT_ALIGNMENT);
 			JPanel bp = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6)); bp.setAlignmentX(Component.LEFT_ALIGNMENT);
 			for (int slot : eligibleBackupSlots) {
 				JLabel lbl = new JLabel("...", SwingConstants.CENTER);
 				lbl.setPreferredSize(new Dimension(CARD_W, CARD_H)); lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
 				lbl.setOpaque(true); lbl.setBackground(Color.DARK_GRAY); lbl.setForeground(Color.WHITE);
-				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10)); lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
+				lbl.setFont(FontLoader.loadPixelNESFont(10)); lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
 				lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 				final String url = bkpUrls[slot];
 				lbl.addMouseListener(new MouseAdapter() {
@@ -6112,14 +6112,14 @@ public class MainWindow {
 		}
 
 		JLabel discHdr = new JLabel("Hand — discard for 2 CP each:");
-		discHdr.setFont(new Font("Pixel NES", Font.PLAIN, 9)); discHdr.setAlignmentX(Component.LEFT_ALIGNMENT);
+		discHdr.setFont(FontLoader.loadPixelNESFont(9)); discHdr.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JPanel dp = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6)); dp.setAlignmentX(Component.LEFT_ALIGNMENT);
 		for (int i = 0; i < hand.size(); i++) {
 			final int hi = i; CardData hc = hand.get(i); boolean payable = !hc.isLightOrDark();
 			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
 			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H)); lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
 			lbl.setOpaque(true); lbl.setBackground(payable ? Color.DARK_GRAY : new Color(50,50,50));
-			lbl.setForeground(Color.WHITE); lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+			lbl.setForeground(Color.WHITE); lbl.setFont(FontLoader.loadPixelNESFont(10));
 			lbl.setBorder(BorderFactory.createLineBorder(payable ? Color.GRAY : new Color(80,80,80), 1));
 			lbl.setCursor(payable ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
 			final String imgUrl = hc.imageUrl();
@@ -6154,7 +6154,7 @@ public class MainWindow {
 		center.add(discHdr); center.add(dp);
 
 		JButton cancelBtn = new JButton("Cancel");
-		cancelBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		cancelBtn.setFont(FontLoader.loadPixelNESFont(11));
 		cancelBtn.addActionListener(ev -> dlg.dispose());
 		confirmBtn.addActionListener(ev -> {
 			dlg.dispose();
@@ -6214,7 +6214,7 @@ public class MainWindow {
 		JLabel titleLabel = new JLabel(
 				"<html><center>" + source.name() + " — " + (costDesc.length() > 0 ? costDesc : "free") + "</center></html>",
 				SwingConstants.CENTER);
-		titleLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		titleLabel.setFont(FontLoader.loadPixelNESFont(11));
 
 		JPanel topPanel = new JPanel(new BorderLayout(0, 4));
 		topPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
@@ -6836,7 +6836,7 @@ public class MainWindow {
 					JPanel wrapper = new JPanel(new BorderLayout(0, 4));
 					wrapper.setBackground(cardsPanel.getBackground());
 					JLabel nameLabel = new JLabel(cd.name(), SwingConstants.CENTER);
-					nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+					nameLabel.setFont(FontLoader.loadPixelNESFont(9));
 					nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
 					wrapper.add(lbl,       BorderLayout.CENTER);
 					wrapper.add(nameLabel, BorderLayout.SOUTH);
@@ -6851,10 +6851,10 @@ public class MainWindow {
 
 				int[] countdown = { 10 };
 				JLabel countdownLabel = new JLabel("Closing in 10...", SwingConstants.CENTER);
-				countdownLabel.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+				countdownLabel.setFont(FontLoader.loadPixelNESFont(10));
 
 				JButton okBtn = new JButton("OK");
-				okBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+				okBtn.setFont(FontLoader.loadPixelNESFont(11));
 				okBtn.addActionListener(ae -> { hideZoom(); dlg.dispose(); });
 
 				JPanel south = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
@@ -7578,7 +7578,7 @@ public class MainWindow {
 		JButton[] btns = new JButton[eligible.size()];
 
 		JButton confirmBtn = new JButton("Confirm");
-		confirmBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		confirmBtn.setFont(FontLoader.loadPixelNESFont(11));
 		confirmBtn.setEnabled(upTo); // enabled immediately for "up to", otherwise waits for maxCount
 
 		for (int i = 0; i < eligible.size(); i++) {
@@ -7600,7 +7600,7 @@ public class MainWindow {
 			JButton btn = new JButton("<html><center>"
 					+ (target.isP1() ? "[You " : "[P2 ") + typeTag + "] "
 					+ card.name() + "<br>(" + card.power() + ")</center></html>");
-			btn.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			btn.setFont(FontLoader.loadPixelNESFont(9));
 			btn.setPreferredSize(new Dimension(130, 56));
 			btn.addActionListener(ae -> {
 				if (sel.contains(fi)) {
@@ -7630,13 +7630,13 @@ public class MainWindow {
 		south.add(confirmBtn);
 		if (upTo) {
 			JButton skipBtn = new JButton("Skip");
-			skipBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+			skipBtn.setFont(FontLoader.loadPixelNESFont(11));
 			skipBtn.addActionListener(ae -> dlg.dispose());
 			south.add(skipBtn);
 		}
 
 		JLabel hdr = new JLabel(title, SwingConstants.CENTER);
-		hdr.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		hdr.setFont(FontLoader.loadPixelNESFont(11));
 		hdr.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
 
 		dlg.getContentPane().setLayout(new BorderLayout(0, 4));
@@ -7670,7 +7670,7 @@ public class MainWindow {
 		JPanel btnsPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 4));
 
 		JButton confirmBtn = new JButton("Confirm");
-		confirmBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		confirmBtn.setFont(FontLoader.loadPixelNESFont(11));
 		confirmBtn.setEnabled(upTo);
 
 		for (int i = 0; i < eligible.size(); i++) {
@@ -7680,7 +7680,7 @@ public class MainWindow {
 			JButton btn = new JButton("<html><center>"
 					+ (target.isP1() ? "[Your BZ] " : "[P2 BZ] ")
 					+ card.name() + "<br>(" + card.power() + ")</center></html>");
-			btn.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			btn.setFont(FontLoader.loadPixelNESFont(9));
 			btn.setPreferredSize(new Dimension(130, 56));
 			btn.addActionListener(ae -> {
 				if (sel.contains(fi)) {
@@ -7709,13 +7709,13 @@ public class MainWindow {
 		south.add(confirmBtn);
 		if (upTo) {
 			JButton skipBtn = new JButton("Skip");
-			skipBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+			skipBtn.setFont(FontLoader.loadPixelNESFont(11));
 			skipBtn.addActionListener(ae -> dlg.dispose());
 			south.add(skipBtn);
 		}
 
 		JLabel hdr = new JLabel(title, SwingConstants.CENTER);
-		hdr.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		hdr.setFont(FontLoader.loadPixelNESFont(11));
 		hdr.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
 
 		dlg.getContentPane().setLayout(new BorderLayout(0, 4));
@@ -7845,7 +7845,7 @@ public class MainWindow {
 		lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
 		lbl.setOpaque(false);
 		lbl.setForeground(Color.DARK_GRAY);
-		lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		lbl.setFont(FontLoader.loadPixelNESFont(11));
 		lbl.setBorder(BorderFactory.createEmptyBorder());
 		lbl.addMouseListener(new MouseAdapter() {
 			@Override public void mousePressed(MouseEvent e) {
@@ -7895,7 +7895,7 @@ public class MainWindow {
 		lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
 		lbl.setOpaque(false);
 		lbl.setForeground(Color.DARK_GRAY);
-		lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		lbl.setFont(FontLoader.loadPixelNESFont(11));
 		lbl.setBorder(BorderFactory.createEmptyBorder());
 		lbl.addMouseListener(new MouseAdapter() {
 			@Override public void mousePressed(MouseEvent e) {
@@ -7953,7 +7953,7 @@ public class MainWindow {
 		lbl.setPreferredSize(new Dimension(CARD_H, CARD_H));
 		lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
 		lbl.setOpaque(false);
-		lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		lbl.setFont(FontLoader.loadPixelNESFont(11));
 		lbl.setBorder(BorderFactory.createEmptyBorder());
 		lbl.addMouseListener(new MouseAdapter() {
 			@Override public void mousePressed(MouseEvent e) {
@@ -8441,11 +8441,11 @@ public class MainWindow {
 		}
 
 		JLabel cpLabel = new JLabel();
-		cpLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		cpLabel.setFont(FontLoader.loadPixelNESFont(11));
 		cpLabel.setHorizontalAlignment(SwingConstants.CENTER);
 
 		JButton confirmBtn = new JButton("Confirm (Prime)");
-		confirmBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		confirmBtn.setFont(FontLoader.loadPixelNESFont(11));
 
 		List<JLabel>   backupLbls  = new ArrayList<>();
 		List<Integer>  backupSlots = new ArrayList<>();
@@ -8511,13 +8511,13 @@ public class MainWindow {
 
 		if (!eligibleBackupSlots.isEmpty()) {
 			JLabel hdr = new JLabel("Backups — dull for 1 CP each:");
-			hdr.setFont(new Font("Pixel NES", Font.PLAIN, 9)); hdr.setAlignmentX(Component.LEFT_ALIGNMENT);
+			hdr.setFont(FontLoader.loadPixelNESFont(9)); hdr.setAlignmentX(Component.LEFT_ALIGNMENT);
 			JPanel bp = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6)); bp.setAlignmentX(Component.LEFT_ALIGNMENT);
 			for (int slot : eligibleBackupSlots) {
 				JLabel lbl = new JLabel("...", SwingConstants.CENTER);
 				lbl.setPreferredSize(new Dimension(CARD_W, CARD_H)); lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
 				lbl.setOpaque(true); lbl.setBackground(Color.DARK_GRAY); lbl.setForeground(Color.WHITE);
-				lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10)); lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
+				lbl.setFont(FontLoader.loadPixelNESFont(10)); lbl.setBorder(BorderFactory.createLineBorder(Color.GRAY, 1));
 				lbl.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
 				final String url = p1BackupUrls[slot];
 				lbl.addMouseListener(new MouseAdapter() {
@@ -8545,14 +8545,14 @@ public class MainWindow {
 		}
 
 		JLabel discardHdr = new JLabel("Hand — discard for 2 CP each:");
-		discardHdr.setFont(new Font("Pixel NES", Font.PLAIN, 9)); discardHdr.setAlignmentX(Component.LEFT_ALIGNMENT);
+		discardHdr.setFont(FontLoader.loadPixelNESFont(9)); discardHdr.setAlignmentX(Component.LEFT_ALIGNMENT);
 		JPanel dp = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 6)); dp.setAlignmentX(Component.LEFT_ALIGNMENT);
 		for (int i = 0; i < hand.size(); i++) {
 			final int hi = i; CardData hc = hand.get(i); boolean payable = !hc.isLightOrDark();
 			JLabel lbl = new JLabel("...", SwingConstants.CENTER);
 			lbl.setPreferredSize(new Dimension(CARD_W, CARD_H)); lbl.setMinimumSize(new Dimension(CARD_W, CARD_H));
 			lbl.setOpaque(true); lbl.setBackground(payable ? Color.DARK_GRAY : new Color(50,50,50));
-			lbl.setForeground(Color.WHITE); lbl.setFont(new Font("Pixel NES", Font.PLAIN, 10));
+			lbl.setForeground(Color.WHITE); lbl.setFont(FontLoader.loadPixelNESFont(10));
 			lbl.setBorder(BorderFactory.createLineBorder(payable ? Color.GRAY : new Color(80,80,80), 1));
 			lbl.setCursor(payable ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : Cursor.getDefaultCursor());
 			final String imgUrl = hc.imageUrl();
@@ -8587,7 +8587,7 @@ public class MainWindow {
 		centerPanel.add(discardHdr); centerPanel.add(dp);
 
 		JButton cancelBtn = new JButton("Cancel");
-		cancelBtn.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		cancelBtn.setFont(FontLoader.loadPixelNESFont(11));
 		cancelBtn.addActionListener(ev -> dlg.dispose());
 		confirmBtn.addActionListener(ev -> {
 			dlg.dispose();
@@ -8607,7 +8607,7 @@ public class MainWindow {
 		JLabel titleLabel = new JLabel(
 				"Priming cost for: " + card.name() + "  (" + (costDesc.length() > 0 ? costDesc : "free") + ")",
 				SwingConstants.CENTER);
-		titleLabel.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		titleLabel.setFont(FontLoader.loadPixelNESFont(11));
 
 		JPanel topPanel = new JPanel(new BorderLayout(0, 4));
 		topPanel.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
@@ -8748,7 +8748,7 @@ public class MainWindow {
 			}.execute();
 
 			JLabel nameLabel = new JLabel(candidate.name(), SwingConstants.CENTER);
-			nameLabel.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+			nameLabel.setFont(FontLoader.loadPixelNESFont(9));
 			nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
 
 			wrapper.add(lbl, BorderLayout.CENTER);
@@ -8757,7 +8757,7 @@ public class MainWindow {
 		}
 
 		JLabel hint = new JLabel("Click a card to select it", SwingConstants.CENTER);
-		hint.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+		hint.setFont(FontLoader.loadPixelNESFont(9));
 
 		dlg.getContentPane().setLayout(new BorderLayout(0, 6));
 		dlg.getContentPane().add(cardsPanel, BorderLayout.CENTER);
@@ -8779,7 +8779,7 @@ public class MainWindow {
 		slotsPanel.setOpaque(false);
 		for (int i = 0; i < 5; i++) {
 			JLabel slot = new JLabel();
-			slot.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+			slot.setFont(FontLoader.loadPixelNESFont(11));
 			slot.setBorder(BorderFactory.createEmptyBorder());
 			slot.setOpaque(false);
 			slot.setPreferredSize(new Dimension(CARD_H, CARD_H));
@@ -8830,14 +8830,14 @@ public class MainWindow {
 								g2.drawImage(img, 0, dy, dw, dy + dh, 0, 0, iw, ih, null);
 							}
 						}
-						g2.setFont(new Font("Pixel NES", Font.PLAIN, 14));
+						g2.setFont(FontLoader.loadPixelNESFont(14));
 						g2.setColor(Color.WHITE);
 						FontMetrics fm = g2.getFontMetrics();
 						int tx = (getWidth() - fm.stringWidth(letter)) / 2;
 						int ty = (getHeight() + fm.getAscent() - fm.getDescent()) / 2;
 						g2.drawString(letter, tx, ty);
 						if (getClientProperty("isExBurst") == Boolean.TRUE) {
-							g2.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+							g2.setFont(FontLoader.loadPixelNESFont(9));
 							FontMetrics exFm = g2.getFontMetrics();
 							int exW = exFm.stringWidth("EX");
 							int exX = getWidth() - exW - 3;
@@ -8918,14 +8918,14 @@ public class MainWindow {
 								g2.drawImage(img, dx, dy, dx + dw, dy + dh, 0, 0, iw, ih, null);
 							}
 						}
-						g2.setFont(new Font("Pixel NES", Font.PLAIN, 14));
+						g2.setFont(FontLoader.loadPixelNESFont(14));
 						g2.setColor(Color.WHITE);
 						FontMetrics fm = g2.getFontMetrics();
 						int tx = (getWidth() - fm.stringWidth(letter)) / 2;
 						int ty = (getHeight() + fm.getAscent() - fm.getDescent()) / 2;
 						g2.drawString(letter, tx, ty);
 						if (getClientProperty("isExBurst") == Boolean.TRUE) {
-							g2.setFont(new Font("Pixel NES", Font.PLAIN, 9));
+							g2.setFont(FontLoader.loadPixelNESFont(9));
 							FontMetrics exFm = g2.getFontMetrics();
 							int exY = exFm.getAscent() + 2;
 							g2.setColor(Color.BLACK);
@@ -8983,7 +8983,7 @@ public class MainWindow {
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 		g.drawImage(base, 0, 0, size.width, size.height, null);
 		String text = String.valueOf(count);
-		g.setFont(new Font("Pixel NES", Font.PLAIN, 12));
+		g.setFont(FontLoader.loadPixelNESFont(12));
 		int textW = g.getFontMetrics().stringWidth(text);
 		int textH = g.getFontMetrics().getAscent();
 		int x = size.width - textW - 4;
@@ -9051,7 +9051,7 @@ public class MainWindow {
 		lbl.setPreferredSize(new Dimension(CARD_H, CARD_H));
 		lbl.setMinimumSize(new Dimension(CARD_H, CARD_H));
 		lbl.setOpaque(false);
-		lbl.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		lbl.setFont(FontLoader.loadPixelNESFont(11));
 		lbl.setBorder(BorderFactory.createEmptyBorder());
 		lbl.addMouseListener(new MouseAdapter() {
 			@Override public void mousePressed(MouseEvent e) {

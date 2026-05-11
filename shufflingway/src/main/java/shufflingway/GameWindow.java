@@ -2,7 +2,6 @@ package shufflingway;
 
 import java.awt.Color;
 import java.awt.Component;
-import java.awt.Font;
 import java.awt.Panel;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -30,7 +29,7 @@ public class GameWindow extends JPanel {
 		setLayout(gridBagLayout);
 		
 		JButton phaseButton = new JButton("Active Phase");
-		phaseButton.setFont(new Font("Pixel NES", Font.PLAIN, 11));
+		phaseButton.setFont(FontLoader.loadPixelNESFont(11));
 		phaseButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
 				switch (phase) {

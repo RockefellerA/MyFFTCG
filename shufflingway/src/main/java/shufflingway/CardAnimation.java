@@ -84,7 +84,7 @@ class CardAnimation {
 		Graphics2D g = canvas.createGraphics();
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 		String text = String.valueOf(value);
-		Font font = new Font("Pixel NES", Font.BOLD, 13);
+		Font font = FontLoader.loadPixelNESFont(13);
 		g.setFont(font);
 		FontMetrics fm = g.getFontMetrics();
 		int tw = fm.stringWidth(text);
