@@ -256,6 +256,9 @@ public class MainWindow {
 	private int     p1GlobalDmgReduction  = 0;
 	private int     p2GlobalDmgReduction  = 0;
 
+	/** End-of-turn effects queued this turn; fired at the beginning of the END phase. */
+	private final List<java.util.function.Consumer<GameContext>> endOfTurnEffects = new ArrayList<>();
+
 	public static void main(String[] args) {
 		Runtime.getRuntime().addShutdownHook(new Thread(ImageCache::shutdown));
 		EventQueue.invokeLater(new Runnable() {
@@ -897,6 +900,7 @@ public class MainWindow {
 	private void startGame(int deckId) {
 		gameState.reset();
 		p1LbIndex = 0;
+		endOfTurnEffects.clear();
 		computerPlayer = new ComputerPlayer();
 		clearUIZones();
 		if (nextPhaseButton != null) nextPhaseButton.setEnabled(false);
@@ -1290,6 +1294,7 @@ public class MainWindow {
 			case MAIN_2 -> {
                             gameState.advancePhase();   // MAIN_2 → END
                             logEntry("End Phase");
+                            fireEndOfTurnEffects(true);
                             for (int i = 0; i < p1ForwardDamage.size(); i++) p1ForwardDamage.set(i, 0);
                             for (int i = 0; i < p1ForwardPowerBoost.size(); i++) p1ForwardPowerBoost.set(i, 0);
                             for (int i = 0; i < p1ForwardPowerReduction.size(); i++) p1ForwardPowerReduction.set(i, 0);
@@ -7384,7 +7389,30 @@ public class MainWindow {
 					}
 				}
 			}
+
+			@Override public void addEndOfTurnEffect(java.util.function.Consumer<GameContext> effect) {
+				endOfTurnEffects.add(effect);
+			}
+
+			@Override public boolean abilityUserControlsCard(String cardName) {
+				List<CardData> fwds = isP1 ? p1ForwardCards : p2ForwardCards;
+				List<CardData> mons = isP1 ? p1MonsterCards : p2MonsterCards;
+				CardData[]     bkps = isP1 ? p1BackupCards  : p2BackupCards;
+				for (CardData c : fwds) if (c != null && c.name().equalsIgnoreCase(cardName)) return true;
+				for (CardData c : mons) if (c != null && c.name().equalsIgnoreCase(cardName)) return true;
+				for (CardData c : bkps) if (c != null && c.name().equalsIgnoreCase(cardName)) return true;
+				return false;
+			}
 		};
+	}
+
+	/** Fires all queued end-of-turn effects using a context for {@code isP1}, then clears the queue. */
+	private void fireEndOfTurnEffects(boolean isP1) {
+		if (endOfTurnEffects.isEmpty()) return;
+		List<java.util.function.Consumer<GameContext>> pending = new ArrayList<>(endOfTurnEffects);
+		endOfTurnEffects.clear();
+		GameContext ctx = buildGameContext(isP1);
+		pending.forEach(e -> e.accept(ctx));
 	}
 
 	// -------------------------------------------------------------------------
@@ -9341,6 +9369,7 @@ public class MainWindow {
 			}
 			refreshP2BreakLabel();
 			refreshP2HandCountLabel();
+			fireEndOfTurnEffects(false);
 			for (int i = 0; i < p2ForwardDamage.size(); i++) p2ForwardDamage.set(i, 0);
 			for (int i = 0; i < p2ForwardPowerBoost.size(); i++) p2ForwardPowerBoost.set(i, 0);
 			for (int i = 0; i < p2ForwardPowerReduction.size(); i++) p2ForwardPowerReduction.set(i, 0);

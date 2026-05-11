@@ -213,6 +213,23 @@ public class ActionResolver {
         "(?:your\\s+opponent's|the\\s+next)\\s+turn\\.?"
     );
 
+    /**
+     * Matches "At the end of this turn, if you control &lt;cardName&gt;, deal it N damage."
+     * Used as a Choose followup that queues conditional damage to fire at the end phase.
+     * <ul>
+     *   <li>Group {@code cardName} — the card the ability user must control</li>
+     *   <li>Group {@code damage}   — fixed damage amount</li>
+     * </ul>
+     */
+    private static final Pattern FOLLOWUP_END_OF_TURN_COND_DAMAGE = Pattern.compile(
+        "(?i)At\\s+the\\s+end\\s+of\\s+this\\s+turn,\\s+if\\s+you\\s+control\\s+(?<cardName>.+?),\\s+deal\\s+it\\s+(?<damage>\\d+)\\s+damage\\.?"
+    );
+
+    /** Matches "At the end of this turn, &lt;rest&gt;" — any delayed standalone effect. */
+    private static final Pattern AT_END_OF_TURN_PATTERN = Pattern.compile(
+        "(?i)At\\s+the\\s+end\\s+of\\s+this\\s+turn,\\s+(?<rest>.+)"
+    );
+
     // ---- Damage-shield followup patterns (apply to selected "it/them" targets) --------
 
     /** Matches "During this turn, the next damage dealt to it/him becomes 0 instead." */
@@ -638,6 +655,9 @@ public class ActionResolver {
         result = tryParseChooseCharacter(effectText, source);
         if (result != null) return result;
 
+        result = tryParseDelayedEffect(effectText);
+        if (result != null) return result;
+
         result = tryParseAllFieldEffect(effectText);
         if (result != null) return result;
 
@@ -693,6 +713,7 @@ public class ActionResolver {
     public static String matchedPatternName(String effectText, CardData source) {
         if (tryParseDealDamageToForwards(effectText)          != null) return "DealDamageToForwards";
         if (tryParseChooseCharacter(effectText, source)       != null) return "ChooseCharacter";
+        if (tryParseDelayedEffect(effectText)                 != null) return "DelayedEffect";
         if (tryParseAllFieldEffect(effectText)                != null) return "AllFieldEffect";
         if (tryParseStandalonePowerBoostUntil(effectText, source) != null) return "StandalonePowerBoostUntil";
         if (tryParseStandalonePowerReduceUntil(effectText, source) != null) return "StandalonePowerReduceUntil";
@@ -1594,6 +1615,31 @@ public class ActionResolver {
             };
         }
 
+        // --- End-of-turn conditional damage followup ---
+        // e.g. "At the end of this turn, if you control <name>, deal it N damage."
+        Matcher eotDmgM = FOLLOWUP_END_OF_TURN_COND_DAMAGE.matcher(primaryFollowup);
+        if (eotDmgM.find()) {
+            String condCard = eotDmgM.group("cardName").trim();
+            int damage      = Integer.parseInt(eotDmgM.group("damage"));
+            return ctx -> {
+                ctx.logEntry(choosePrefix + " — End of turn: if you control " + condCard + ", deal " + damage + " damage");
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, inclSummons);
+                if (!ts.isEmpty()) {
+                    ctx.addEndOfTurnEffect(endCtx -> {
+                        if (endCtx.abilityUserControlsCard(condCard)) {
+                            sortedByIdxDesc(ts, true) .forEach(t -> endCtx.damageTarget(t, damage));
+                            sortedByIdxDesc(ts, false).forEach(t -> endCtx.damageTarget(t, damage));
+                        } else {
+                            endCtx.logEntry("End-of-turn damage skipped: " + condCard + " not on field");
+                        }
+                    });
+                }
+                if (secondary != null) secondary.accept(ctx);
+            };
+        }
+
         // Recognised "Choose" header but followup not yet implemented
         Consumer<GameContext> warnEffect = ctx -> ctx.logEntry(
                 "[ActionResolver] Choose effect — followup not yet implemented: " + followup);
@@ -1789,6 +1835,26 @@ public class ActionResolver {
         return ctx -> {
             ctx.logEntry("Effect: Opponent discards " + count + " card(s)");
             ctx.forceOpponentDiscard(count);
+        };
+    }
+
+    // -------------------------------------------------------------------------
+    // Delayed ("at the end of this turn") effect parser
+    // -------------------------------------------------------------------------
+
+    /**
+     * Parses "At the end of this turn, &lt;effect&gt;" — wraps any supported mass-field
+     * effect so it fires at the beginning of the end phase instead of immediately.
+     */
+    private static Consumer<GameContext> tryParseDelayedEffect(String text) {
+        Matcher m = AT_END_OF_TURN_PATTERN.matcher(text);
+        if (!m.find()) return null;
+        String rest = m.group("rest");
+        Consumer<GameContext> inner = tryParseAllFieldEffect(rest);
+        if (inner == null) return null;
+        return ctx -> {
+            ctx.logEntry("End-of-turn effect queued: " + rest);
+            ctx.addEndOfTurnEffect(inner);
         };
     }
 

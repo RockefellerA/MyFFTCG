@@ -2,6 +2,7 @@ package shufflingway;
 
 import java.util.EnumSet;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Bridge interface that gives {@link ActionResolver} controlled access to the
@@ -444,6 +445,22 @@ public interface GameContext {
 
     /** Removes P2's forward at {@code idx} from the game permanently. */
     void removeP2ForwardFromGame(int idx);
+
+    // ---- Mass field effects -------------------------------------------------
+
+    // ---- End-of-turn delayed effects ----------------------------------------
+
+    /**
+     * Registers {@code effect} to execute at the beginning of the end phase this turn,
+     * before turn-cleanup clearing.
+     */
+    void addEndOfTurnEffect(Consumer<GameContext> effect);
+
+    /**
+     * Returns {@code true} if the ability user controls a field card whose name
+     * matches {@code cardName} (case-insensitive), checking forwards, monsters, and backups.
+     */
+    boolean abilityUserControlsCard(String cardName);
 
     // ---- Mass field effects -------------------------------------------------
 

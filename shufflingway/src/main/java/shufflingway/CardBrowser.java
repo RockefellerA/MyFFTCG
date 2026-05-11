@@ -379,6 +379,7 @@ public class CardBrowser extends JDialog {
                 } catch (InterruptedException | ExecutionException e) {
                     cardImageLabel.setIcon(null);
                     cardImageLabel.setText("Error loading image");
+                    e.printStackTrace();
                 }
             }
         }.execute();
