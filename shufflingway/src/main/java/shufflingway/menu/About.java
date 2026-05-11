@@ -13,7 +13,6 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.border.EmptyBorder;
 
-@SuppressWarnings("serial")
 public class About extends JDialog {
 
 	private final JPanel contentPanel = new JPanel();

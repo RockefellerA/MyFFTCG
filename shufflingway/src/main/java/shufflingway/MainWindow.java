@@ -1,10 +1,6 @@
 package shufflingway;
 
-import java.io.File;
-import java.io.IOException;
-import javax.imageio.ImageIO;
 import java.awt.AlphaComposite;
-import java.awt.BasicStroke;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -14,7 +10,6 @@ import java.awt.EventQueue;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.FontMetrics;
-import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
@@ -30,6 +25,8 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.awt.image.ColorConvertOp;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -41,6 +38,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
+import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.ImageIcon;
@@ -73,6 +71,8 @@ import scraper.DeckDatabase;
 import scraper.DeckDatabase.DeckCardDetail;
 import static shufflingway.CardAnimation.CARD_H;
 import static shufflingway.CardAnimation.CARD_W;
+import static shufflingway.CpPaymentUtils.contributingElement;
+import static shufflingway.CpPaymentUtils.matchesAnyElement;
 import shufflingway.menu.FileMenu;
 import shufflingway.menu.HelpMenu;
 import shufflingway.menu.MultiplayerMenu;
@@ -400,9 +400,9 @@ public class MainWindow {
 		p2DeckLabel.setMinimumSize(cardSize);
 
 		p2CrystalDisplay = new CrystalDisplay(0);
-		p2CrystalDisplay.setPreferredSize(new Dimension(REMOVE_W, CRYSTAL_H));
-		p2CrystalDisplay.setMinimumSize(new Dimension(REMOVE_W, CRYSTAL_H));
-		p2CrystalDisplay.setMaximumSize(new Dimension(REMOVE_W, CRYSTAL_H));
+		p2CrystalDisplay.setPreferredSize(new Dimension(REMOVE_W, CrystalDisplay.CRYSTAL_H));
+		p2CrystalDisplay.setMinimumSize(new Dimension(REMOVE_W, CrystalDisplay.CRYSTAL_H));
+		p2CrystalDisplay.setMaximumSize(new Dimension(REMOVE_W, CrystalDisplay.CRYSTAL_H));
 
 		JPanel p2CornerPanel = new JPanel(new BorderLayout(0, 0));
 		p2CornerPanel.add(p2BreakLabel, BorderLayout.NORTH);
@@ -561,9 +561,9 @@ public class MainWindow {
 		p1RemoveButton.addActionListener(e -> showRemovedFromPlayDialog(p1RemoveLabel, "P1"));
 
 		p1CrystalDisplay = new CrystalDisplay(0);
-		p1CrystalDisplay.setPreferredSize(new Dimension(REMOVE_W, CRYSTAL_H));
-		p1CrystalDisplay.setMinimumSize(new Dimension(REMOVE_W, CRYSTAL_H));
-		p1CrystalDisplay.setMaximumSize(new Dimension(REMOVE_W, CRYSTAL_H));
+		p1CrystalDisplay.setPreferredSize(new Dimension(REMOVE_W, CrystalDisplay.CRYSTAL_H));
+		p1CrystalDisplay.setMinimumSize(new Dimension(REMOVE_W, CrystalDisplay.CRYSTAL_H));
+		p1CrystalDisplay.setMaximumSize(new Dimension(REMOVE_W, CrystalDisplay.CRYSTAL_H));
 
 		// Crystal sits above the full bar, pinned to the right to align with the RFP button
 		JPanel p1CrystalRow = new JPanel(new BorderLayout(0, 0));
@@ -3803,41 +3803,6 @@ public class MainWindow {
 	 * {@code excludeHandIdx} is the index of the card being played (not available
 	 * for discard).
 	 */
-	/** Returns the first element of {@code source} that matches one of {@code playedElems}. */
-	private String contributingElement(CardData source, String[] playedElems) {
-		for (String pe : playedElems)
-			if (source.containsElement(pe)) return pe;
-		return playedElems[0];
-	}
-
-	/**
-	 * Returns the element of {@code source} that has the largest remaining deficit
-	 * ({@code required - alreadyPaid}), so multi-element payment cards fill whichever
-	 * requirement is still most needed rather than always defaulting to the first match.
-	 */
-	private String contributingElement(CardData source, String[] playedElems,
-			Map<String, Integer> cpByElem, Map<String, Integer> costByElem) {
-		String best = null;
-		int maxDeficit = Integer.MIN_VALUE;
-		for (String pe : playedElems) {
-			if (source.containsElement(pe)) {
-				int deficit = costByElem.getOrDefault(pe, 0) - cpByElem.getOrDefault(pe, 0);
-				if (deficit > maxDeficit) {
-					maxDeficit = deficit;
-					best = pe;
-				}
-			}
-		}
-		return best != null ? best : playedElems[0];
-	}
-
-	/** Returns true if {@code source} contains any element from {@code playedElems}. */
-	private boolean matchesAnyElement(CardData source, String[] playedElems) {
-		for (String pe : playedElems)
-			if (source.containsElement(pe)) return true;
-		return false;
-	}
-
 	private boolean canAffordCard(CardData card, int excludeHandIdx) {
 		String[]       elems = card.elements();
 		List<CardData> hand  = gameState.getP1Hand();
@@ -9017,110 +8982,9 @@ public class MainWindow {
 	private void setPanelBackground(JPanel panel, Color color) {
 		panel.setBackground(color);
 		for (Component c : panel.getComponents()) {
-			if (c instanceof JPanel) {
-				setPanelBackground((JPanel) c, color);
+			if (c instanceof JPanel jPanel) {
+				setPanelBackground(jPanel, color);
 			}
-		}
-	}
-
-	// -------------------------------------------------------------------------
-	// Gradient board panel
-	// -------------------------------------------------------------------------
-
-	// -------------------------------------------------------------------------
-	// Grayscale label — auto-converts any icon set on it to grayscale
-	// -------------------------------------------------------------------------
-
-	// -------------------------------------------------------------------------
-	// Crystal display — elongated upright hexagon badge with ": N" label
-	// -------------------------------------------------------------------------
-
-	private static final int CRYSTAL_H = 36;  // component height
-
-	/**
-	 * A compact custom component that renders an elongated upright hexagon
-	 * (point-top, flat left/right sides) in crystal-blue and draws ": N"
-	 * centred inside it, where N is the current Crystal count.
-	 */
-	private class CrystalDisplay extends javax.swing.JComponent {
-		private int     count;
-		/** Once true (count has been > 0 this game), the display stays visible. */
-		private boolean hasBeenNonZero = false;
-		/** Index into ElementColor.values(); starts at ICE to match the original blue. */
-		private int     colorIndex     = ElementColor.ICE.ordinal();
-
-		CrystalDisplay(int initial) {
-			this.count = initial;
-			setPreferredSize(new java.awt.Dimension(CARD_W, CRYSTAL_H));
-			setMinimumSize(new java.awt.Dimension(CARD_W, CRYSTAL_H));
-			setMaximumSize(new java.awt.Dimension(CARD_W, CRYSTAL_H));
-			setOpaque(false);
-			setToolTipText("Crystals — click to change element color");
-			addMouseListener(new java.awt.event.MouseAdapter() {
-				@Override public void mousePressed(java.awt.event.MouseEvent e) {
-					colorIndex = (colorIndex + 1) % ElementColor.values().length;
-					repaint();
-				}
-			});
-			updateVisibility();
-		}
-
-		/** Updates count, latches persistence when count first exceeds zero, then repaints. */
-		void setCount(int n) {
-			this.count = n;
-			if (n > 0) hasBeenNonZero = true;
-			updateVisibility();
-			repaint();
-		}
-
-		/** Shown in debug mode or once the count has ever been > 0 this game. */
-		void updateVisibility() {
-			setVisible(AppSettings.isDebugMode() || hasBeenNonZero);
-		}
-
-		/** Fully resets for a new game: count, persistence flag, and visibility. */
-		void hardReset() {
-			count          = 0;
-			hasBeenNonZero = false;
-			updateVisibility();
-			repaint();
-		}
-
-		@Override
-		protected void paintComponent(Graphics g0) {
-			super.paintComponent(g0);
-			Graphics2D g = (Graphics2D) g0.create();
-			g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-			g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-
-			int cw = getWidth(), ch = getHeight();
-
-			// Elongated upright hexagon: 22 px wide, 32 px tall, centred
-			int hxW = 22, hxH = 32;
-			int hxX = (cw - hxW) / 2;
-			int hxY = (ch - hxH) / 2;
-
-			int shoulder = hxH / 5;
-			int[] xp = { hxX + hxW/2, hxX + hxW, hxX + hxW, hxX + hxW/2, hxX,                   hxX           };
-			int[] yp = { hxY,          hxY + shoulder, hxY + hxH - shoulder, hxY + hxH, hxY + hxH - shoulder, hxY + shoulder };
-
-			Color base = ElementColor.values()[colorIndex].color;
-			g.setColor(new Color(base.getRed(), base.getGreen(), base.getBlue(), 210));
-			g.fillPolygon(xp, yp, 6);
-			g.setColor(base.darker());
-			g.setStroke(new BasicStroke(1.5f));
-			g.drawPolygon(xp, yp, 6);
-
-			// Count number centred inside the hexagon (no colon)
-			g.setFont(new Font("Pixel NES", Font.PLAIN, 10));
-			g.setColor(Color.WHITE);
-			String text = String.valueOf(count);
-			FontMetrics fm = g.getFontMetrics();
-			int tx = (cw - fm.stringWidth(text)) / 2;
-			int ty = hxY + hxH / 2 + fm.getAscent() / 2 - 1;
-			g.drawString(text, tx, ty);
-
-			g.dispose();
 		}
 	}
 
@@ -9129,32 +8993,6 @@ public class MainWindow {
 		if (p1CrystalDisplay != null) p1CrystalDisplay.setCount(gameState.getP1Crystals());
 		if (p2CrystalDisplay != null) p2CrystalDisplay.setCount(gameState.getP2Crystals());
 	}
-
-	private static class GrayscaleLabel extends JLabel {
-		private String url;
-
-		GrayscaleLabel(String text) { super(text); }
-
-		void setUrl(String u) { this.url = u; }
-		String getUrl()       { return url; }
-
-		@Override
-		public void setIcon(javax.swing.Icon icon) {
-			if (icon instanceof ImageIcon) {
-				Image src = ((ImageIcon) icon).getImage();
-				BufferedImage buf = new BufferedImage(icon.getIconWidth(), icon.getIconHeight(), BufferedImage.TYPE_INT_ARGB);
-				buf.getGraphics().drawImage(src, 0, 0, null);
-				BufferedImage gray = new ColorConvertOp(ColorSpace.getInstance(ColorSpace.CS_GRAY), null).filter(buf, null);
-				super.setIcon(new ImageIcon(gray));
-			} else {
-				super.setIcon(icon);
-			}
-		}
-	}
-
-	// -------------------------------------------------------------------------
-	// Gradient board panel
-	// -------------------------------------------------------------------------
 
 	// -------------------------------------------------------------------------
 	// P2 rendering helpers
@@ -9716,29 +9554,4 @@ public class MainWindow {
 		}
 	}
 
-	private class GradientPanel extends JPanel {
-		private Color gradientColor;
-		private final boolean colorAtTop;
-
-		GradientPanel(boolean colorAtTop) {
-			this.colorAtTop = colorAtTop;
-		}
-
-		void setGradientColor(Color c) {
-			this.gradientColor = c;
-			repaint();
-		}
-
-		@Override
-		protected void paintComponent(Graphics g) {
-			super.paintComponent(g);
-			Color base = UIManager.getColor("Panel.background");
-			Color top    = colorAtTop && gradientColor != null ? gradientColor : base;
-			Color bottom = !colorAtTop && gradientColor != null ? gradientColor : base;
-			Graphics2D g2d = (Graphics2D) g.create();
-			g2d.setPaint(new GradientPaint(0, 0, top, 0, getHeight(), bottom));
-			g2d.fillRect(0, 0, getWidth(), getHeight());
-			g2d.dispose();
-		}
-	}
 }

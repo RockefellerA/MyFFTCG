@@ -13,7 +13,6 @@ import javax.swing.JPanel;
 import java.awt.GridBagLayout;
 import java.awt.GridBagConstraints;
 
-@SuppressWarnings("serial")
 public class GameWindow extends JPanel {
 	
 	public int phase = 0; // Track the game phases with this handy button!
