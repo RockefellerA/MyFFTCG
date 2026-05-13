@@ -112,6 +112,13 @@
       <version>20240303</version>
     </dependency>
 
+    <!-- WebP encode/decode (JNI wrapper around libwebp, natives bundled per platform) -->
+    <dependency>
+      <groupId>dev.matrixlab.webp4j</groupId>
+      <artifactId>webp4j-core</artifactId>
+      <version>2.2.0</version>
+    </dependency>
+
     <!-- JUnit 5 for unit tests -->
     <dependency>
       <groupId>org.junit.jupiter</groupId>
