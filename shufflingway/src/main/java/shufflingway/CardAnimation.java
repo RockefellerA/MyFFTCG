@@ -102,6 +102,39 @@ class CardAnimation {
 		renderPill(canvas, damage, new Color(255, 50, 50), false);
 	}
 
+	/** Returns a {@code CARD_H × CARD_H} placeholder canvas with a card outline and "Loading…" text. */
+	static BufferedImage renderPlaceholder(CardState state) {
+		BufferedImage canvas = new BufferedImage(CARD_H, CARD_H, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = canvas.createGraphics();
+		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+		int cx, cy, rw, rh;
+		if (state == CardState.DULL) {
+			// rotated 90° CW: CARD_H wide × CARD_W tall, pinned bottom-left
+			cx = 0; cy = CARD_H - CARD_W; rw = CARD_H; rh = CARD_W;
+		} else {
+			cx = 0; cy = 0; rw = CARD_W; rh = CARD_H;
+		}
+
+		g.setColor(new Color(30, 30, 30, 200));
+		g.fillRoundRect(cx + 2, cy + 2, rw - 4, rh - 4, 10, 10);
+		g.setColor(new Color(160, 160, 160));
+		g.setStroke(new BasicStroke(2f));
+		g.drawRoundRect(cx + 2, cy + 2, rw - 4, rh - 4, 10, 10);
+
+		String text = "Loading...";
+		Font font = FontLoader.loadPixelNESFont(11);
+		g.setFont(font);
+		FontMetrics fm = g.getFontMetrics();
+		int tx = cx + (rw - fm.stringWidth(text)) / 2;
+		int ty = cy + (rh + fm.getAscent()) / 2 - fm.getDescent();
+		g.setColor(new Color(180, 180, 180));
+		g.drawString(text, tx, ty);
+		g.dispose();
+		return canvas;
+	}
+
 	/** Converts any {@link Image} to a scaled {@link BufferedImage} (ARGB). */
 	static BufferedImage toARGB(Image src, int w, int h) {
 		BufferedImage buf = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);

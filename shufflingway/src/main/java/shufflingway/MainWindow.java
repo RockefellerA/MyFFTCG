@@ -5398,10 +5398,11 @@ public class MainWindow {
 		JLabel slot  = p1BackupLabels[idx];
 		if (slot == null) return;
 		if (url == null) { slot.setIcon(null); slot.setText(null); return; }
+		if (slot.getIcon() == null) slot.setIcon(new ImageIcon(CardAnimation.renderPlaceholder(state)));
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
-				if (raw == null) return null;
+				if (raw == null) return new ImageIcon(CardAnimation.renderPlaceholder(state));
 				BufferedImage card = CardAnimation.toARGB(raw, CARD_W, CARD_H);
 				return new ImageIcon(CardAnimation.renderBackupCard(card, state, false, false, p1BackupFrozen[idx]));
 			}
@@ -7956,10 +7957,11 @@ public class MainWindow {
 		CardState state = p1MonsterStates.get(idx);
 		JLabel slot  = p1MonsterLabels.get(idx);
 		if (url == null) return;
+		if (slot.getIcon() == null) slot.setIcon(new ImageIcon(CardAnimation.renderPlaceholder(state)));
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
-				if (raw == null) return null;
+				if (raw == null) return new ImageIcon(CardAnimation.renderPlaceholder(state));
 				BufferedImage card = CardAnimation.toARGB(raw, CARD_W, CARD_H);
 				return new ImageIcon(CardAnimation.renderBackupCard(card, state, false, false, p1MonsterFrozen.get(idx)));
 			}
@@ -8014,10 +8016,11 @@ public class MainWindow {
 		CardState state = p2MonsterStates.get(idx);
 		JLabel slot = p2MonsterLabels.get(idx);
 		if (url == null) return;
+		if (slot.getIcon() == null) slot.setIcon(new ImageIcon(CardAnimation.renderPlaceholder(state)));
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
-				if (raw == null) return null;
+				if (raw == null) return new ImageIcon(CardAnimation.renderPlaceholder(state));
 				BufferedImage card = CardAnimation.toARGB(raw, CARD_W, CARD_H);
 				return new ImageIcon(CardAnimation.renderBackupCard(card, state, false, false, p2MonsterFrozen.get(idx)));
 			}
@@ -8078,10 +8081,11 @@ public class MainWindow {
 		int power     = effectiveP1ForwardPower(idx);
 		int basePower = (topCard != null ? topCard : p1ForwardCards.get(idx)).power();
 		boolean selected = p1AttackSelection.contains(idx);
+		if (slot.getIcon() == null) slot.setIcon(new ImageIcon(CardAnimation.renderPlaceholder(state)));
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
-				if (raw == null) return null;
+				if (raw == null) return new ImageIcon(CardAnimation.renderPlaceholder(state));
 				BufferedImage canvas = CardAnimation.renderBackupCard(CardAnimation.toARGB(raw, CARD_W, CARD_H), state, canAttack, selected, Boolean.TRUE.equals(p1ForwardFrozen.get(idx)));
 				if (damage > 0) {
 					CardAnimation.renderDamageOverlay(canvas, damage);
@@ -9129,10 +9133,11 @@ public class MainWindow {
 		CardState state = p2BackupStates[idx];
 		if (slot == null) return;
 		if (url == null) { slot.setIcon(null); slot.setText(null); return; }
+		if (slot.getIcon() == null) slot.setIcon(new ImageIcon(CardAnimation.renderPlaceholder(state)));
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
-				if (raw == null) return null;
+				if (raw == null) return new ImageIcon(CardAnimation.renderPlaceholder(state));
 				return new ImageIcon(CardAnimation.renderBackupCard(CardAnimation.toARGB(raw, CARD_W, CARD_H), state, false, false, p2BackupFrozen[idx]));
 			}
 			@Override protected void done() {
@@ -9152,10 +9157,11 @@ public class MainWindow {
 		int damage    = p2ForwardDamage.get(idx);
 		int power     = effectiveP2ForwardPower(idx);
 		int basePower = p2ForwardCards.get(idx).power();
+		if (slot.getIcon() == null) slot.setIcon(new ImageIcon(CardAnimation.renderPlaceholder(state)));
 		new SwingWorker<ImageIcon, Void>() {
 			@Override protected ImageIcon doInBackground() throws Exception {
 				Image raw = ImageCache.load(url);
-				if (raw == null) return null;
+				if (raw == null) return new ImageIcon(CardAnimation.renderPlaceholder(state));
 				BufferedImage canvas = CardAnimation.renderBackupCard(CardAnimation.toARGB(raw, CARD_W, CARD_H), state, false, false, p2ForwardFrozen.get(idx));
 				if (damage > 0) {
 					CardAnimation.renderDamageOverlay(canvas, damage);

@@ -68,7 +68,7 @@ public class DeckManager extends JDialog {
         "Serial", "Name", "Type", "Element", "Cost", "Power", "Rarity", "Job", "Category 1", "Category 2", "Card Text"
     };
     private static final String[] DECK_COLUMNS = {
-        "Serial", "Name", "Type", "Element", "Cost", "Power", "Rarity", "Qty"
+        "Serial", "Name", "Type", "Element", "Cost", "Power", "Job", "Category 1", "Category 2", "Qty"
     };
     private static final int MAX_DECK_SIZE    = 50;
     private static final int MAX_LB_DECK_SIZE = 8;
@@ -270,6 +270,18 @@ public class DeckManager extends JDialog {
                 }
                 return c;
             }
+            @Override
+            public String getToolTipText(MouseEvent e) {
+                int row = rowAtPoint(e.getPoint());
+                int col = columnAtPoint(e.getPoint());
+                if (row < 0 || col < 0) return null;
+                Object value = getValueAt(row, col);
+                if (value == null) return null;
+                String text = value.toString();
+                if (text.isBlank()) return null;
+                Component c = prepareRenderer(getCellRenderer(row, col), row, col);
+                return c.getPreferredSize().width > getCellRect(row, col, false).width ? text : null;
+            }
         };
         cardTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         cardTable.getTableHeader().setReorderingAllowed(false);
@@ -283,6 +295,7 @@ public class DeckManager extends JDialog {
         cardTable.removeColumn(cardTable.getColumnModel().getColumn(10));
         applyBrowserRenderers(cardTable);
         setNarrowColumns(cardTable);
+        cardTable.getColumnModel().getColumn(6).setMaxWidth(55);
 
         cardTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
@@ -361,12 +374,25 @@ public class DeckManager extends JDialog {
                 }
                 return c;
             }
+            @Override
+            public String getToolTipText(MouseEvent e) {
+                int row = rowAtPoint(e.getPoint());
+                int col = columnAtPoint(e.getPoint());
+                if (row < 0 || col < 0) return null;
+                Object value = getValueAt(row, col);
+                if (value == null) return null;
+                String text = value.toString();
+                if (text.isBlank()) return null;
+                Component c = prepareRenderer(getCellRenderer(row, col), row, col);
+                return c.getPreferredSize().width > getCellRect(row, col, false).width ? text : null;
+            }
         };
         deckTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         deckTable.getTableHeader().setReorderingAllowed(false);
         deckTable.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
         applyDeckRenderers(deckTable);
-        setNarrowColumns(deckTable);
+        setDeckNarrowColumns(deckTable);
+        deckTable.getColumnModel().moveColumn(9, 0);
 
         deckTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
@@ -395,7 +421,7 @@ public class DeckManager extends JDialog {
             if (!e.getValueIsAdjusting()) {
                 int row = deckTable.getSelectedRow();
                 if (row >= 0) {
-                    Integer qty = (Integer) deckModel.getValueAt(row, 7);
+                    Integer qty = (Integer) deckModel.getValueAt(row, 9);
                     removeBtn.setEnabled(true);
                     removeAllBtn.setEnabled(qty != null && qty > 1);
                 } else {
@@ -497,6 +523,21 @@ public class DeckManager extends JDialog {
     private void applyDeckRenderers(JTable table) {
         // Grey out Power (5) when 0 or null
         table.getColumnModel().getColumn(5).setCellRenderer(powerRenderer());
+        // Grey out Job (6) and Category 2 (8) when empty
+        DefaultTableCellRenderer greyIfEmpty = new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(
+                    JTable t, Object value, boolean sel, boolean focus, int row, int col) {
+                super.getTableCellRendererComponent(t, value, sel, focus, row, col);
+                if (!sel && (value == null || value.toString().isBlank()))
+                    setBackground(Color.LIGHT_GRAY);
+                else
+                    setBackground(t.getBackground());
+                return this;
+            }
+        };
+        table.getColumnModel().getColumn(6).setCellRenderer(greyIfEmpty);
+        table.getColumnModel().getColumn(8).setCellRenderer(greyIfEmpty);
     }
 
     private DefaultTableCellRenderer powerRenderer() {
@@ -542,7 +583,7 @@ public class DeckManager extends JDialog {
             int mainTotal = 0, lbTotal = 0;
             for (Object[] row : rows) {
                 deckModel.addRow(row);
-                int qty = (Integer) row[7];
+                int qty = (Integer) row[9];
                 if (lbSerials.contains((String) row[0])) lbTotal += qty;
                 else                                       mainTotal += qty;
             }
@@ -729,7 +770,7 @@ public class DeckManager extends JDialog {
         int viewRow = deckTable.getSelectedRow();
         if (viewRow < 0) return;
         String serial = (String) deckModel.getValueAt(viewRow, 0);
-        int count     = (Integer) deckModel.getValueAt(viewRow, 7);
+        int count     = (Integer) deckModel.getValueAt(viewRow, 9);
 
         try {
             db.setCardCount(selectedDeckId, serial, count - 1);
@@ -920,7 +961,7 @@ public class DeckManager extends JDialog {
             for (Object[] row : db.getDeckCards(entry.id())) {
                 cards.put(new JSONObject()
                         .put("serial", row[0])
-                        .put("qty",    row[7]));
+                        .put("qty",    row[9]));
             }
             String json = new JSONObject()
                     .put("name",  entry.name())
@@ -1029,19 +1070,30 @@ public class DeckManager extends JDialog {
     // Column sizing
     // -------------------------------------------------------------------------
 
-    /** Widens Name (1), shrinks Type (2), constrains Cost/Power/Rarity. */
+    /** Constrains shared columns — applied to both the browser and deck tables. */
     private void setNarrowColumns(JTable table) {
         table.getColumnModel().getColumn(1).setPreferredWidth(86);
-        table.getColumnModel().getColumn(2).setPreferredWidth(70);
+        table.getColumnModel().getColumn(2).setPreferredWidth(80);
+        table.getColumnModel().getColumn(2).setMaxWidth(80);
         int[][] specs = {
-            {4, 45, 60},  // Cost
-            {5, 55, 70},  // Power
-            {6, 55, 70},  // Rarity
+            {0, 70,  90},  // Serial
+            {3, 75, 100},  // Element
+            {4, 45,  60},  // Cost
+            {5, 55,  70},  // Power
         };
         for (int[] s : specs) {
             var col = table.getColumnModel().getColumn(s[0]);
             col.setPreferredWidth(s[1]);
             col.setMaxWidth(s[2]);
         }
+        table.getColumnModel().getColumn(6).setPreferredWidth(70);  // Rarity (browser) / Job (deck)
+    }
+
+    /** Applies deck-table-only overrides: tiny Qty column. */
+    private void setDeckNarrowColumns(JTable table) {
+        setNarrowColumns(table);
+        var qty = table.getColumnModel().getColumn(9);
+        qty.setPreferredWidth(28);
+        qty.setMaxWidth(38);
     }
 }
