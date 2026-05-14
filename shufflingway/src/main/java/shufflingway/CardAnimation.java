@@ -75,12 +75,12 @@ class CardAnimation {
 		return canvas;
 	}
 
-	/**
-	 * Draws {@code value} in a dark pill in the bottom-left of {@code canvas} using
-	 * {@code textColor} as the text color.  Used to show remaining HP, boosted power,
-	 * or reduced power with different colors.
-	 */
-	static void renderPowerOverlay(BufferedImage canvas, int value, Color textColor) {
+	/** Draws {@code value} in a dark pill in the bottom-right of {@code canvas} using {@code textColor}. */
+	static void renderPowerOverlayRight(BufferedImage canvas, int value, Color textColor) {
+		renderPill(canvas, value, textColor, true);
+	}
+
+	private static void renderPill(BufferedImage canvas, int value, Color textColor, boolean alignRight) {
 		Graphics2D g = canvas.createGraphics();
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 		String text = String.valueOf(value);
@@ -88,7 +88,7 @@ class CardAnimation {
 		g.setFont(font);
 		FontMetrics fm = g.getFontMetrics();
 		int tw = fm.stringWidth(text);
-		int tx = 4;
+		int tx = alignRight ? canvas.getWidth() - tw - 8 : 4;
 		int ty = canvas.getHeight() - 5;
 		g.setColor(new Color(0, 0, 0, 180));
 		g.fillRoundRect(tx - 4, ty - fm.getAscent() - 1, tw + 8, fm.getAscent() + fm.getDescent() + 2, 5, 5);
@@ -97,9 +97,9 @@ class CardAnimation {
 		g.dispose();
 	}
 
-	/** Draws remaining HP in a red pill — delegates to {@link #renderPowerOverlay}. */
-	static void renderDamageOverlay(BufferedImage canvas, int remainingHp) {
-		renderPowerOverlay(canvas, remainingHp, new Color(255, 50, 50));
+	/** Draws accumulated damage in a red pill at the bottom-left. */
+	static void renderDamageOverlay(BufferedImage canvas, int damage) {
+		renderPill(canvas, damage, new Color(255, 50, 50), false);
 	}
 
 	/** Converts any {@link Image} to a scaled {@link BufferedImage} (ARGB). */

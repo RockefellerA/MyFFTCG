@@ -8083,12 +8083,13 @@ public class MainWindow {
 				Image raw = ImageCache.load(url);
 				if (raw == null) return null;
 				BufferedImage canvas = CardAnimation.renderBackupCard(CardAnimation.toARGB(raw, CARD_W, CARD_H), state, canAttack, selected, Boolean.TRUE.equals(p1ForwardFrozen.get(idx)));
-				if (damage > 0 && power > 0) {
-					CardAnimation.renderPowerOverlay(canvas, power - damage, new Color(255, 50, 50));
-				} else if (power > basePower) {
-					CardAnimation.renderPowerOverlay(canvas, power, new Color(80, 220, 80));
+				if (damage > 0) {
+					CardAnimation.renderDamageOverlay(canvas, damage);
+				}
+				if (power > basePower) {
+					CardAnimation.renderPowerOverlayRight(canvas, power, new Color(80, 220, 80));
 				} else if (power < basePower) {
-					CardAnimation.renderPowerOverlay(canvas, power, new Color(230, 200, 60));
+					CardAnimation.renderPowerOverlayRight(canvas, power, new Color(230, 200, 60));
 				}
 				return new ImageIcon(canvas);
 			}
@@ -9156,12 +9157,13 @@ public class MainWindow {
 				Image raw = ImageCache.load(url);
 				if (raw == null) return null;
 				BufferedImage canvas = CardAnimation.renderBackupCard(CardAnimation.toARGB(raw, CARD_W, CARD_H), state, false, false, p2ForwardFrozen.get(idx));
-				if (damage > 0 && power > 0) {
-					CardAnimation.renderPowerOverlay(canvas, power - damage, new Color(255, 50, 50));
-				} else if (power > basePower) {
-					CardAnimation.renderPowerOverlay(canvas, power, new Color(80, 220, 80));
+				if (damage > 0) {
+					CardAnimation.renderDamageOverlay(canvas, damage);
+				}
+				if (power > basePower) {
+					CardAnimation.renderPowerOverlayRight(canvas, power, new Color(80, 220, 80));
 				} else if (power < basePower) {
-					CardAnimation.renderPowerOverlay(canvas, power, new Color(230, 200, 60));
+					CardAnimation.renderPowerOverlayRight(canvas, power, new Color(230, 200, 60));
 				}
 				return new ImageIcon(canvas);
 			}
@@ -9358,6 +9360,7 @@ public class MainWindow {
 					int toSpend = Math.min(remaining, avail);
 					if (toSpend > 0) { gameState.spendP2Cp(e, toSpend); remaining -= toSpend; }
 				}
+				for (String e : elems) { gameState.clearP2Cp(e); }
 				logEntry("[P2] Plays " + toPlay.name());
 				if (toPlay.isForward())      placeP2CardInForwardZone(toPlay);
 				else if (toPlay.isBackup())  placeP2CardInFirstBackupSlot(toPlay);
