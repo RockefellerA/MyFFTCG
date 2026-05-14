@@ -1838,44 +1838,19 @@ public class MainWindow {
 			triggerGameOver("7 Damage Taken - You Lose!");
 		}
 
-		if (p1DamageSlotPanel != null) {
-			p1DamageSlotPanel.putClientProperty("exBurst", isEx ? Boolean.TRUE : Boolean.FALSE);
-			for (JPanel s : p1DamageSlots) { if (s != null) s.repaint(); }
-			p1DamageSlotPanel.repaint();
-		}
+		animateCardToDamage(true, idx);
 
-		if (idx < 7 && p1DamageSlots[idx] != null) {
-			JPanel slot = p1DamageSlots[idx];
-			slot.putClientProperty("isExBurst", isEx ? Boolean.TRUE : Boolean.FALSE);
-			slot.repaint();
-			String url = drawn.imageUrl();
-			new SwingWorker<Image, Void>() {
-				@Override protected Image doInBackground() throws Exception {
-					return ImageCache.load(url);
-				}
-				@Override protected void done() {
-					try {
-						Image img = get();
-						if (img != null) { slot.putClientProperty("cardImg", img); slot.repaint(); }
-					} catch (InterruptedException | ExecutionException ignored) {}
-				}
-			}.execute();
-		}
-	}
-
-	private void p2TakeDamage() {
-		CardData drawn = gameState.drawToP2DamageZone();
-		p2DamageCount++;
-		boolean isEx = drawn != null && drawn.exBurst();
-		String cardInfo = drawn != null ? " — " + drawn.name() + (isEx ? " [EX BURST!]" : "") : "";
-		logEntry("P2 takes 1 damage (" + p2DamageCount + "/7)" + cardInfo);
-
-		int slotIdx = p2DamageCount - 1;
-		if (slotIdx >= 0 && slotIdx < p2DamageSlots.length && p2DamageSlots[slotIdx] != null) {
-			JPanel slot = p2DamageSlots[slotIdx];
-			slot.putClientProperty("isExBurst", isEx ? Boolean.TRUE : Boolean.FALSE);
-			slot.repaint();
-			if (drawn != null) {
+		int animDelay = CardSlideAnimator.TOTAL_FRAMES * CardSlideAnimator.FRAME_MS;
+		javax.swing.Timer revealTimer = new javax.swing.Timer(animDelay, e -> {
+			if (p1DamageSlotPanel != null) {
+				p1DamageSlotPanel.putClientProperty("exBurst", isEx ? Boolean.TRUE : Boolean.FALSE);
+				for (JPanel s : p1DamageSlots) { if (s != null) s.repaint(); }
+				p1DamageSlotPanel.repaint();
+			}
+			if (idx < 7 && p1DamageSlots[idx] != null) {
+				JPanel slot = p1DamageSlots[idx];
+				slot.putClientProperty("isExBurst", isEx ? Boolean.TRUE : Boolean.FALSE);
+				slot.repaint();
 				String url = drawn.imageUrl();
 				new SwingWorker<Image, Void>() {
 					@Override protected Image doInBackground() throws Exception {
@@ -1889,8 +1864,48 @@ public class MainWindow {
 					}
 				}.execute();
 			}
-		}
+		});
+		revealTimer.setRepeats(false);
+		revealTimer.start();
+	}
+
+	private void p2TakeDamage() {
+		CardData drawn = gameState.drawToP2DamageZone();
+		p2DamageCount++;
+		boolean isEx = drawn != null && drawn.exBurst();
+		String cardInfo = drawn != null ? " — " + drawn.name() + (isEx ? " [EX BURST!]" : "") : "";
+		logEntry("P2 takes 1 damage (" + p2DamageCount + "/7)" + cardInfo);
+
+		int slotIdx = p2DamageCount - 1;
+		if (drawn != null) animateCardToDamage(false, slotIdx);
+
 		refreshP2DeckLabel();
+
+		int animDelay = CardSlideAnimator.TOTAL_FRAMES * CardSlideAnimator.FRAME_MS;
+		javax.swing.Timer revealTimer = new javax.swing.Timer(animDelay, e -> {
+			if (slotIdx >= 0 && slotIdx < p2DamageSlots.length && p2DamageSlots[slotIdx] != null) {
+				JPanel slot = p2DamageSlots[slotIdx];
+				slot.putClientProperty("isExBurst", isEx ? Boolean.TRUE : Boolean.FALSE);
+				slot.repaint();
+				if (drawn != null) {
+					String url = drawn.imageUrl();
+					new SwingWorker<Image, Void>() {
+						@Override protected Image doInBackground() throws Exception {
+							return ImageCache.load(url);
+						}
+						@Override protected void done() {
+							try {
+								Image img = get();
+								if (img != null) { slot.putClientProperty("cardImg", img); slot.repaint(); }
+							} catch (InterruptedException | ExecutionException ignored) {}
+						}
+					}.execute();
+				}
+			}
+		});
+		revealTimer.setRepeats(false);
+		revealTimer.start();
+
 		if (p2DamageCount >= 7) {
 			triggerGameOver("Player 2 Defeated - You Win!");
 		}
@@ -3802,6 +3817,19 @@ public class MainWindow {
 			cardSlideAnimator.startSlide(img, start, end, i * 5);
 	}
 
+	private void animateCardToDamage(boolean isP1, int slotIdx) {
+		JLabel   deck  = isP1 ? p1DeckLabel : p2DeckLabel;
+		JPanel[] slots = isP1 ? p1DamageSlots : p2DamageSlots;
+		if (slotIdx < 0 || slotIdx >= slots.length || slots[slotIdx] == null) return;
+		JLayeredPane lp   = frame.getRootPane().getLayeredPane();
+		JPanel       slot = slots[slotIdx];
+		Point start = SwingUtilities.convertPoint(deck, deck.getWidth() / 2, deck.getHeight() / 2, lp);
+		Point end   = SwingUtilities.convertPoint(slot, slot.getWidth() / 2, slot.getHeight() / 2, lp);
+		BufferedImage img = CardAnimation.toARGB(
+				loadCardbackImage(), CardAnimation.CARD_W, CardAnimation.CARD_H);
+		cardSlideAnimator.startSlide(img, start, end, 0);
+	}
+
 	// -------------------------------------------------------------------------
 	// Play / Payment
 	// -------------------------------------------------------------------------
@@ -4355,7 +4383,7 @@ public class MainWindow {
 			boolean canAddBackup  = total < cost;
 			canAddDiscard[0] = isLD
 					? total < cost
-					: (total < cost) || (unsatisfiedElems > 0 && total + 2 <= cost + 2 * unsatisfiedElems);
+					: (total < cost) || (extraCp == 0 && unsatisfiedElems > 0 && total + 2 <= cost + 2 * unsatisfiedElems);
 			boolean allElemsPresent = isLD || cpByElem.values().stream().allMatch(v -> v >= 1);
 			confirmBtn.setEnabled(total >= cost && allElemsPresent);
 			if (elems.length == 1) {
@@ -4888,7 +4916,7 @@ public class MainWindow {
 			boolean canAddBackup  = total < cost;
 			canAddDiscard[0] = isLD
 					? total < cost
-					: (total < cost) || (unsatisfiedElems > 0 && total + 2 <= cost + 2 * unsatisfiedElems);
+					: (total < cost) || (extraCp == 0 && unsatisfiedElems > 0 && total + 2 <= cost + 2 * unsatisfiedElems);
 			boolean allElemsPresent = isLD || cpByElem.values().stream().allMatch(v -> v >= 1);
 			confirmBtn.setEnabled(total >= cost && allElemsPresent);
 			if (elems.length == 1) {
