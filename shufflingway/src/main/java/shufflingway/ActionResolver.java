@@ -645,6 +645,12 @@ public class ActionResolver {
         "[.!]?"
     );
 
+    /** Matches "Take 1 more turn after this one. At the end of that turn, you lose the game." */
+    private static final Pattern EXTRA_TURN_THEN_LOSE = Pattern.compile(
+        "(?i)Take\\s+1\\s+more\\s+turn\\s+after\\s+this\\s+one[.!]?\\s+" +
+        "At\\s+the\\s+end\\s+of\\s+that\\s+turn,\\s+you\\s+lose\\s+the\\s+game[.!]?"
+    );
+
     // -------------------------------------------------------------------------
     // Public API
     // -------------------------------------------------------------------------
@@ -736,6 +742,9 @@ public class ActionResolver {
         result = tryParseActivateNamedCard(effectText);
         if (result != null) return result;
 
+        result = tryParseExtraTurnThenLose(effectText);
+        if (result != null) return result;
+
         return null;
     }
 
@@ -761,6 +770,7 @@ public class ActionResolver {
         if (tryParseStandaloneDamageShields(effectText, source) != null) return "StandaloneDamageShields";
         if (tryParseSearchDeck(effectText)                      != null) return "SearchDeck";
         if (tryParseActivateNamedCard(effectText)               != null) return "ActivateNamedCard";
+        if (tryParseExtraTurnThenLose(effectText)               != null) return "ExtraTurnThenLose";
         return null;
     }
 
@@ -860,6 +870,7 @@ public class ActionResolver {
         if (tryParseStandaloneDamageShields(effectText, source) != null)    return "StandaloneDamageShields";
         if (tryParseSearchDeck(effectText) != null)                         return "SearchDeck";
         if (tryParseActivateNamedCard(effectText) != null)                  return "ActivateNamedCard";
+        if (tryParseExtraTurnThenLose(effectText) != null)                  return "ExtraTurnThenLose";
         return null;
     }
 
@@ -2300,6 +2311,15 @@ public class ActionResolver {
         }
 
         return null;
+    }
+
+    /** Parses "Take 1 more turn after this one. At the end of that turn, you lose the game." */
+    private static Consumer<GameContext> tryParseExtraTurnThenLose(String text) {
+        if (!EXTRA_TURN_THEN_LOSE.matcher(text).find()) return null;
+        return ctx -> {
+            ctx.logEntry("Effect: Take 1 more turn — you lose at the end of that turn");
+            ctx.takeExtraTurnThenLose();
+        };
     }
 
     /** Parses "Activate &lt;cardName&gt;[.]" — activates the named card the ability user controls. */

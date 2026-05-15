@@ -259,6 +259,9 @@ public class MainWindow {
 	/** End-of-turn effects queued this turn; fired at the beginning of the END phase. */
 	private final List<java.util.function.Consumer<GameContext>> endOfTurnEffects = new ArrayList<>();
 
+	/** Set when "Take 1 more turn; lose at the end of that turn" fires. */
+	private boolean p1ExtraTurnThenLose = false;
+
 	public static void main(String[] args) {
 		Runtime.getRuntime().addShutdownHook(new Thread(ImageCache::shutdown));
 		EventQueue.invokeLater(new Runnable() {
@@ -1326,10 +1329,19 @@ public class MainWindow {
             }
 
 			case END ->  {
-				// END → ACTIVE: increments turn number and switches to P2
-				gameState.advancePhase();
-				nextPhaseButton.setEnabled(false);
-				computerPlayer.runTurn();
+				if (p1ExtraTurnThenLose) {
+					p1ExtraTurnThenLose = false;
+					logEntry("Extra Turn — P1 takes one additional turn");
+					gameState.advancePhaseExtraTurn(); // END → ACTIVE, same player
+					nextPhaseButton.setEnabled(true);
+					endOfTurnEffects.add(ctx -> triggerGameOver("Extra Turn ended — You Lose!"));
+					onNextPhase(); // begin ACTIVE → DRAW automatically
+				} else {
+					// END → ACTIVE: increments turn number and switches to P2
+					gameState.advancePhase();
+					nextPhaseButton.setEnabled(false);
+					computerPlayer.runTurn();
+				}
 			}
 		}
 	}
@@ -7357,6 +7369,11 @@ public class MainWindow {
 				} else {
 					showForcedDiscardDialog(count);
 				}
+			}
+
+			@Override public void takeExtraTurnThenLose() {
+				logEntry("Effect: Take 1 more turn — you will lose at the end of that turn");
+				p1ExtraTurnThenLose = true;
 			}
 
 			@Override public void drawCards(int count) {

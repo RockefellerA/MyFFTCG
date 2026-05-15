@@ -280,6 +280,12 @@ public interface GameContext {
     void forceOpponentDiscard(int count);
 
     /**
+     * Grants the ability user one additional turn immediately after the current turn ends.
+     * At the end of that extra turn, the ability user loses the game.
+     */
+    void takeExtraTurnThenLose();
+
+    /**
      * Draws {@code count} cards from the top of the ability user's deck into their hand.
      */
     void drawCards(int count);

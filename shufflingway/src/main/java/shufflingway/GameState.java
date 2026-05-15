@@ -508,6 +508,17 @@ public class GameState {
         return currentPhase;
     }
 
+    /**
+     * Advances the phase from END to ACTIVE for an extra-turn grant: increments the
+     * turn number but keeps the current player unchanged.  Only valid when the current
+     * phase is {@link GamePhase#END}.
+     */
+    public GamePhase advancePhaseExtraTurn() {
+        turnNumber++;
+        currentPhase = currentPhase.next(); // END → ACTIVE
+        return currentPhase;
+    }
+
     public GamePhase getCurrentPhase()   { return currentPhase; }
     public int       getTurnNumber()     { return turnNumber; }
     public Player    getCurrentPlayer()  { return currentPlayer; }
