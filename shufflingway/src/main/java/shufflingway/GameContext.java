@@ -83,11 +83,13 @@ public interface GameContext {
      * @param jobFilter       optional job name(s) to restrict targets; {@code null} = any;
      *                        bar-separated (e.g. {@code "Standard Unit|Warrior of Light"}) for OR
      * @param cardNameFilter  optional exact card name to restrict targets; {@code null} = any
+     * @param categoryFilter  optional category substring to restrict targets; {@code null} = any
+     * @param excludeName     optional card name to exclude; {@code null} = none excluded
      */
     List<ForwardTarget> selectCharacters(int maxCount, boolean upTo, boolean opponentOnly,
             boolean selfOnly, String condition, String element, int costVal, String costCmp,
             boolean forwards, boolean backups, boolean monsters,
-            String jobFilter, String cardNameFilter, boolean summons);
+            String jobFilter, String cardNameFilter, String categoryFilter, String excludeName, boolean summons);
 
     /**
      * Shows a modal dialog letting P1 choose up to {@code maxCount} eligible
@@ -103,11 +105,13 @@ public interface GameContext {
      * @param monsters        include Monsters as eligible targets
      * @param jobFilter       optional job name(s); {@code null} = any; bar-separated for OR
      * @param cardNameFilter  optional exact card name; {@code null} = any
+     * @param categoryFilter  optional category substring; {@code null} = any
+     * @param excludeName     optional card name to exclude; {@code null} = none excluded
      */
     List<ForwardTarget> selectCharactersFromBreakZone(int maxCount, boolean upTo,
             boolean opponentZone, String condition, String element, int costVal, String costCmp,
             boolean forwards, boolean backups, boolean monsters,
-            String jobFilter, String cardNameFilter, boolean summons);
+            String jobFilter, String cardNameFilter, String categoryFilter, String excludeName, boolean summons);
 
     /**
      * Presents the ability user with Summons currently on the stack and cancels
