@@ -195,12 +195,12 @@ public class DeckDatabase implements AutoCloseable {
 
     /**
      * Returns all cards in the deck joined with card metadata.
-     * Each row: [serial, name_en, type_en, element, cost, power, job_en, category_1, category_2, count]
+     * Each row: [count, serial, name_en, type_en, element, cost, power, job_en, category_1, category_2]
      */
     public List<Object[]> getDeckCards(int deckId) throws SQLException {
         List<Object[]> result = new ArrayList<>();
         String sql = """
-            SELECT dc.serial, c.name_en, c.type_en, c.element, c.cost, c.power, c.job_en, c.category_1, c.category_2, dc.count
+            SELECT dc.count, dc.serial, c.name_en, c.type_en, c.element, c.cost, c.power, c.job_en, c.category_1, c.category_2
             FROM deck_cards dc
             LEFT JOIN cards c ON dc.serial = c.serial
             WHERE dc.deck_id = ?
@@ -211,6 +211,7 @@ public class DeckDatabase implements AutoCloseable {
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     result.add(new Object[]{
+                        rs.getInt("count"),
                         rs.getString("serial"),
                         rs.getString("name_en"),
                         rs.getString("type_en"),
@@ -219,8 +220,7 @@ public class DeckDatabase implements AutoCloseable {
                         rs.getObject("power"),
                         rs.getString("job_en"),
                         rs.getString("category_1"),
-                        rs.getString("category_2"),
-                        rs.getInt("count")
+                        rs.getString("category_2")
                     });
                 }
             }
