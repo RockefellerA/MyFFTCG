@@ -53,6 +53,7 @@ public class ActionResolver {
         "(?<targets>Forwards?(?:\\s+or\\s+Monsters?)?|Monsters?|Backups?|Characters?|Summons?" +
             "|\\[Job\\s+\\([^)]+\\)\\]" +
             "|\\[Card\\s+Name\\s+\\([^)]+\\)\\]" +
+            "|Card\\s+Name\\s+\\S+(?:\\s+\\([^)]+\\))?" +
             "|Job\\s+.+?\\s+Forwards?(?:\\s+or\\s+Job\\s+.+?\\s+Forwards?)*)" +
         "(?:\\s+of\\s+cost\\s+(?<cost>\\d+)(?:\\s+or\\s+(?<costcmp>less|more))?)?" +
         "(?:\\s+(?<control>(?:your\\s+)?opponent\\s+controls|you\\s+control))?" +
@@ -1078,6 +1079,12 @@ public class ActionResolver {
         } else if (tgtLower.startsWith("[card name ")) {
             Matcher nm = CARD_NAME_BRACKET_PATTERN.matcher(targets);
             cardNameFilter = nm.find() ? nm.group(1).trim() : null;
+            jobFilter      = null;
+            inclForwards   = true;
+            inclBackups    = true;
+            inclMonsters   = true;
+        } else if (tgtLower.startsWith("card name ")) {
+            cardNameFilter = targets.substring("Card Name ".length()).trim();
             jobFilter      = null;
             inclForwards   = true;
             inclBackups    = true;
