@@ -95,14 +95,12 @@ public record CardData(
         "(?i)(?:^Back\\s+Attack\\s*(?:\\(Like|\\[\\[br\\]\\])|<p>Back\\s+Attack)"
     );
 
-    // Warp X -- 《...》 with optional [[i]]/[[/]] italic markup around the trait header
     private static final Pattern WARP_PATTERN = Pattern.compile(
-        "(?i)(?:\\[\\[i\\]\\])?Warp\\s+(\\d+)\\s*--(?:\\[\\[/\\]\\])?\\s*((?:《[^》]*》\\s*)*)"
+        "(?i)Warp\\s+(\\d+)\\s*--\\s*((?:《[^》]*》\\s*)*)"
     );
 
-    // Priming "Card Name" -- 《...》 with optional [[i]]/[[/]] italic markup
     private static final Pattern PRIMING_PATTERN = Pattern.compile(
-        "(?i)(?:\\[\\[i\\]\\])?Priming\\s+\"([^\"]+)\"\\s*--(?:\\[\\[/\\]\\])?\\s*((?:《[^》]*》\\s*)*)"
+        "(?i)Priming\\s+\"([^\"]+)\"\\s*--\\s*((?:《[^》]*》\\s*)*)"
     );
 
     // Matches individual 《symbol》 cost tokens
@@ -341,8 +339,6 @@ public record CardData(
         List<BreakZoneCost> result = new ArrayList<>();
         for (String part : content.split("(?i)\\s+and\\s+")) {
             String p = part.trim();
-            // Strip [[i]]…[[/]] italic markup
-            p = p.replaceAll("(?i)\\[\\[i\\]\\][^\\[]*\\[\\[/\\]\\]\\s*", "").trim();
             Matcher numM = Pattern.compile("^(\\d+)\\s+(.+)$").matcher(p);
             if (numM.matches()) {
                 result.add(new BreakZoneCost("", Integer.parseInt(numM.group(1)), numM.group(2).trim()));

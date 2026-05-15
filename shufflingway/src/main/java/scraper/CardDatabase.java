@@ -122,12 +122,14 @@ public class CardDatabase implements AutoCloseable {
             ps.setString(10, card.category2);
             ps.setInt   (11, card.exBurst  ? 1 : 0);
             ps.setInt   (12, card.multicard ? 1 : 0);
-            ps.setString(13, card.textEn);
+            String textEn = card.textEn == null ? null
+                    : card.textEn.replaceAll("(?si)\\[\\[i\\]\\](.*?)\\[\\[/\\]\\]", "$1");
+            ps.setString(13, textEn);
             ps.setString(14, card.thumbName);
             ps.setString(15, card.imageUrl);
             ps.setString(16, card.setNumber);
-            ps.setInt   (17, computeLimitBreak(card.textEn));
-            Integer lbCost = computeLbCost(card.textEn);
+            ps.setInt   (17, computeLimitBreak(textEn));
+            Integer lbCost = computeLbCost(textEn);
             if (lbCost != null) ps.setInt (18, lbCost);
             else                ps.setNull(18, Types.INTEGER);
             ps.executeUpdate();
