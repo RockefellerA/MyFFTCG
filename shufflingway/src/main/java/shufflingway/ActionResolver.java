@@ -841,6 +841,7 @@ public class ActionResolver {
      * layer has no matching pattern yet.  Returns {@code null} if no primary pattern matches.
      */
     public static String fullDescription(String effectText, CardData source) {
+        if (CardData.YOUR_TURN_ONLY_PATTERN.matcher(effectText).matches())  return "YourTurnOnly";
         if (tryParseDealDamageToForwards(effectText) != null)               return "DealDamageToForwards";
 
         Matcher chooseM = CHOOSE_CHARACTER_PATTERN.matcher(effectText);

@@ -356,7 +356,7 @@ public record CardData(
         "(?i)remove\\s+(.+?)\\s+from\\s+(?:the\\s+)?game"
     );
 
-    private static final Pattern YOUR_TURN_ONLY_PATTERN = Pattern.compile(
+    static final Pattern YOUR_TURN_ONLY_PATTERN = Pattern.compile(
         "(?i)You\\s+can(?:\\s+only)?\\s+use\\s+this\\s+ability(?:\\s+only)?\\s+during\\s+your\\s+turn[.!]?"
     );
 
