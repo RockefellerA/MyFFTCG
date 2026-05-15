@@ -132,6 +132,16 @@ public interface GameContext {
     void revealOpponentHand();
 
     /**
+     * Reveals the top card of the specified deck in a modal popup, then evaluates
+     * each clause in order against the revealed card.  The first matching clause fires
+     * its action; if no clause matches the card is returned to the top of the deck.
+     *
+     * @param clauses      ordered list of condition/action pairs built by the parser
+     * @param opponentDeck {@code true} to reveal from the opponent's deck instead of the ability user's
+     */
+    void revealTopDeckCard(List<RevealClause> clauses, boolean opponentDeck);
+
+    /**
      * Lets P1 choose one eligible card from their hand and places it onto the field
      * without paying costs.
      *

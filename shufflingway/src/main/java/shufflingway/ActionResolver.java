@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -421,6 +422,32 @@ public class ActionResolver {
     );
 
     /**
+     * Anchored prefix that confirms the effect text is a deck-reveal ability.
+     * Group {@code who} captures the deck owner phrase so callers can tell
+     * whether it is the ability user's own deck or the opponent's.
+     * The clauses themselves are iterated with {@link #REVEAL_CLAUSE_PATTERN}.
+     */
+    private static final Pattern REVEAL_TOP_DECK_HEADER = Pattern.compile(
+        "(?i)^\\s*Reveal\\s+the\\s+top\\s+card\\s+of\\s+" +
+        "(?<who>opponent's|your)\\s+deck[.!]?"
+    );
+
+    /**
+     * Iteratively matches each "If it is/has [cond], [action]" clause within a
+     * reveal-top-deck effect text.
+     * <ul>
+     *   <li>Group {@code cond}   — full condition text (passed to {@link #parseRevealCondition})</li>
+     *   <li>Group {@code action} — full action text (card-op or standalone effect)</li>
+     * </ul>
+     * The lookahead stops each {@code action} capture before the next clause or end of text.
+     */
+    private static final Pattern REVEAL_CLAUSE_PATTERN = Pattern.compile(
+        "If\\s+it\\s+(?:is|has)\\s+(?<cond>[^,]+?)\\s*,\\s*(?<action>.+?)" +
+        "(?=[.!]?\\s+If\\s+it\\s+(?:is|has)\\b|[.!]?\\s*$)",
+        Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+    );
+
+    /**
      * Matches "Put it into the Break Zone" — a forced send that bypasses
      * "cannot be broken" protections, unlike {@code FOLLOWUP_BREAK}.
      */
@@ -697,6 +724,9 @@ public class ActionResolver {
         result = tryParseOpponentRevealHand(effectText);
         if (result != null) return result;
 
+        result = tryParseRevealTopDeck(effectText, source);
+        if (result != null) return result;
+
         result = tryParseStandaloneDamageShields(effectText, source);
         if (result != null) return result;
 
@@ -727,6 +757,7 @@ public class ActionResolver {
         if (tryParseOpponentSelects(effectText)               != null) return "OpponentSelects";
         if (tryParseOpponentMill(effectText)                  != null) return "OpponentMill";
         if (tryParseOpponentRevealHand(effectText)            != null) return "OpponentRevealHand";
+        if (tryParseRevealTopDeck(effectText, source)         != null) return "RevealTopDeck";
         if (tryParseStandaloneDamageShields(effectText, source) != null) return "StandaloneDamageShields";
         if (tryParseSearchDeck(effectText)                      != null) return "SearchDeck";
         if (tryParseActivateNamedCard(effectText)               != null) return "ActivateNamedCard";
@@ -825,6 +856,7 @@ public class ActionResolver {
 
         if (tryParseOpponentMill(effectText) != null)                       return "OpponentMill";
         if (tryParseOpponentRevealHand(effectText) != null)                 return "OpponentRevealHand";
+        if (tryParseRevealTopDeck(effectText, source) != null)              return "RevealTopDeck";
         if (tryParseStandaloneDamageShields(effectText, source) != null)    return "StandaloneDamageShields";
         if (tryParseSearchDeck(effectText) != null)                         return "SearchDeck";
         if (tryParseActivateNamedCard(effectText) != null)                  return "ActivateNamedCard";
@@ -2060,6 +2092,170 @@ public class ActionResolver {
             ctx.logEntry("Effect: Opponent reveals hand");
             ctx.revealOpponentHand();
         };
+    }
+
+    /**
+     * Parses one or more "If it is/has [cond], [action]" clauses following a
+     * "Reveal the top card of your deck" header.
+     * Each action is either a card-referencing op code or a standalone effect
+     * parsed by {@link #parse}.
+     */
+    private static Consumer<GameContext> tryParseRevealTopDeck(String text, CardData source) {
+        Matcher header = REVEAL_TOP_DECK_HEADER.matcher(text);
+        if (!header.find()) return null;
+        boolean opponentDeck = header.group("who").toLowerCase(java.util.Locale.ROOT).contains("opponent");
+        List<RevealClause> clauses = new ArrayList<>();
+        Matcher m = REVEAL_CLAUSE_PATTERN.matcher(text);
+        while (m.find()) {
+            RevealClause clause = buildRevealClause(
+                m.group("cond").trim(), m.group("action").trim(), source);
+            if (clause == null) return null;
+            clauses.add(clause);
+        }
+        if (clauses.isEmpty()) return null;
+        String whose = opponentDeck ? "opponent's" : "your";
+        return ctx -> {
+            ctx.logEntry("Effect: Reveal top card of " + whose + " deck (" + clauses.size() + " clause(s))");
+            ctx.revealTopDeckCard(clauses, opponentDeck);
+        };
+    }
+
+    /**
+     * Builds a single {@link RevealClause} from a parsed condition string and
+     * action string.  Returns {@code null} if either the condition or the action
+     * is not recognised.
+     */
+    private static RevealClause buildRevealClause(String condText, String actionText, CardData source) {
+        Predicate<CardData> condition = parseRevealCondition(condText);
+        if (condition == null) return null;
+        String cardOp = normalizeRevealOp(actionText);
+        if (cardOp != null) return new RevealClause(condition, cardOp, null);
+        Consumer<GameContext> effect = parse(actionText, source);
+        if (effect != null) return new RevealClause(condition, null, effect);
+        return null;
+    }
+
+    /**
+     * Converts a raw condition string (captured from "If it is/has [cond],") into a
+     * {@link Predicate} that tests a {@link CardData} against that condition.
+     * Supported forms (article and negation handled first):
+     * <ul>
+     *   <li>"[not] a/an Forward|Backup|Character|Summon|Monster"</li>
+     *   <li>"[not] a/an [Element] [type|card]" — element alone, element+type, element+card</li>
+     *   <li>"[not] a/an Job X [or Card Name Y]"</li>
+     *   <li>"[not] a/an Card Name X"</li>
+     *   <li>"[not] a/an Category X [type]"</li>
+     * </ul>
+     * Returns {@code null} for unrecognised patterns.
+     */
+    private static Predicate<CardData> parseRevealCondition(String cond) {
+        cond = cond.trim();
+        boolean negated = false;
+
+        Matcher negM = Pattern.compile("(?i)^not\\s+an?\\s+(.+)$").matcher(cond);
+        if (negM.matches()) {
+            negated = true;
+            cond = negM.group(1).trim();
+        } else {
+            Matcher artM = Pattern.compile("(?i)^an?\\s+(.+)$").matcher(cond);
+            if (artM.matches()) cond = artM.group(1).trim();
+        }
+
+        Predicate<CardData> pred;
+
+        // 1. "Job X [or Card Name Y]"
+        Matcher jobM = Pattern.compile(
+            "(?i)^Job\\s+(.+?)(?:\\s+or\\s+Card\\s+Name\\s+(.+))?$"
+        ).matcher(cond);
+        if (jobM.matches()) {
+            String job  = jobM.group(1).trim();
+            String name = jobM.group(2) != null ? jobM.group(2).trim() : null;
+            pred = card -> card.job().equalsIgnoreCase(job)
+                    || (name != null && card.name().equalsIgnoreCase(name));
+            return negated ? pred.negate() : pred;
+        }
+
+        // 2. "Card Name X"
+        Matcher nameM = Pattern.compile("(?i)^Card\\s+Name\\s+(.+)$").matcher(cond);
+        if (nameM.matches()) {
+            String name = nameM.group(1).trim();
+            pred = card -> card.name().equalsIgnoreCase(name);
+            return negated ? pred.negate() : pred;
+        }
+
+        // 3. "Category X [type|card]"
+        Matcher catM = Pattern.compile(
+            "(?i)^Category\\s+(\\S+)(?:\\s+(Forward|Character|Backup|Summon|Monster|card))?$"
+        ).matcher(cond);
+        if (catM.matches()) {
+            String cat     = catM.group(1).trim();
+            String catType = catM.group(2);
+            pred = card -> {
+                String cl = cat.toLowerCase(java.util.Locale.ROOT);
+                if (!card.category1().toLowerCase(java.util.Locale.ROOT).contains(cl)
+                        && !card.category2().toLowerCase(java.util.Locale.ROOT).contains(cl))
+                    return false;
+                return catType == null || catType.equalsIgnoreCase("card")
+                        || meetsTypeCheck(card, catType);
+            };
+            return negated ? pred.negate() : pred;
+        }
+
+        // 4. "[Element] [type|card]" — element alone, element+type, or element+"card"
+        Matcher elemM = Pattern.compile(
+            "(?i)^(Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark)" +
+            "(?:\\s+(Forward|Character|Backup|Summon|Monster|card))?$"
+        ).matcher(cond);
+        if (elemM.matches()) {
+            String elem     = elemM.group(1);
+            String elemType = elemM.group(2);
+            pred = card -> {
+                if (!card.containsElement(elem)) return false;
+                return elemType == null || elemType.equalsIgnoreCase("card")
+                        || meetsTypeCheck(card, elemType);
+            };
+            return negated ? pred.negate() : pred;
+        }
+
+        // 5. Simple type
+        Matcher typeM = Pattern.compile(
+            "(?i)^(Forward|Character|Backup|Summon|Monster)$"
+        ).matcher(cond);
+        if (typeM.matches()) {
+            String type = typeM.group(1);
+            pred = card -> meetsTypeCheck(card, type);
+            return negated ? pred.negate() : pred;
+        }
+
+        return null;
+    }
+
+    private static boolean meetsTypeCheck(CardData card, String type) {
+        return switch (type.toLowerCase(java.util.Locale.ROOT)) {
+            case "forward"   -> card.isForward();
+            case "backup"    -> card.isBackup();
+            case "character" -> card.isForward() || card.isBackup() || card.isMonster();
+            case "summon"    -> card.isSummon();
+            case "monster"   -> card.isMonster();
+            default          -> false;
+        };
+    }
+
+    /**
+     * Returns a card-op code if {@code raw} is an action that directly places the
+     * revealed card ("play it onto the field [dull]", "add it to your hand",
+     * "put it into the Break Zone").  Returns {@code null} for all other actions
+     * (standalone effects like "draw N cards", "deal X damage …"), which are then
+     * parsed by the main {@link #parse} chain.
+     */
+    private static String normalizeRevealOp(String raw) {
+        if (raw == null) return null;
+        String lo = raw.trim().toLowerCase(java.util.Locale.ROOT);
+        if (lo.contains("field") && lo.contains("dull")) return "playOntoFieldDull";
+        if (lo.contains("field"))  return "playOntoField";
+        if (lo.contains("hand"))   return "addToHand";
+        if (lo.contains("break"))  return "putToBreakZone";
+        return null;
     }
 
     /**

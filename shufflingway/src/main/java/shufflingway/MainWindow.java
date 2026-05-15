@@ -6908,6 +6908,127 @@ public class MainWindow {
 				timerRef[0].start();
 			}
 
+			@Override public void revealTopDeckCard(java.util.List<RevealClause> clauses, boolean opponentDeck) {
+				if (!isP1) {
+					logEntry("[P2] Reveal top deck card — not yet implemented for P2");
+					return;
+				}
+				java.util.Deque<CardData> deck = opponentDeck
+						? gameState.getP2MainDeck()
+						: gameState.getP1MainDeck();
+				String deckLabel = opponentDeck ? "opponent's deck" : "your deck";
+				if (deck.isEmpty()) {
+					logEntry("Reveal: " + deckLabel + " is empty.");
+					return;
+				}
+				CardData card = deck.pollFirst();
+				logEntry("Revealed from " + deckLabel + ": " + card.name() + " (" + card.type() + ")");
+
+				JDialog dlg = new JDialog(frame, "Reveal", true);
+				dlg.setResizable(false);
+				dlg.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+				JLabel cardLabel = new JLabel("...", SwingConstants.CENTER);
+				cardLabel.setPreferredSize(new Dimension(CARD_W, CARD_H));
+				cardLabel.setMinimumSize(new Dimension(CARD_W, CARD_H));
+				cardLabel.setOpaque(true);
+				cardLabel.setBackground(Color.DARK_GRAY);
+				cardLabel.setBorder(BorderFactory.createLineBorder(new Color(160, 110, 220), 1));
+				cardLabel.addMouseListener(new MouseAdapter() {
+					@Override public void mouseEntered(MouseEvent e) { showZoomAt(card.imageUrl()); }
+					@Override public void mouseExited(MouseEvent e)  { hideZoom(); }
+				});
+				new SwingWorker<ImageIcon, Void>() {
+					@Override protected ImageIcon doInBackground() throws Exception {
+						Image img = ImageCache.load(card.imageUrl());
+						return img == null ? null
+								: new ImageIcon(img.getScaledInstance(CARD_W, CARD_H, Image.SCALE_SMOOTH));
+					}
+					@Override protected void done() {
+						try {
+							ImageIcon icon = get();
+							if (icon != null) { cardLabel.setIcon(icon); cardLabel.setText(null); }
+						} catch (InterruptedException | ExecutionException ignored) {}
+					}
+				}.execute();
+
+				JPanel wrapper = new JPanel(new BorderLayout(0, 4));
+				wrapper.setBorder(BorderFactory.createEmptyBorder(8, 8, 0, 8));
+				JLabel nameLabel = new JLabel(card.name(), SwingConstants.CENTER);
+				nameLabel.setFont(FontLoader.loadPixelNESFont(9));
+				nameLabel.setPreferredSize(new Dimension(CARD_W, 18));
+				wrapper.add(cardLabel,  BorderLayout.CENTER);
+				wrapper.add(nameLabel,  BorderLayout.SOUTH);
+
+				JButton okBtn = new JButton("OK");
+				okBtn.setFont(FontLoader.loadPixelNESFont(11));
+				okBtn.addActionListener(ae -> { hideZoom(); dlg.dispose(); });
+
+				JPanel south = new JPanel(new FlowLayout(FlowLayout.CENTER, 12, 6));
+				south.add(okBtn);
+				south.setBorder(BorderFactory.createEmptyBorder(0, 8, 8, 8));
+
+				dlg.getContentPane().setLayout(new BorderLayout(0, 4));
+				dlg.getContentPane().add(wrapper, BorderLayout.CENTER);
+				dlg.getContentPane().add(south,   BorderLayout.SOUTH);
+				dlg.pack();
+				dlg.setLocationRelativeTo(frame);
+				dlg.setVisible(true); // modal — blocks until dismissed
+
+				// Find the first matching clause and execute its action
+				for (RevealClause clause : clauses) {
+					if (!clause.condition().test(card)) continue;
+					logEntry("Condition matched for " + card.name());
+					if (clause.cardOp() != null) {
+						switch (clause.cardOp()) {
+							case "playOntoField" -> {
+								logEntry(card.name() + " played from reveal onto field");
+								if (card.isBackup())       placeCardInFirstBackupSlot(card);
+								else if (card.isMonster()) placeCardInMonsterZone(card);
+								else                       placeCardInForwardZone(card);
+							}
+							case "playOntoFieldDull" -> {
+								logEntry(card.name() + " played from reveal onto field (dull)");
+								if (card.isBackup()) {
+									placeCardInFirstBackupSlot(card);
+								} else if (card.isMonster()) {
+									placeCardInMonsterZone(card);
+									int idx = p1MonsterCards.size() - 1;
+									p1MonsterStates.set(idx, CardState.DULL);
+									refreshP1MonsterSlot(idx);
+								} else {
+									placeCardInForwardZone(card);
+									dullP1Forward(p1ForwardCards.size() - 1);
+								}
+							}
+							case "addToHand" -> {
+								gameState.getP1Hand().add(card);
+								animateCardDraw(true, 1);
+								logEntry(card.name() + " added to hand from reveal");
+								refreshP1HandLabel();
+							}
+							case "putToBreakZone" -> {
+								gameState.getP1BreakZone().add(card);
+								logEntry(card.name() + " put into Break Zone from reveal");
+								refreshP1BreakLabel();
+							}
+						}
+					} else {
+						// Standalone effect — return card to top of appropriate deck first
+						// so any subsequent draw includes it
+						deck.addFirst(card);
+						if (opponentDeck) refreshP2DeckLabel(); else refreshP1DeckLabel();
+						clause.effect().accept(this);
+					}
+					if (opponentDeck) refreshP2DeckLabel(); else refreshP1DeckLabel();
+					return;
+				}
+				// No clause matched — put card back on top
+				logEntry("No condition matched — returning " + card.name() + " to top of " + deckLabel);
+				deck.addFirst(card);
+				if (opponentDeck) refreshP2DeckLabel(); else refreshP1DeckLabel();
+			}
+
 			@Override public void playCharacterFromHand(boolean inclForwards, boolean inclBackups,
 					boolean inclMonsters, int costVal, String costCmp,
 					String jobFilter, String cardNameFilter, String categoryFilter) {
