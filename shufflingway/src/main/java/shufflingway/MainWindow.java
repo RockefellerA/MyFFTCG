@@ -7600,6 +7600,44 @@ public class MainWindow {
 				for (CardData c : bkps) if (c != null && c.name().equalsIgnoreCase(cardName)) return true;
 				return false;
 			}
+
+			@Override public int p1DamageCount() { return gameState.getP1DamageZone().size(); }
+
+			@Override public int opponentHandSize() {
+				return (isP1 ? gameState.getP2Hand() : gameState.getP1Hand()).size();
+			}
+
+			@Override public int countP1FieldCards(boolean inclForwards, boolean inclBackups,
+					boolean inclMonsters, String jobFilter, String cardNameFilter) {
+				int count = 0;
+				if (inclForwards) for (CardData c : p1ForwardCards) {
+					if (!meetsJobFilter(c, jobFilter)) continue;
+					if (!meetsCardNameFilter(c, cardNameFilter)) continue;
+					count++;
+				}
+				if (inclBackups) for (CardData c : p1BackupCards) {
+					if (c == null) continue;
+					if (!meetsJobFilter(c, jobFilter)) continue;
+					if (!meetsCardNameFilter(c, cardNameFilter)) continue;
+					count++;
+				}
+				if (inclMonsters) for (CardData c : p1MonsterCards) {
+					if (!meetsJobFilter(c, jobFilter)) continue;
+					if (!meetsCardNameFilter(c, cardNameFilter)) continue;
+					count++;
+				}
+				return count;
+			}
+
+			@Override public int countP1BreakZoneCards(String cardNameFilter, String jobFilter) {
+				int count = 0;
+				for (CardData c : gameState.getP1BreakZone()) {
+					if (!meetsCardNameFilter(c, cardNameFilter)) continue;
+					if (!meetsJobFilter(c, jobFilter)) continue;
+					count++;
+				}
+				return count;
+			}
 		};
 	}
 

@@ -257,6 +257,34 @@ public interface GameContext {
      */
     void shieldActivePlayerDamageReduction(int reduction);
 
+    // ---- "For each" scaling queries -------------------------------------------
+
+    /** Returns the number of cards in P1's damage zone. */
+    int p1DamageCount();
+
+    /** Returns the number of cards in the opponent's hand. */
+    int opponentHandSize();
+
+    /**
+     * Counts P1's field cards matching all supplied filters.
+     *
+     * @param inclForwards   include Forwards
+     * @param inclBackups    include Backups
+     * @param inclMonsters   include Monsters
+     * @param jobFilter      bar-separated job name(s); {@code null} = any
+     * @param cardNameFilter exact card name; {@code null} = any
+     */
+    int countP1FieldCards(boolean inclForwards, boolean inclBackups, boolean inclMonsters,
+            String jobFilter, String cardNameFilter);
+
+    /**
+     * Counts cards in P1's Break Zone matching all supplied filters.
+     *
+     * @param cardNameFilter exact card name; {@code null} = any
+     * @param jobFilter      bar-separated job name(s); {@code null} = any
+     */
+    int countP1BreakZoneCards(String cardNameFilter, String jobFilter);
+
     // ---- Computed-damage queries -----------------------------------------------
 
     /** Returns the highest effective power among all P1 Forwards on the field; {@code 0} if none. */

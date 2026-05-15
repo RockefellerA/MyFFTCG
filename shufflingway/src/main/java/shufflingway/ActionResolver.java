@@ -112,6 +112,36 @@ public class ActionResolver {
         ")"
     );
 
+    /**
+     * Matches "Deal it/them [base] damage [and [per] more damage] for each [source]".
+     * <ul>
+     *   <li>{@code base}     — base damage per unit (or fixed base when {@code per} is set)</li>
+     *   <li>{@code per}      — additional damage per each unit (the "and N more" form)</li>
+     *   <li>{@code selfdmg}  — source is P1's damage-zone count</li>
+     *   <li>{@code jobbname} — bracket job: "[Job (name)] you control"</li>
+     *   <li>{@code jobwname} — written job: "Job Name you control"</li>
+     *   <li>{@code chartype} — type filter: "Forwards/Characters/etc. you control"</li>
+     *   <li>{@code bzname}   — card name in P1's Break Zone</li>
+     *   <li>{@code opphand}  — source is the opponent's hand size</li>
+     *   <li>{@code xpaid}    — source is the X CP value paid for this ability</li>
+     * </ul>
+     */
+    private static final Pattern FOLLOWUP_DAMAGE_FOR_EACH = Pattern.compile(
+        "(?i)deal\\s+(?:it|them)\\s+(?<base>\\d+)\\s+damage" +
+        "(?:\\s+and\\s+(?<per>\\d+)\\s+more\\s+damage)?" +
+        "\\s+for\\s+each\\s+" +
+        "(?:" +
+            "(?<selfdmg>point\\s+of\\s+damage\\s+you\\s+have\\s+received)" +
+            "|\\[Job\\s+\\((?<jobbname>[^)]+)\\)\\]\\s+you\\s+control" +
+            "|Job\\s+(?<jobwname>.+?)\\s+you\\s+control" +
+            "|(?<chartype>Forwards?|Characters?|Backups?|Monsters?)\\s+you\\s+control" +
+            "|Card\\s+Name\\s+(?<bzname>\\S+(?:\\s+\\([^)]+\\))?)\\s+in\\s+your\\s+Break\\s+Zone" +
+            "|(?<opphand>card\\s+in\\s+your\\s+opponent'?s?\\s+hand)" +
+            "|(?<xpaid>CP\\s+paid\\s+as\\s+X)" +
+        ")" +
+        "[.!]?"
+    );
+
     /** Matches "Activate it" or "Activate them". */
     private static final Pattern FOLLOWUP_ACTIVATE = Pattern.compile(
         "(?i)Activate\\s+(?:it|them)\\.?"
@@ -702,7 +732,7 @@ public class ActionResolver {
         result = tryParseDealDamageToForwards(effectText);
         if (result != null) return result;
 
-        result = tryParseChooseCharacter(effectText, source);
+        result = tryParseChooseCharacter(effectText, source, xValue);
         if (result != null) return result;
 
         result = tryParseDelayedEffect(effectText);
@@ -768,7 +798,7 @@ public class ActionResolver {
     /** Returns the name of the first pattern that matches {@code effectText}, or {@code null}. */
     public static String matchedPatternName(String effectText, CardData source) {
         if (tryParseDealDamageToForwards(effectText)          != null) return "DealDamageToForwards";
-        if (tryParseChooseCharacter(effectText, source)       != null) return "ChooseCharacter";
+        if (tryParseChooseCharacter(effectText, source, 0)    != null) return "ChooseCharacter";
         if (tryParseDelayedEffect(effectText)                 != null) return "DelayedEffect";
         if (tryParseAllFieldEffect(effectText)                != null) return "AllFieldEffect";
         if (tryParseStandalonePowerBoostUntil(effectText, source) != null) return "StandalonePowerBoostUntil";
@@ -797,6 +827,7 @@ public class ActionResolver {
      * used inside {@link #tryParseChooseCharacter}.
      */
     public static String matchedFollowupName(String followupText, CardData source) {
+        if (FOLLOWUP_DAMAGE_FOR_EACH.matcher(followupText).find())                    return "DamageForEach";
         if (FOLLOWUP_DAMAGE.matcher(followupText).find())                             return "Damage";
         if (FOLLOWUP_DAMAGE_EXPR.matcher(followupText).find())                        return "DamageExpr";
         if (FOLLOWUP_ACTIVATE.matcher(followupText).find())                           return "Activate";
@@ -1060,7 +1091,7 @@ public class ActionResolver {
      *   <li>"Put it at the top or bottom of its owner's deck" — player chooses placement</li>
      * </ul>
      */
-    private static Consumer<GameContext> tryParseChooseCharacter(String text, CardData source) {
+    private static Consumer<GameContext> tryParseChooseCharacter(String text, CardData source, int xValue) {
         Matcher m = CHOOSE_CHARACTER_PATTERN.matcher(text);
         if (!m.find()) return null;
 
@@ -1157,6 +1188,53 @@ public class ActionResolver {
                 + (condition != null ? " " + condition : "")
                 + (element   != null ? " " + element   : "")
                 + categoryLabel + " " + targets + costLabel + controlLabel + excludeLabel + zoneLabel;
+
+        // --- "Deal it N damage for each [source]" followup ---
+        Matcher forEachM = FOLLOWUP_DAMAGE_FOR_EACH.matcher(primaryFollowup);
+        if (forEachM.find()) {
+            int    baseDmg        = Integer.parseInt(forEachM.group("base"));
+            String perStr         = forEachM.group("per");
+            int    perDmg         = perStr != null ? Integer.parseInt(perStr) : 0;
+            boolean srcSelfDmg    = forEachM.group("selfdmg")  != null;
+            String  srcJobBracket = forEachM.group("jobbname") != null ? forEachM.group("jobbname").trim() : null;
+            String  srcJobWritten = forEachM.group("jobwname") != null ? forEachM.group("jobwname").trim() : null;
+            String  srcCharType   = forEachM.group("chartype");
+            String  srcBzName     = forEachM.group("bzname")   != null ? forEachM.group("bzname").trim()   : null;
+            boolean srcOppHand    = forEachM.group("opphand")  != null;
+            // if none of the above → xpaid
+            boolean charFwd = srcCharType != null && (srcCharType.equalsIgnoreCase("forward")   || srcCharType.equalsIgnoreCase("forwards")   || srcCharType.equalsIgnoreCase("character") || srcCharType.equalsIgnoreCase("characters"));
+            boolean charBkp = srcCharType != null && (srcCharType.equalsIgnoreCase("backup")    || srcCharType.equalsIgnoreCase("backups")    || srcCharType.equalsIgnoreCase("character") || srcCharType.equalsIgnoreCase("characters"));
+            boolean charMon = srcCharType != null && (srcCharType.equalsIgnoreCase("monster")   || srcCharType.equalsIgnoreCase("monsters")   || srcCharType.equalsIgnoreCase("character") || srcCharType.equalsIgnoreCase("characters"));
+            String sourceLabel;
+            if      (srcSelfDmg)           sourceLabel = "P1 damage";
+            else if (srcJobBracket != null) sourceLabel = "[Job (" + srcJobBracket + ")] you control";
+            else if (srcJobWritten != null) sourceLabel = "Job " + srcJobWritten + " you control";
+            else if (srcCharType   != null) sourceLabel = srcCharType + " you control";
+            else if (srcBzName     != null) sourceLabel = "Card Name " + srcBzName + " in BZ";
+            else if (srcOppHand)           sourceLabel = "opponent hand";
+            else                            sourceLabel = "X CP paid";
+            String logLabel = perDmg > 0
+                    ? baseDmg + " + " + perDmg + "×[" + sourceLabel + "]"
+                    : baseDmg + "×[" + sourceLabel + "]";
+            return ctx -> {
+                int n;
+                if      (srcSelfDmg)           n = ctx.p1DamageCount();
+                else if (srcJobBracket != null) n = ctx.countP1FieldCards(true, true, true, srcJobBracket, null);
+                else if (srcJobWritten != null) n = ctx.countP1FieldCards(true, true, true, srcJobWritten, null);
+                else if (srcCharType   != null) n = ctx.countP1FieldCards(charFwd, charBkp, charMon, null, null);
+                else if (srcBzName     != null) n = ctx.countP1BreakZoneCards(srcBzName, null);
+                else if (srcOppHand)           n = ctx.opponentHandSize();
+                else                            n = xValue;
+                int damage = perDmg > 0 ? baseDmg + perDmg * n : baseDmg * n;
+                ctx.logEntry(choosePrefix + " — Deal " + damage + " damage (" + logLabel + ", n=" + n + ")");
+                List<ForwardTarget> ts = selectTargets(ctx, maxCount, upTo,
+                        opponentOnly, selfOnly, condition, element, zone, opponentZone,
+                        costVal, costCmp, inclForwards, inclBackups, inclMonsters, jobFilter, cardNameFilter, categoryFilter, excludeName, inclSummons);
+                sortedByIdxDesc(ts, true) .forEach(t -> ctx.damageTarget(t, damage));
+                sortedByIdxDesc(ts, false).forEach(t -> ctx.damageTarget(t, damage));
+                if (secondary != null) secondary.accept(ctx);
+            };
+        }
 
         // --- Damage followup (fixed amount) ---
         Matcher dmgM = FOLLOWUP_DAMAGE.matcher(primaryFollowup);

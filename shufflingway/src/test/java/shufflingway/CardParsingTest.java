@@ -73,14 +73,17 @@ public class CardParsingTest {
                         rs.getString("category_1"), rs.getString("category_2"), textEn);
 
                 int parsed = 0;
+                boolean hasPartialDesc = false;
                 for (ActionAbility ab : abilities) {
                     if (ActionResolver.parse(ab.effectText(), source) != null) parsed++;
+                    String desc = ActionResolver.fullDescription(ab.effectText(), source);
+                    if (desc != null && desc.contains("?")) hasPartialDesc = true;
                 }
 
-                if (parsed == abilities.size()) {
+                if (parsed == abilities.size() && !hasPartialDesc) {
                     fullyParsed++;
                     reservoirAdd(examplesFully, formatExample(source.name(), abilities, source), fullyParsed, rng);
-                } else if (parsed > 0) {
+                } else if (parsed > 0 || hasPartialDesc) {
                     partiallyParsed++;
                     reservoirAdd(examplesPartial, formatExample(source.name(), abilities, source), partiallyParsed, rng);
                 } else {
