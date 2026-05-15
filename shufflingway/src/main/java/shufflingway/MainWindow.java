@@ -259,6 +259,9 @@ public class MainWindow {
 	/** End-of-turn effects queued this turn; fired at the beginning of the END phase. */
 	private final List<java.util.function.Consumer<GameContext>> endOfTurnEffects = new ArrayList<>();
 
+	/** Tracks once-per-turn ability uses this turn; keyed by card instance identity, value is set of effectText strings used. */
+	private final java.util.IdentityHashMap<CardData, java.util.Set<String>> usedOncePerTurnAbilities = new java.util.IdentityHashMap<>();
+
 	/** Set when "Take 1 more turn; lose at the end of that turn" fires. */
 	private boolean p1ExtraTurnThenLose = false;
 
@@ -1255,6 +1258,7 @@ public class MainWindow {
 		switch (current) {
 
 			case ACTIVE ->  {
+				usedOncePerTurnAbilities.clear();
 				// Advance first so getTurnNumber() still reflects the current turn
 				gameState.advancePhase();   // ACTIVE → DRAW
 				int drawCount = gameState.getTurnNumber() == 1 ? 1 : 2;
@@ -5449,6 +5453,7 @@ public class MainWindow {
 		if (ability.isSpecial())       { if (!first) sb.append(", "); sb.append("S"); first = false; }
 		if (ability.hasXCost())        { if (!first) sb.append(", "); sb.append("X"); first = false; }
 		if (ability.yourTurnOnly())        { if (!first) sb.append(", "); sb.append("your turn"); first = false; }
+		if (ability.oncePerTurn())         { if (!first) sb.append(", "); sb.append("1/turn");    first = false; }
 		if (ability.whilePartyAttacking()) { if (!first) sb.append(", "); sb.append("while party atk"); first = false; }
 		else if (ability.whileCardAttacking() != null) { if (!first) sb.append(", "); sb.append("while ").append(ability.whileCardAttacking()).append(" atk"); first = false; }
 		if (ability.whileCardBlocking() != null) { if (!first) sb.append(", "); sb.append("while ").append(ability.whileCardBlocking()).append(" blk"); first = false; }
@@ -5648,8 +5653,11 @@ public class MainWindow {
 	 * @param sourceName  card name, needed for special-ability hand check
 	 */
 	private boolean canActivateAbility(ActionAbility ability, boolean isFrozen, CardState state,
-			int playedTurn, String sourceName, boolean isP1) {
+			int playedTurn, CardData source, boolean isP1) {
 		if (ability.yourTurnOnly() && !isP1) return false;
+		if (ability.oncePerTurn()
+				&& usedOncePerTurnAbilities.getOrDefault(source, java.util.Set.of()).contains(ability.effectText()))
+			return false;
 		// Attack-phase restrictions — all require the game to be in the ATTACK phase
 		if (ability.whileCardAttacking() != null || ability.whileCardBlocking() != null || ability.whilePartyAttacking()) {
 			if (gameState.getCurrentPhase() != GameState.GamePhase.ATTACK) return false;
@@ -5669,7 +5677,7 @@ public class MainWindow {
 			if (state != CardState.ACTIVE) return false;
 			if (playedTurn == gameState.getTurnNumber()) return false;
 		}
-		if (ability.isSpecial() && !hasSameNameInHand(sourceName, isP1)) return false;
+		if (ability.isSpecial() && !hasSameNameInHand(source.name(), isP1)) return false;
 		if (ability.crystalCost() > 0 && playerCrystals(isP1) < ability.crystalCost()) return false;
 		for (BreakZoneCost bz : ability.breakZoneCosts())
 			if (!bzCostSatisfied(bz, isP1)) return false;
@@ -5981,7 +5989,7 @@ public class MainWindow {
 					|| ability.whileCardBlocking() != null || ability.whilePartyAttacking();
 			boolean phaseOk = hasAttackRestriction ? isAttackPhase : isMainPhase;
 			JMenuItem item = new JMenuItem(buildAbilityMenuLabel(ability));
-			item.setEnabled(phaseOk && canActivateAbility(ability, isFrozen, state, playedTurn, card.name(), isP1));
+			item.setEnabled(phaseOk && canActivateAbility(ability, isFrozen, state, playedTurn, card, isP1));
 			item.addActionListener(ae ->
 					showActionAbilityPaymentDialog(ability, card, applyDull, isP1));
 			menu.add(item);
@@ -6307,6 +6315,10 @@ public class MainWindow {
 
 		// Crystal cost
 		if (ability.crystalCost() > 0) playerSpendCrystals(isP1, ability.crystalCost());
+
+		// Mark once-per-turn ability as used for this turn
+		if (ability.oncePerTurn())
+			usedOncePerTurnAbilities.computeIfAbsent(source, k -> new java.util.HashSet<>()).add(ability.effectText());
 
 		// Dull source card
 		if (ability.requiresDull()) applyDull.run();

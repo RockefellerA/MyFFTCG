@@ -291,12 +291,13 @@ public record CardData(
             List<RemoveFromGameCost> removeFromGameCosts = parseRemoveFromGameCosts(removeRaw);
             List<ReturnToHandCost>   returnToHandCosts   = parseReturnToHandCosts(returnRaw);
             boolean yourTurnOnly      = YOUR_TURN_ONLY_PATTERN.matcher(effectRaw).find();
+            boolean oncePerTurn       = ONCE_PER_TURN_PATTERN.matcher(effectRaw).find();
             boolean whilePartyAtk     = WHILE_PARTY_ATTACKING_PATTERN.matcher(effectRaw).find();
             Matcher wAtkM             = whilePartyAtk ? null : WHILE_CARD_ATTACKING_PATTERN.matcher(effectRaw);
             String  whileCardAtk      = (!whilePartyAtk && wAtkM.find()) ? wAtkM.group("card").trim() : null;
             Matcher wBlkM             = WHILE_CARD_BLOCKING_PATTERN.matcher(effectRaw);
             String  whileCardBlk      = wBlkM.find() ? wBlkM.group("card").trim() : null;
-            result.add(new ActionAbility(abilityName, requiresDull, isSpecial, crystalCost, hasXCost, cpCost, breakZoneCosts, discardCosts, removeFromGameCosts, returnToHandCosts, yourTurnOnly, whileCardAtk, whileCardBlk, whilePartyAtk, effectRaw));
+            result.add(new ActionAbility(abilityName, requiresDull, isSpecial, crystalCost, hasXCost, cpCost, breakZoneCosts, discardCosts, removeFromGameCosts, returnToHandCosts, yourTurnOnly, oncePerTurn, whileCardAtk, whileCardBlk, whilePartyAtk, effectRaw));
         }
         return List.copyOf(result);
     }
@@ -358,6 +359,10 @@ public record CardData(
 
     static final Pattern YOUR_TURN_ONLY_PATTERN = Pattern.compile(
         "(?i)You\\s+can(?:\\s+only)?\\s+use\\s+this\\s+ability(?:\\s+only)?\\s+during\\s+your\\s+turn[.!]?"
+    );
+
+    static final Pattern ONCE_PER_TURN_PATTERN = Pattern.compile(
+        "(?i)(?:You\\s+can(?:\\s+only)?\\s+use\\s+this\\s+ability(?:\\s+only)?\\s+|(?:and\\s+)?only\\s+)once\\s+per\\s+turn[.!]?"
     );
 
     // Must be tested before WHILE_CARD_ATTACKING_PATTERN to avoid "a party you control" matching as a card name

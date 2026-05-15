@@ -847,6 +847,9 @@ public class ActionResolver {
      */
     public static String fullDescription(String effectText, CardData source) {
         if (CardData.YOUR_TURN_ONLY_PATTERN.matcher(effectText).matches())  return "YourTurnOnly";
+        if (CardData.ONCE_PER_TURN_PATTERN.matcher(effectText).matches())   return "OncePerTurn";
+        if (CardData.YOUR_TURN_ONLY_PATTERN.matcher(effectText).find()
+                && CardData.ONCE_PER_TURN_PATTERN.matcher(effectText).find()) return "YourTurnOnly+OncePerTurn";
         if (tryParseDealDamageToForwards(effectText) != null)               return "DealDamageToForwards";
 
         Matcher chooseM = CHOOSE_CHARACTER_PATTERN.matcher(effectText);

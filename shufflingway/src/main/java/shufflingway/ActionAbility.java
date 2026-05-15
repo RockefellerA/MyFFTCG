@@ -48,6 +48,7 @@ public record ActionAbility(
         List<RemoveFromGameCost> removeFromGameCosts,  // "remove X from the game" costs (may be empty)
         List<ReturnToHandCost>   returnToHandCosts,    // "return X to its owner's hand" costs (may be empty)
         boolean                 yourTurnOnly,          // "can only use this ability during your turn" restriction
+        boolean                 oncePerTurn,           // "can only use this ability once per turn" restriction
         String                  whileCardAttacking,    // non-null = named card must be in P1's attack selection
         String                  whileCardBlocking,     // non-null = named P1 forward must be the declared blocker
         boolean                 whilePartyAttacking,   // true = P1's attack selection must have ≥ 2 forwards
