@@ -187,9 +187,12 @@ public class ActionResolver {
         "(?i)it\\s+cannot\\s+block\\s+this\\s+turn\\.?"
     );
 
-    /** Matches "if possible, it must block this turn". */
+    /** Matches "if possible, it must block this turn" or the gains-until-EOT equivalent. */
     private static final Pattern FOLLOWUP_MUST_BLOCK = Pattern.compile(
-        "(?i)if\\s+possible[,]?\\s+it\\s+must\\s+block\\s+this\\s+turn\\.?"
+        "(?i)(?:" +
+            "if\\s+possible[,]?\\s+it\\s+must\\s+block\\s+this\\s+turn" +
+            "|it\\s+gains\\s+[\"']If\\s+possible[,]?\\s+this\\s+Forward\\s+must\\s+block\\.?[\"']\\s+until\\s+the\\s+end\\s+of\\s+the\\s+turn" +
+        ")[.!]?"
     );
 
     /** Matches "Return it to its owner's hand." */
