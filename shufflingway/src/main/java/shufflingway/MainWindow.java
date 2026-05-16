@@ -5453,7 +5453,8 @@ public class MainWindow {
 		if (ability.isSpecial())       { if (!first) sb.append(", "); sb.append("S"); first = false; }
 		if (ability.hasXCost())        { if (!first) sb.append(", "); sb.append("X"); first = false; }
 		if (ability.yourTurnOnly())        { if (!first) sb.append(", "); sb.append("your turn"); first = false; }
-		if (ability.oncePerTurn())         { if (!first) sb.append(", "); sb.append("1/turn");    first = false; }
+		if (ability.oncePerTurn())         { if (!first) sb.append(", "); sb.append("1/turn");      first = false; }
+		if (ability.mainPhaseOnly())       { if (!first) sb.append(", "); sb.append("main phase"); first = false; }
 		if (ability.whilePartyAttacking()) { if (!first) sb.append(", "); sb.append("while party atk"); first = false; }
 		else if (ability.whileCardAttacking() != null) { if (!first) sb.append(", "); sb.append("while ").append(ability.whileCardAttacking()).append(" atk"); first = false; }
 		if (ability.whileCardBlocking() != null) { if (!first) sb.append(", "); sb.append("while ").append(ability.whileCardBlocking()).append(" blk"); first = false; }
@@ -5658,6 +5659,10 @@ public class MainWindow {
 		if (ability.oncePerTurn()
 				&& usedOncePerTurnAbilities.getOrDefault(source, java.util.Set.of()).contains(ability.effectText()))
 			return false;
+		if (ability.mainPhaseOnly()) {
+			GameState.GamePhase p = gameState.getCurrentPhase();
+			if (p != GameState.GamePhase.MAIN_1 && p != GameState.GamePhase.MAIN_2) return false;
+		}
 		// Attack-phase restrictions — all require the game to be in the ATTACK phase
 		if (ability.whileCardAttacking() != null || ability.whileCardBlocking() != null || ability.whilePartyAttacking()) {
 			if (gameState.getCurrentPhase() != GameState.GamePhase.ATTACK) return false;

@@ -290,12 +290,13 @@ public record CardData(
             List<ReturnToHandCost>   returnToHandCosts   = parseReturnToHandCosts(returnRaw);
             boolean yourTurnOnly      = YOUR_TURN_ONLY_PATTERN.matcher(effectRaw).find();
             boolean oncePerTurn       = ONCE_PER_TURN_PATTERN.matcher(effectRaw).find();
+            boolean mainPhaseOnly     = MAIN_PHASE_ONLY_PATTERN.matcher(effectRaw).find();
             boolean whilePartyAtk     = WHILE_PARTY_ATTACKING_PATTERN.matcher(effectRaw).find();
             Matcher wAtkM             = whilePartyAtk ? null : WHILE_CARD_ATTACKING_PATTERN.matcher(effectRaw);
             String  whileCardAtk      = (!whilePartyAtk && wAtkM.find()) ? wAtkM.group("card").trim() : null;
             Matcher wBlkM             = WHILE_CARD_BLOCKING_PATTERN.matcher(effectRaw);
             String  whileCardBlk      = wBlkM.find() ? wBlkM.group("card").trim() : null;
-            result.add(new ActionAbility(abilityName, requiresDull, isSpecial, crystalCost, hasXCost, cpCost, breakZoneCosts, discardCosts, removeFromGameCosts, returnToHandCosts, yourTurnOnly, oncePerTurn, whileCardAtk, whileCardBlk, whilePartyAtk, effectRaw));
+            result.add(new ActionAbility(abilityName, requiresDull, isSpecial, crystalCost, hasXCost, cpCost, breakZoneCosts, discardCosts, removeFromGameCosts, returnToHandCosts, yourTurnOnly, oncePerTurn, mainPhaseOnly, whileCardAtk, whileCardBlk, whilePartyAtk, effectRaw));
         }
         return List.copyOf(result);
     }
@@ -359,6 +360,10 @@ public record CardData(
 
     static final Pattern ONCE_PER_TURN_PATTERN = Pattern.compile(
         "(?i)(?:You\\s+can(?:\\s+only)?\\s+use\\s+this\\s+ability(?:\\s+only)?\\s+|(?:and\\s+)?only\\s+)once\\s+per\\s+turn[.!]?"
+    );
+
+    static final Pattern MAIN_PHASE_ONLY_PATTERN = Pattern.compile(
+        "(?i)You\\s+can\\s+only\\s+use\\s+this\\s+ability\\s+during\\s+your\\s+Main\\s+Phase[.!]?"
     );
 
     // Must be tested before WHILE_CARD_ATTACKING_PATTERN to avoid "a party you control" matching as a card name
@@ -539,8 +544,10 @@ public record CardData(
         return false;
     }
 
-    /** Returns {@code true} if any of this card's elements matches {@code elem} (case-insensitive). */
+    /** Returns {@code true} if any of this card's elements matches {@code elem} (case-insensitive).
+     *  The special value {@code "Multi-Element"} matches any card that has more than one element. */
     public boolean containsElement(String elem) {
+        if ("Multi-Element".equalsIgnoreCase(elem)) return element.split("/").length > 1;
         for (String e : element.split("/"))
             if (e.equalsIgnoreCase(elem)) return true;
         return false;

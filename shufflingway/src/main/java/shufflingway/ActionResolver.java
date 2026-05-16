@@ -51,7 +51,7 @@ public class ActionResolver {
     private static final Pattern CHOOSE_CHARACTER_PATTERN = Pattern.compile(
         "(?i)Choose\\s+(?<upto>up\\s+to\\s+)?(?<count>\\d+)\\s+" +
         "(?:(?<condition>dull|damaged|attacking|blocking|active)\\s+)?" +
-        "(?:(?<element>Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark)\\s+)?" +
+        "(?:(?<element>Multi-Element|Fire|Ice|Wind|Earth|Lightning|Water|Light|Dark)\\s+)?" +
         "(?:Category\\s+(?<category>.+?)(?=\\s+(?:Forwards?|Backups?|Characters?|Monsters?|Summons?))\\s+)?" +
         "(?<targets>Forwards?(?:\\s+or\\s+Monsters?)?|Monsters?|Backups?|Characters?|Summons?" +
             "|\\[Job\\s+\\([^)]+\\)\\]" +
@@ -884,6 +884,7 @@ public class ActionResolver {
         if (CardData.ONCE_PER_TURN_PATTERN.matcher(effectText).matches())   return "OncePerTurn";
         if (CardData.YOUR_TURN_ONLY_PATTERN.matcher(effectText).find()
                 && CardData.ONCE_PER_TURN_PATTERN.matcher(effectText).find()) return "YourTurnOnly+OncePerTurn";
+        if (CardData.MAIN_PHASE_ONLY_PATTERN.matcher(effectText).matches())        return "MainPhaseOnly";
         if (CardData.WHILE_PARTY_ATTACKING_PATTERN.matcher(effectText).matches()) return "WhilePartyAttacking";
         if (CardData.WHILE_CARD_ATTACKING_PATTERN.matcher(effectText).matches())  return "WhileCardAttacking";
         if (CardData.WHILE_CARD_BLOCKING_PATTERN.matcher(effectText).matches())   return "WhileCardBlocking";
