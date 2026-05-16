@@ -362,13 +362,13 @@ public record CardData(
     );
 
     // Must be tested before WHILE_CARD_ATTACKING_PATTERN to avoid "a party you control" matching as a card name
-    private static final Pattern WHILE_PARTY_ATTACKING_PATTERN = Pattern.compile(
+    static final Pattern WHILE_PARTY_ATTACKING_PATTERN = Pattern.compile(
         "(?i)You\\s+can\\s+only\\s+use\\s+this\\s+ability\\s+while\\s+a\\s+party\\s+you\\s+control\\s+is\\s+attacking[.!]?"
     );
-    private static final Pattern WHILE_CARD_ATTACKING_PATTERN = Pattern.compile(
+    static final Pattern WHILE_CARD_ATTACKING_PATTERN = Pattern.compile(
         "(?i)You\\s+can\\s+only\\s+use\\s+this\\s+ability\\s+while\\s+(?<card>.+?)\\s+is\\s+attacking[.!]?"
     );
-    private static final Pattern WHILE_CARD_BLOCKING_PATTERN = Pattern.compile(
+    static final Pattern WHILE_CARD_BLOCKING_PATTERN = Pattern.compile(
         "(?i)You\\s+can\\s+only\\s+use\\s+this\\s+ability\\s+while\\s+(?<card>.+?)\\s+is\\s+blocking[.!]?"
     );
 

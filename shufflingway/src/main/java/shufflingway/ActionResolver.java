@@ -881,6 +881,9 @@ public class ActionResolver {
         if (CardData.ONCE_PER_TURN_PATTERN.matcher(effectText).matches())   return "OncePerTurn";
         if (CardData.YOUR_TURN_ONLY_PATTERN.matcher(effectText).find()
                 && CardData.ONCE_PER_TURN_PATTERN.matcher(effectText).find()) return "YourTurnOnly+OncePerTurn";
+        if (CardData.WHILE_PARTY_ATTACKING_PATTERN.matcher(effectText).matches()) return "WhilePartyAttacking";
+        if (CardData.WHILE_CARD_ATTACKING_PATTERN.matcher(effectText).matches())  return "WhileCardAttacking";
+        if (CardData.WHILE_CARD_BLOCKING_PATTERN.matcher(effectText).matches())   return "WhileCardBlocking";
         if (tryParseDealDamageToForwards(effectText) != null)               return "DealDamageToForwards";
 
         Matcher chooseM = CHOOSE_CHARACTER_PATTERN.matcher(effectText);
